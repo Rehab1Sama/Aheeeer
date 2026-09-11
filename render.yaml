@@ -1,0 +1,24 @@
+services:
+  # الخدمة الموحدة: Express يخدّم الـ API + ملفات الفرونت الثابتة
+  - name: sana-quran-app
+    type: web
+    runtime: node
+    region: frankfurt
+    plan: free
+    autoDeploy: true
+    buildCommand: >
+      corepack pnpm install --frozen-lockfile &&
+      BASE_PATH=/ corepack pnpm --filter @workspace/sana-quran run build &&
+      corepack pnpm --filter @workspace/api-server run build
+    startCommand: corepack pnpm --filter @workspace/db run migrate && node --enable-source-maps artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false

@@ -1,0 +1,15 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "B5In2qY7n_G2RBNzkc0ZC"
+uri = "file://sana_fixes.patch"
+type = "unspecified"
+title = "sana_fixes.patch — التعديلات الجاهزة للرفع"
+
+[[outputs]]
+id = "4fpKhoaX1dgpTxZYJJXzj"
+uri = "file://screenshots/sana-quran-first-page.jpg"
+type = "image"
+title = "أول صفحة بعد إصلاح الواجهة"
+description = "لقطة من النسخة المحلية بعد إصلاح مسار ملفات الواجهة؛ ظهرت صفحة تسجيل الدخول العربية بنجاح بدل الصفحة البيضاء."

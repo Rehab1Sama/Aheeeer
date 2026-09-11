@@ -1,0 +1,18 @@
+- [Mushaf Madinah page data](mushaf-accuracy.md) — MUSHAF_PAGES has 1208 entries (2 per page × 604 pages); one exception: page 48 (ayat al-dayn 2:282) needs explicit [2,282,48.5] entry; result×0.5 = wajhs.
+- [DB push method](db-push.md) — drizzle-kit push fails interactively; use direct SQL via Node.js pg from /home/runner/workspace/node_modules/.pnpm/pg@8.21.0/node_modules/pg
+- [Build pipeline](build-pipeline.md) — esbuild used (not tsc); TS errors in pre-existing files don't block build but should be fixed with explicit type annotations.
+- [White-label system](white-label-system.md) — whitelabel_configs table + /api/white-label/* + /api/school-config routes; env vars pattern for Render deployments; schoolConfig.ts frontend reader.
+- [ThemeProvider dark mode](theme-dark-mode.md) — ThemeProvider.tsx was colour-only (white-label); dark mode context added via useTheme()/toggleDark(); toggle button in Layout sidebar; CSS vars under .dark in index.css; key: sana_dark in localStorage.
+- [Lib declarations build](lib-declarations.md) — shared packages, including lib/db after schema changes, need generated dist/*.d.ts before dependent tsc checks; esbuild itself does not.
+- [Auth token key](auth-token-key.md) — frontend localStorage key is sana_auth_token (lib/auth.ts TOKEN_KEY); several pages had wrong key auth_token: my-circle.tsx, my-progress.tsx, student-profile.tsx (×3 occurrences).
+- [Startup sync functions](startup-sync.md) — index.ts runs auto-repair functions at boot: seedLeader, normalizeEmails, repairMissingEnrollments, syncCircleStaff, migrateAndLinkStudentIds.
+- [Student-user direct link](student-user-link.md) — users.student_id FK added to link accounts to students; migrateAndLinkStudentIds() backfills on startup; all create/update flows now set this field.
+- [Review plan day ranges](review-plan-ranges.md) — computeDayRanges() in quran.ts maps quota start (surahName+ayah) + per-day page counts → surah/ayah ranges using MUSHAF_PAGES index; backend DELETE skips 21-day lock for leader/deputy/track_supervisor; canForceDelete prop on ReviewPlanSection controls locked-plan delete button.
+- [Student records access](student-records-access.md) — students were 403-blocked from GET /api/records; fixed to allow own records via name+circleId lookup; deputy added to STAFF_ROLES for student profile/notes/enrollments.
+- [Multi-circle student linking](multi-circle-student-linking.md) — users.student_id is 1-to-1; never mutate students.circleId when enrollment count > 1; POST /users must search before insert; migration steps 6&7 need COUNT<=1 guard.
+- [Workflow port conflict](workflow-port-conflict.md) — combined Start application API uses 3001 while the managed API workflow keeps 8080; Vite proxy uses API_PORT.
+- [GitHub source synchronization](github-source-sync.md) — REST API commits must include dependent local source files when the remote branch lags, or deployments build mixed versions.
+- [Orval and Zod compatibility](orval-zod-compatibility.md) — current OpenAPI code generation emits Zod v4 APIs, so the workspace catalog must stay on v4.
+- [Archived student records](archived-student-records.md) — archive periods hide absence and shortcomings only from student-facing endpoints; admin data remains complete.
+- [Enrollment archive restoration](enrollment-archive-restoration.md) — restoring a per-circle archive always reactivates that same enrollment; moving to another circle is a separate authorized flow.
+- [Historical memorization migration](historical-memorization-migration.md) — backfill legacy credits before eligibility queries and fail startup if schema or migration preparation fails.
