@@ -1,0 +1,788 @@
+From 342b056ba9e1fc67600a4c75884caaed3456af56 Mon Sep 17 00:00:00 2001
+From: fixes <a@a.com>
+Date: Fri, 11 Sep 2026 05:40:16 +0000
+Subject: [PATCH] =?UTF-8?q?=D8=A3=D9=88=D8=B3=D9=85=D8=A9:=20=D8=AD=D8=AC?=
+ =?UTF-8?q?=D9=85=20=D8=A7=D9=84=D8=B5=D9=88=D8=B1=20+=20=D8=A5=D8=B1?=
+ =?UTF-8?q?=D8=B3=D8=A7=D9=84=20=D8=A7=D9=84=D8=AD=D8=B6=D9=88=D8=B1=20?=
+ =?UTF-8?q?=D8=A7=D9=84=D8=B4=D9=87=D8=B1=D9=8A=20=D8=A8=D9=81=D8=AA=D8=B1?=
+ =?UTF-8?q?=D8=A9=20=D8=AD=D8=B1=D8=A9=20+=20=D9=85=D9=86=D8=B9=20=D8=AE?=
+ =?UTF-8?q?=D8=B7=D8=A3=20=D8=B5=D9=81=D8=B1-=D8=BA=D9=8A=D8=A7=D8=A8-?=
+ =?UTF-8?q?=D8=A8=D8=AF=D9=88=D9=86-=D8=A8=D9=8A=D8=A7=D9=86=D8=A7=D8=AA?=
+ =?UTF-8?q?=20+=20=D8=B4=D8=B1=D8=B7=20=D8=A8=D8=AF=D8=A7=D9=8A=D8=A9=20?=
+ =?UTF-8?q?=D8=A7=D9=84=D9=81=D8=B5=D9=84=20=D9=84=D9=88=D8=B3=D8=A7=D9=85?=
+ =?UTF-8?q?=20=D8=A7=D9=84=D8=AA=D8=B7=D9=88=D8=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ artifacts/api-server/src/lib/badgeEngine.ts   |  48 ++++--
+ artifacts/api-server/src/lib/badgeOverview.ts |  22 +++
+ .../src/lib/monthlyAttendanceBadge.ts         |  43 ++++++
+ artifacts/api-server/src/routes/attendance.ts |  22 ++-
+ .../src/routes/liveBadgesOverview.ts          |  26 +++-
+ .../src/components/badges/BadgeChip.tsx       |  61 ++++++++
+ .../src/pages/badge-entitlements.tsx          | 144 +++++++++++++++---
+ .../sana-quran/src/pages/circle-overview.tsx  |  21 +--
+ artifacts/sana-quran/src/pages/my-circle.tsx  |  19 +--
+ .../sana-quran/src/pages/my-progress.tsx      |  19 +--
+ .../src/pages/weekly-absence-groups.tsx       |  25 ++-
+ 11 files changed, 363 insertions(+), 87 deletions(-)
+ create mode 100644 artifacts/api-server/src/lib/monthlyAttendanceBadge.ts
+ create mode 100644 artifacts/sana-quran/src/components/badges/BadgeChip.tsx
+
+diff --git a/artifacts/api-server/src/lib/badgeEngine.ts b/artifacts/api-server/src/lib/badgeEngine.ts
+index 7e52c0b..c983540 100644
+--- a/artifacts/api-server/src/lib/badgeEngine.ts
++++ b/artifacts/api-server/src/lib/badgeEngine.ts
+@@ -5,7 +5,7 @@
+ // راجعي lib/badgeDefinitions.ts للأسماء والنصوص والدرجات.
+ // ============================================================================
+ 
+-import { db, recordsTable, circlesTable, studentsTable, tracksTable, dailyCircleTasksTable, trackSupervisorNamesTable, reviewPlansTable, reviewPlanDaysTable } from "@workspace/db";
++import { db, recordsTable, circlesTable, studentsTable, tracksTable, dailyCircleTasksTable, trackSupervisorNamesTable, reviewPlansTable, reviewPlanDaysTable, globalSettingsTable } from "@workspace/db";
+ import { eq, and, gte, lte, inArray } from "drizzle-orm";
+ import { getLastCompletedWeekStart, addDaysStr, getMakkahDay, minutesSinceMakkahDayStart, ONE_AM_MINUTES_SINCE_DAY_START } from "./date";
+ import { computeShortcoming } from "../routes/shortcomings";
+@@ -91,30 +91,51 @@ export async function computeAllCirclesWeeklyMoonBadges(
+   return result;
+ }
+ 
+-// ── ٣. حضور الشهر الكامل (فردي) ──────────────────────────────────────────
++// ── ٣. حضور فترة كاملة بلا غياب (فردي) — نطاق تاريخ حر ────────────────────
++// معاد هيكلتها: الدالة العامة تقبل [dateFrom, dateTo] حرّة (تحددها القائدة من
++// صفحة "مستحقات الأوسمة")، بدل شهر تقويمي ثابت لازم ينتهي أولًا. الغلاف
++// الشهري (أدناه) موجود فقط للتوافق مع أي استخدام قديم بمعامل month=YYYY-MM.
+ 
+-/** شهر ميلادي كامل بلا أي غياب. month بصيغة YYYY-MM، افتراضيًا الشهر الحالي (توقيت مكة) */
+-export async function computeStudentMonthlyPerfectAttendance(
++/** حضور كامل بلا أي غياب خلال [dateFrom, dateTo] (شاملة الطرفين). null لو ما فيه إدخال بيانات فعلي بالفترة. */
++export async function computeStudentPerfectAttendanceInRange(
+   studentId: number,
+-  month: string = getMakkahDay().slice(0, 7),
++  dateFrom: string,
++  dateTo: string,
+ ): Promise<EarnedBadge | null> {
+-  const monthStart = `${month}-01`;
+-  const [y, m] = month.split("-").map(Number);
+-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+-  const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+-
+   const recs = await db.select({ isAbsent: recordsTable.isAbsent })
+     .from(recordsTable)
+-    .where(and(eq(recordsTable.studentId, studentId), gte(recordsTable.date, monthStart), lte(recordsTable.date, monthEnd)));
++    .where(and(eq(recordsTable.studentId, studentId), gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
+ 
+-  if (recs.length === 0) return null; // ما فيه إدخال بيانات فعلي بالشهر
++  if (recs.length === 0) return null; // ما فيه إدخال بيانات فعلي بالفترة
+   if (recs.some(r => r.isAbsent)) return null;
+ 
+   const tierDef = getBadgeTier("monthly_perfect", 0);
+   return tierDef ? tierToEarned("monthly_perfect", tierDef) : null;
+ }
+ 
++/** شهر ميلادي كامل بلا أي غياب. month بصيغة YYYY-MM، افتراضيًا الشهر الحالي (توقيت مكة) */
++export async function computeStudentMonthlyPerfectAttendance(
++  studentId: number,
++  month: string = getMakkahDay().slice(0, 7),
++): Promise<EarnedBadge | null> {
++  const monthStart = `${month}-01`;
++  const [y, m] = month.split("-").map(Number);
++  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
++  const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
++  return computeStudentPerfectAttendanceInRange(studentId, monthStart, monthEnd);
++}
++
+ // ── ٤. التطور — تحسّن غياب الطالبة هالأسبوع مقارنة باللي قبله ──────────────
++// "شع نورك" يقارن بين آخر أسبوعين متتاليين فقط. لو الأسبوع السابق بالكامل
++// قبل بداية الفصل الحالي (term_start_date بالإعدادات)، ما فيه أساس عادل
++// للمقارنة — يعني الوسام فعليًا ما يبدأ إلا من ثاني أسبوع بالفصل. لو
++// term_start_date مو محدد أصلًا، نتجاهل هذا الشرط (نفس السلوك القديم).
++const TERM_START_SETTING_KEY = "term_start_date";
++
++async function getTermStartDate(): Promise<string | null> {
++  const [row] = await db.select().from(globalSettingsTable).where(eq(globalSettingsTable.key, TERM_START_SETTING_KEY));
++  return row?.value || null;
++}
+ 
+ export async function computeStudentImprovement(
+   studentId: number,
+@@ -124,6 +145,9 @@ export async function computeStudentImprovement(
+   const prevWeekStart = addDaysStr(weekStart, -7);
+   const prevWeekEnd = addDaysStr(prevWeekStart, 4);
+ 
++  const termStart = await getTermStartDate();
++  if (termStart && prevWeekEnd < termStart) return null; // الأسبوع السابق بالكامل قبل بداية الفصل — لا مقارنة عادلة بعد
++
+   const [thisWeek, prevWeek] = await Promise.all([
+     db.select({ isAbsent: recordsTable.isAbsent }).from(recordsTable)
+       .where(and(eq(recordsTable.studentId, studentId), gte(recordsTable.date, weekStart), lte(recordsTable.date, weekEnd))),
+diff --git a/artifacts/api-server/src/lib/badgeOverview.ts b/artifacts/api-server/src/lib/badgeOverview.ts
+index 25327c2..4c9db8b 100644
+--- a/artifacts/api-server/src/lib/badgeOverview.ts
++++ b/artifacts/api-server/src/lib/badgeOverview.ts
+@@ -30,6 +30,7 @@ import { getBadgeTier } from "./badgeDefinitions";
+ import {
+   computeAllCirclesWeeklyMoonBadges,
+   computeStudentMonthlyPerfectAttendance,
++  computeStudentPerfectAttendanceInRange,
+   computeStudentImprovement,
+   computeTrackNoShortcoming,
+   computeSupervisorWeeklyCommitment,
+@@ -153,6 +154,27 @@ export async function overviewMonthlyPerfect(month: string = getMakkahDay().slic
+     .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+ }
+ 
++// ── ٣ب. حضور فترة كاملة بلا غياب — نطاق تاريخ حر (dateFrom/dateTo) تحدده القائدة ──
++// نفس منطق overviewMonthlyPerfect أعلاه بالضبط، بس تقبل فترة حرة بدل شهر
++// تقويمي ثابت — تُستخدم بزر "إرسال الوسام الآن" بصفحة مستحقات الأوسمة.
++export async function overviewPerfectAttendanceInRange(dateFrom: string, dateTo: string): Promise<OverviewEntry[]> {
++  const students = await db.select({ id: studentsTable.id, fullName: studentsTable.fullName, circleId: studentsTable.circleId })
++    .from(studentsTable).where(eq(studentsTable.isArchived, false));
++  if (students.length === 0) return [];
++
++  const results = await Promise.all(students.map(async s => ({ s, badge: await computeStudentPerfectAttendanceInRange(s.id, dateFrom, dateTo) })));
++  const qualifying = results.filter((r): r is { s: typeof students[number]; badge: EarnedBadge } => r.badge !== null);
++  if (qualifying.length === 0) return [];
++
++  const circleIds = [...new Set(qualifying.map(r => r.s.circleId).filter((x): x is number => x != null))];
++  const circles = circleIds.length ? await db.select({ id: circlesTable.id, name: circlesTable.name }).from(circlesTable).where(inArray(circlesTable.id, circleIds)) : [];
++  const circleNameById = new Map(circles.map(c => [c.id, c.name]));
++
++  return qualifying
++    .map(({ s, badge }) => ({ key: String(s.id), label: s.fullName, meta: s.circleId ? circleNameById.get(s.circleId) : undefined, badge }))
++    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
++}
++
+ // ── ٤. التطور — كل الطالبات النشيطات ──────────────────────────────────────
+ export async function overviewImprovement(weekStart: string = getLastCompletedWeekStart()): Promise<OverviewEntry[]> {
+   const students = await db.select({ id: studentsTable.id, fullName: studentsTable.fullName, circleId: studentsTable.circleId })
+diff --git a/artifacts/api-server/src/lib/monthlyAttendanceBadge.ts b/artifacts/api-server/src/lib/monthlyAttendanceBadge.ts
+new file mode 100644
+index 0000000..664170a
+--- /dev/null
++++ b/artifacts/api-server/src/lib/monthlyAttendanceBadge.ts
+@@ -0,0 +1,43 @@
++// ============================================================================
++// إرسال وسام "حضور الفترة الكاملة" (المعروف سابقًا بحضور الشهر الكامل) —
++// بخلاف أقمر الحلقة (كرون أسبوعي تلقائي)، هذا الوسام تُرسله القائدة يدويًا من
++// صفحة "مستحقات الأوسمة": تحدد فترة (من/إلى) وتضغط "إرسال"، فيُحسب لحظيًا
++// (lib/badgeOverview.ts) مين مستحقة، وتوصلها رسالة تهنئة عبر جدول messages
++// الموجود (نفس اتفاقية targetType: "student" المستخدمة بمسارات /messages/batch).
++// ما نخزّن أي وسام "رسمي" جديد هنا — فقط الإشعار + عدّاد الاستحقاقات
++// (badge_award_counts) عشان تظهر "تكررت X مرة" بصفحة نظرة الحلقة لاحقًا.
++// ============================================================================
++
++import { db, messagesTable } from "@workspace/db";
++import { overviewPerfectAttendanceInRange, type OverviewEntry } from "./badgeOverview";
++import { recordBadgeAward } from "./badgeAwardCounts";
++
++export interface SendPerfectAttendanceResult {
++  count: number;
++  students: { id: number; name: string }[];
++}
++
++/** ترسل وسام حضور الفترة [dateFrom, dateTo] لكل طالبة مستحقة، وترجّع عدد المُرسَل لهن. */
++export async function sendPerfectAttendanceBadges(
++  dateFrom: string,
++  dateTo: string,
++  senderId: number,
++): Promise<SendPerfectAttendanceResult> {
++  const qualifying: OverviewEntry[] = await overviewPerfectAttendanceInRange(dateFrom, dateTo);
++  if (qualifying.length === 0) return { count: 0, students: [] };
++
++  const messageRows = qualifying.map(e => ({
++    senderId,
++    targetType: "student",
++    targetId: e.key, // key = String(studentId) — نفس القيمة المُرجَعة من overviewPerfectAttendanceInRange
++    content: `${e.badge.emoji} مبروك ${e.label}! حصلتِ على وسام "${e.badge.name}" — ${e.badge.subtitle} (من ${dateFrom} إلى ${dateTo})`,
++    expiresAt: null,
++  }));
++  await db.insert(messagesTable).values(messageRows);
++
++  for (const e of qualifying) {
++    await recordBadgeAward("student", Number(e.key), "monthly_perfect", e.badge.tier, `${dateFrom}:${dateTo}`);
++  }
++
++  return { count: qualifying.length, students: qualifying.map(e => ({ id: Number(e.key), name: e.label })) };
++}
+diff --git a/artifacts/api-server/src/routes/attendance.ts b/artifacts/api-server/src/routes/attendance.ts
+index ce1818f..8c76586 100644
+--- a/artifacts/api-server/src/routes/attendance.ts
++++ b/artifacts/api-server/src/routes/attendance.ts
+@@ -24,6 +24,18 @@ async function countAbsencesByCircle(circleIds: number[], from: string, to: stri
+   return countByCircle;
+ }
+ 
++// يرجّع مجموعة الحلقات (id) اللي عندها إدخال بيانات فعلي (أي سجل، حاضر أو غايب)
++// خلال [from, to] — نستخدمها عشان نميّز "صفر غياب فعلي" عن "ما فيه إدخال بيانات أصلًا"
++async function circlesWithAnyRecord(circleIds: number[], from: string, to: string): Promise<Set<number>> {
++  const result = new Set<number>();
++  if (circleIds.length === 0) return result;
++  const rows = await db.select({ circleId: recordsTable.circleId }).from(recordsTable).where(
++    and(gte(recordsTable.date, from), lte(recordsTable.date, to), inArray(recordsTable.circleId, circleIds))
++  );
++  for (const r of rows) result.add(r.circleId);
++  return result;
++}
++
+ router.get("/attendance/today", authenticate, async (req, res): Promise<void> => {
+   const today = new Date().toISOString().slice(0, 10);
+   const trackFilter = req.query.track as string | undefined;
+@@ -180,15 +192,20 @@ router.get("/attendance/weekly-circle-groups", authenticate, async (req, res): P
+   }
+ 
+   const circleIds = circles.map(c => c.id);
+-  const [countByCircle, prevCountByCircle] = await Promise.all([
++  const [countByCircle, prevCountByCircle, hasDataThisWeek] = await Promise.all([
+     countAbsencesByCircle(circleIds, weekStart, weekEnd),
+     countAbsencesByCircle(circleIds, prevWeekStart, prevWeekEnd),
++    circlesWithAnyRecord(circleIds, weekStart, weekEnd),
+   ]);
+ 
+   const groups: Record<string, { id: number; name: string; track: string; absenceCount: number; prevAbsenceCount: number; trend: "improved" | "worse" | "same" }[]> = {
+     "0": [], "1": [], "2": [], "3": [], "4": [], "5+": [],
+   };
++  // حلقات بدون أي إدخال بيانات فعلي هالأسبوع — لا تدخل أي مجموعة (خصوصًا "صفر غياب"،
++  // اللي كانت تُحسب افتراضيًا = 0 غياب حتى لو ما فيه أي إدخال أصلًا)
++  const noData: { id: number; name: string; track: string }[] = [];
+   for (const c of circles) {
++    if (!hasDataThisWeek.has(c.id)) { noData.push({ id: c.id, name: c.name, track: c.track }); continue; }
+     const count = countByCircle.get(c.id) ?? 0;
+     const prevCount = prevCountByCircle.get(c.id) ?? 0;
+     const trend: "improved" | "worse" | "same" = count < prevCount ? "improved" : count > prevCount ? "worse" : "same";
+@@ -198,8 +215,9 @@ router.get("/attendance/weekly-circle-groups", authenticate, async (req, res): P
+   for (const key of Object.keys(groups)) {
+     groups[key].sort((a, b) => a.name.localeCompare(b.name, "ar"));
+   }
++  noData.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+ 
+-  res.json({ weekStart, weekEnd, availableTracks, groups });
++  res.json({ weekStart, weekEnd, availableTracks, groups, noData });
+ });
+ 
+ export default router;
+diff --git a/artifacts/api-server/src/routes/liveBadgesOverview.ts b/artifacts/api-server/src/routes/liveBadgesOverview.ts
+index b600d46..c8ae263 100644
+--- a/artifacts/api-server/src/routes/liveBadgesOverview.ts
++++ b/artifacts/api-server/src/routes/liveBadgesOverview.ts
+@@ -10,6 +10,7 @@ import {
+   overviewCircleWeeklyMoon,
+   overviewReviewPlanCompletion,
+   overviewMonthlyPerfect,
++  overviewPerfectAttendanceInRange,
+   overviewImprovement,
+   overviewTrackNoShortcoming,
+   overviewSupervisorWeeklyCommitment,
+@@ -17,6 +18,7 @@ import {
+   type OverviewEntry,
+ } from "../lib/badgeOverview";
+ import { ensureWeeklyMoonBadgeRan } from "../lib/weeklyMoonBadge";
++import { sendPerfectAttendanceBadges } from "../lib/monthlyAttendanceBadge";
+ import { withCache, CACHE_TTL_MS } from "../lib/simpleCache";
+ 
+ const router: IRouter = Router();
+@@ -49,11 +51,33 @@ router.get("/live-badges/overview/review-plan-completion", authenticate, async (
+ 
+ router.get("/live-badges/overview/monthly-perfect", authenticate, async (req, res): Promise<void> => {
+   if (!assertOverviewAccess(req.userRole)) { res.status(403).json({ error: "Forbidden" }); return; }
++  // تفضّل فترة حرة (dateFrom/dateTo) لو موجودة — تسمح للقائدة تحدد أي فترة بنفسها،
++  // مو بس شهر تقويمي لازم ينتهي أولًا. month لسا مدعوم للتوافق مع أي استخدام قديم.
++  const dateFrom = typeof req.query.dateFrom === "string" ? req.query.dateFrom : undefined;
++  const dateTo = typeof req.query.dateTo === "string" ? req.query.dateTo : undefined;
+   const month = typeof req.query.month === "string" ? req.query.month : undefined;
+-  const entries = await withCache(`overview:monthly-perfect:${month ?? ""}`, CACHE_TTL_MS, () => overviewMonthlyPerfect(month));
++  const entries = dateFrom && dateTo
++    ? await withCache(`overview:monthly-perfect:${dateFrom}:${dateTo}`, CACHE_TTL_MS, () => overviewPerfectAttendanceInRange(dateFrom, dateTo))
++    : await withCache(`overview:monthly-perfect:${month ?? ""}`, CACHE_TTL_MS, () => overviewMonthlyPerfect(month));
+   res.json(scopeToTrack(entries, req.userRole!, req.userTrack));
+ });
+ 
++/**
++ * إرسال وسام "حضور الفترة الكاملة" فعليًا لكل المستحقات ضمن [dateFrom, dateTo] —
++ * القائدة/النائبة فقط. يُنشئ رسالة تهنئة لكل طالبة مستحقة عبر جدول messages،
++ * فورًا لحظة الضغط — بدون انتظار أي كرون.
++ */
++router.post("/live-badges/send/monthly-perfect", authenticate, async (req, res): Promise<void> => {
++  if (req.userRole !== "leader" && req.userRole !== "deputy") { res.status(403).json({ error: "Forbidden" }); return; }
++  const { dateFrom, dateTo } = req.body as { dateFrom?: string; dateTo?: string };
++  if (!dateFrom || !dateTo || dateFrom > dateTo) {
++    res.status(400).json({ error: "حددي فترة تاريخ صحيحة (تاريخ البداية قبل النهاية)" });
++    return;
++  }
++  const result = await sendPerfectAttendanceBadges(dateFrom, dateTo, req.userId!);
++  res.json(result);
++});
++
+ router.get("/live-badges/overview/improvement", authenticate, async (req, res): Promise<void> => {
+   if (!assertOverviewAccess(req.userRole)) { res.status(403).json({ error: "Forbidden" }); return; }
+   const weekStart = typeof req.query.weekStart === "string" ? req.query.weekStart : undefined;
+diff --git a/artifacts/sana-quran/src/components/badges/BadgeChip.tsx b/artifacts/sana-quran/src/components/badges/BadgeChip.tsx
+new file mode 100644
+index 0000000..abafbba
+--- /dev/null
++++ b/artifacts/sana-quran/src/components/badges/BadgeChip.tsx
+@@ -0,0 +1,61 @@
++// ============================================================================
++// عرض موحّد لوسام واحد — نفس الشكل بالضبط بكل صفحات الأوسمة (حلقتي، نظرة
++// الحلقة، تقدمي، مستحقات الأوسمة): صورة نظيفة 88×88px، بدون أي خلفية أو
++// قص أو تشويه (object-contain يحافظ على نسبة 1:1)، وإلا إيموجي احتياطي لو
++// ما فيه صورة. نفضّل thumb (240×240px) على الصورة الكاملة (1254×1254px) —
++// نفس الصورة بالضبط بجودة عالية تكفي بهالحجم، بس أخف بكثير على التحميل.
++// ============================================================================
++import { useState } from "react";
++
++const BASE = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
++
++export interface BadgeChipData {
++  name: string;
++  subtitle?: string | null;
++  emoji?: string | null;
++  image?: string | null;
++  thumb?: string | null;
++  color?: string | null;
++}
++
++export function BadgeChip({
++  badge,
++  trailing,
++  meta,
++}: {
++  badge: BadgeChipData;
++  /** نص إضافي يُلحق باسم الوسام (مثل "تكررت ٣ مرات") */
++  trailing?: React.ReactNode;
++  /** سياق إضافي بين قوسين (مثل اسم الحلقة) */
++  meta?: string;
++}) {
++  const [imgFailed, setImgFailed] = useState(false);
++  const src = badge.thumb || badge.image;
++
++  return (
++    <div className="inline-flex flex-col items-center text-center gap-1 w-[104px]">
++      {src && !imgFailed ? (
++        <img
++          src={`${BASE}/${src.replace(/^\//, "")}`}
++          alt={badge.name}
++          width={88}
++          height={88}
++          className="w-[88px] h-[88px] object-contain shrink-0"
++          onError={() => setImgFailed(true)}
++        />
++      ) : (
++        <span className="w-[88px] h-[88px] flex items-center justify-center text-4xl shrink-0">
++          {badge.emoji}
++        </span>
++      )}
++      <span className="text-xs font-semibold leading-tight" style={{ color: badge.color ?? undefined }}>
++        {badge.name}
++        {trailing}
++        {meta && <span className="font-normal opacity-70"> ({meta})</span>}
++      </span>
++      {badge.subtitle && (
++        <span className="text-[10px] text-muted-foreground leading-tight">{badge.subtitle}</span>
++      )}
++    </div>
++  );
++}
+diff --git a/artifacts/sana-quran/src/pages/badge-entitlements.tsx b/artifacts/sana-quran/src/pages/badge-entitlements.tsx
+index e16979b..75e1d85 100644
+--- a/artifacts/sana-quran/src/pages/badge-entitlements.tsx
++++ b/artifacts/sana-quran/src/pages/badge-entitlements.tsx
+@@ -15,7 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { Button } from "@/components/ui/button";
+-import { Loader2, Award, RefreshCw } from "lucide-react";
++import { Loader2, Award, RefreshCw, Send } from "lucide-react";
++import { BadgeChip } from "@/components/badges/BadgeChip";
+ 
+ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+ 
+@@ -77,6 +78,12 @@ function formatArDate(dateStr: string): string {
+     return new Date(dateStr + "T12:00:00Z").toLocaleDateString("ar-SA", { day: "numeric", month: "long" });
+   } catch { return dateStr; }
+ }
++function monthStartOf(dateStr: string): string { return `${dateStr.slice(0, 7)}-01`; }
++function monthEndOf(dateStr: string): string {
++  const [y, m] = dateStr.slice(0, 7).split("-").map(Number);
++  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
++  return `${dateStr.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
++}
+ 
+ async function fetchJson<T>(path: string): Promise<T> {
+   const res = await fetch(`${BASE}/api${path}`, { headers: authHeader() });
+@@ -85,20 +92,19 @@ async function fetchJson<T>(path: string): Promise<T> {
+ }
+ 
+ // ─── قسم عام قابل لإعادة الاستخدام ───────────────────────────────────────────
+-// نفس نمط عرض الوسام (صورة لو متوفرة، وإلا إيموجي) المستخدم بصفحات
+-// my-circle.tsx / my-progress.tsx / circle-overview.tsx — عشان يبقى متوافق شكليًا.
++// نفس مكوّن عرض الوسام (BadgeChip) المستخدم بصفحات my-circle.tsx /
++// my-progress.tsx / circle-overview.tsx — عشان يبقى متوافق شكليًا 100%.
+ function BadgePill({ e }: { e: OverviewEntry }) {
++  return <BadgeChip badge={e.badge} meta={e.meta} />;
++}
++// ملاحظة: e.label (اسم الطالبة/الحلقة نفسها) كان يظهر بدل اسم الوسام بالسطر
++// الأول سابقًا؛ الآن BadgeChip يعرض اسم الوسام دومًا، واسم الجهة المستحقة (e.label)
++// نعرضه فوق الوسام مباشرة عشان يبقى واضح مين المستحقة.
++function BadgeEntry({ e }: { e: OverviewEntry }) {
+   return (
+-    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl text-white text-sm font-semibold shadow-sm" style={{ backgroundColor: e.badge.color }}>
+-      {(e.badge.thumb || e.badge.image) ? (
+-        <img src={`${BASE}/${e.badge.thumb || e.badge.image}`} alt={e.badge.name} className="w-10 h-10 object-contain shrink-0" />
+-      ) : (
+-        <span className="text-lg shrink-0">{e.badge.emoji}</span>
+-      )}
+-      <span className="flex flex-col items-start">
+-        <span>{e.label}{e.meta && <span className="font-normal opacity-80"> ({e.meta})</span>}</span>
+-        <span className="text-[11px] font-normal opacity-80">{e.badge.name}</span>
+-      </span>
++    <div className="inline-flex flex-col items-center gap-1">
++      <span className="text-xs font-semibold text-foreground">{e.label}</span>
++      <BadgePill e={e} />
+     </div>
+   );
+ }
+@@ -111,9 +117,11 @@ interface SectionProps {
+   filterLabel: string;
+   filterControl: React.ReactNode;
+   emptyLabel?: string;
++  /** محتوى إضافي أسفل القسم (مثل زر "إرسال الوسام الآن" لقسم الحضور الشهري) */
++  footer?: React.ReactNode;
+ }
+ 
+-function BadgeSection({ title, description, entries, loading, filterLabel, filterControl, emptyLabel }: SectionProps) {
++function BadgeSection({ title, description, entries, loading, filterLabel, filterControl, emptyLabel, footer }: SectionProps) {
+   return (
+     <Card>
+       <CardHeader className="pb-3">
+@@ -136,10 +144,11 @@ function BadgeSection({ title, description, entries, loading, filterLabel, filte
+         ) : entries === null ? null : entries.length === 0 ? (
+           <p className="text-sm text-muted-foreground text-center py-6">{emptyLabel ?? "لا توجد مستحقات ضمن هذا الفلتر"}</p>
+         ) : (
+-          <div className="flex flex-wrap gap-2">
+-            {entries.map(e => <BadgePill key={e.key} e={e} />)}
++          <div className="flex flex-wrap gap-4">
++            {entries.map(e => <BadgeEntry key={e.key} e={e} />)}
+           </div>
+         )}
++        {footer}
+       </CardContent>
+     </Card>
+   );
+@@ -153,7 +162,10 @@ export default function BadgeEntitlementsPage({ userRole }: BadgeEntitlementsPag
+   // فلاتر كل قسم — مستقلة عن بعض
+   const [weekMoon, setWeekMoon] = useState(getLastCompletedWeekStart());
+   const [asOfPlan, setAsOfPlan] = useState(getMakkahDay());
+-  const [month, setMonth] = useState(getMakkahDay().slice(0, 7));
++  // الحضور الشهري: فترة حرة تحددينها بنفسك (من/إلى)، افتراضيًا الشهر الحالي كامل —
++  // مو شهر تقويمي ثابت لازم ينتهي؛ اختاري أي فترة تبين ترسلين وسامها.
++  const [monthFrom, setMonthFrom] = useState(monthStartOf(getMakkahDay()));
++  const [monthTo, setMonthTo] = useState(monthEndOf(getMakkahDay()));
+   const [weekImprove, setWeekImprove] = useState(getLastCompletedWeekStart());
+   const [weekTrack, setWeekTrack] = useState(getLastCompletedWeekStart());
+   const [weekSupervisor, setWeekSupervisor] = useState(getLastCompletedWeekStart());
+@@ -161,6 +173,62 @@ export default function BadgeEntitlementsPage({ userRole }: BadgeEntitlementsPag
+   const [data, setData] = useState<Partial<AllOverviewResponse>>({});
+   const [loadingKey, setLoadingKey] = useState<Record<string, boolean>>({});
+   const [error, setError] = useState<string | null>(null);
++  const [sending, setSending] = useState(false);
++  const [sendResult, setSendResult] = useState<string | null>(null);
++
++  const canSend = userRole === "leader" || userRole === "deputy";
++
++  // بداية الفصل الحالي — تُستخدم بالباك إند عشان "شع نورك" ما يقارن بأسبوع قبل بداية الفصل
++  const [termStart, setTermStart] = useState("");
++  const [savingTermStart, setSavingTermStart] = useState(false);
++  const [termStartSaved, setTermStartSaved] = useState<string | null>(null);
++
++  useEffect(() => {
++    if (!canSend) return;
++    fetchJson<Record<string, string>>("/settings").then(s => {
++      if (s.term_start_date) setTermStart(s.term_start_date);
++    }).catch(() => {});
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  async function saveTermStart() {
++    if (!termStart) return;
++    setSavingTermStart(true);
++    setTermStartSaved(null);
++    try {
++      const res = await fetch(`${BASE}/api/settings`, {
++        method: "PATCH",
++        headers: authHeader(),
++        body: JSON.stringify({ key: "term_start_date", value: termStart }),
++      });
++      if (!res.ok) throw new Error();
++      setTermStartSaved("✅ تم الحفظ");
++    } catch {
++      setTermStartSaved("تعذّر الحفظ");
++    } finally {
++      setSavingTermStart(false);
++    }
++  }
++
++  async function sendMonthlyBadges() {
++    if (monthFrom > monthTo) { setSendResult("تاريخ البداية لازم يكون قبل تاريخ النهاية"); return; }
++    setSending(true);
++    setSendResult(null);
++    try {
++      const res = await fetch(`${BASE}/api/live-badges/send/monthly-perfect`, {
++        method: "POST",
++        headers: authHeader(),
++        body: JSON.stringify({ dateFrom: monthFrom, dateTo: monthTo }),
++      });
++      const body = await res.json();
++      if (!res.ok) throw new Error(body?.error ?? "تعذّر الإرسال");
++      setSendResult(body.count > 0 ? `✅ تم إرسال الوسام لـ ${body.count} طالبة` : "ما فيه طالبات مستحقة ضمن هذي الفترة");
++    } catch (err) {
++      setSendResult(err instanceof Error ? err.message : "تعذّر الإرسال");
++    } finally {
++      setSending(false);
++    }
++  }
+ 
+   function setLoading(key: string, v: boolean) { setLoadingKey(s => ({ ...s, [key]: v })); }
+ 
+@@ -179,7 +247,7 @@ export default function BadgeEntitlementsPage({ userRole }: BadgeEntitlementsPag
+   function reloadAll() {
+     reload("circleWeeklyMoon", `/live-badges/overview/circle-weekly-moon?weekStart=${weekMoon}`);
+     reload("reviewPlanCompletion", `/live-badges/overview/review-plan-completion?asOf=${asOfPlan}`);
+-    reload("monthlyPerfect", `/live-badges/overview/monthly-perfect?month=${month}`);
++    reload("monthlyPerfect", `/live-badges/overview/monthly-perfect?dateFrom=${monthFrom}&dateTo=${monthTo}`);
+     reload("improvement", `/live-badges/overview/improvement?weekStart=${weekImprove}`);
+     reload("trackNoShortcoming", `/live-badges/overview/track-no-shortcoming?weekStart=${weekTrack}`);
+     reload("supervisorWeeklyCommitment", `/live-badges/overview/supervisor-weekly-commitment?weekStart=${weekSupervisor}`);
+@@ -235,20 +303,34 @@ export default function BadgeEntitlementsPage({ userRole }: BadgeEntitlementsPag
+       />
+ 
+       <BadgeSection
+-        title="🏆 حضور الشهر الكامل"
+-        description="الطالبات اللي حضرن الشهر كامل بدون أي غياب"
++        title="🏆 حضور الفترة الكاملة"
++        description="الطالبات اللي حضرن الفترة المحددة كاملة بدون أي غياب — حددي الفترة اللي تبين، مو بالضرورة شهر تقويمي كامل"
+         entries={data.monthlyPerfect ?? null}
+         loading={!!loadingKey.monthlyPerfect}
+-        filterLabel="الشهر"
++        filterLabel="من — إلى"
+         filterControl={
+-          <Input type="month" className="h-8 w-40" value={month}
+-            onChange={e => { setMonth(e.target.value); reload("monthlyPerfect", `/live-badges/overview/monthly-perfect?month=${e.target.value}`); }} />
++          <div className="flex items-center gap-2">
++            <Input type="date" className="h-8 w-36" value={monthFrom}
++              onChange={e => { setMonthFrom(e.target.value); reload("monthlyPerfect", `/live-badges/overview/monthly-perfect?dateFrom=${e.target.value}&dateTo=${monthTo}`); }} />
++            <span className="text-xs text-muted-foreground">إلى</span>
++            <Input type="date" className="h-8 w-36" value={monthTo}
++              onChange={e => { setMonthTo(e.target.value); reload("monthlyPerfect", `/live-badges/overview/monthly-perfect?dateFrom=${monthFrom}&dateTo=${e.target.value}`); }} />
++          </div>
+         }
++        footer={canSend && (
++          <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
++            <Button size="sm" onClick={sendMonthlyBadges} disabled={sending || !(data.monthlyPerfect?.length)}>
++              {sending ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Send className="w-4 h-4 ml-1" />}
++              إرسال الوسام الآن لكل المستحقات
++            </Button>
++            {sendResult && <span className="text-sm text-muted-foreground">{sendResult}</span>}
++          </div>
++        )}
+       />
+ 
+       <BadgeSection
+-        title="✨ التطور"
+-        description="الطالبات اللي تحسّن حضورهن هذا الأسبوع مقارنة باللي قبله"
++        title="✨ شع نورك (التطور)"
++        description="الطالبات اللي تحسّن حضورهن هذا الأسبوع مقارنة بالأسبوع اللي قبله مباشرة"
+         entries={data.improvement ?? null}
+         loading={!!loadingKey.improvement}
+         filterLabel="الأسبوع (اختاري أي يوم منه)"
+@@ -259,6 +341,18 @@ export default function BadgeEntitlementsPage({ userRole }: BadgeEntitlementsPag
+             <span className="text-xs text-muted-foreground whitespace-nowrap">{formatArDate(weekImprove)} — {formatArDate(addDaysStr(weekImprove, 4))}</span>
+           </div>
+         }
++        footer={canSend && (
++          <div className="mt-4 pt-4 border-t flex items-center gap-2 flex-wrap">
++            <Label className="text-xs whitespace-nowrap">بداية الفصل الحالي (ما يُحسب وسام إلا من ثاني أسبوع بعدها)</Label>
++            <Input type="date" className="h-8 w-40" value={termStart}
++              onChange={e => setTermStart(e.target.value)} />
++            <Button size="sm" variant="outline" onClick={saveTermStart} disabled={savingTermStart}>
++              {savingTermStart ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : null}
++              حفظ
++            </Button>
++            {termStartSaved && <span className="text-xs text-muted-foreground">{termStartSaved}</span>}
++          </div>
++        )}
+       />
+ 
+       <BadgeSection
+diff --git a/artifacts/sana-quran/src/pages/circle-overview.tsx b/artifacts/sana-quran/src/pages/circle-overview.tsx
+index 6be1a9d..1dd8933 100644
+--- a/artifacts/sana-quran/src/pages/circle-overview.tsx
++++ b/artifacts/sana-quran/src/pages/circle-overview.tsx
+@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Loader2, ArrowRight, Users, CalendarDays } from "lucide-react";
+ import { getToken } from "@/lib/auth";
++import { BadgeChip } from "@/components/badges/BadgeChip";
+ 
+ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+ const authHeader = (): Record<string, string> => {
+@@ -89,23 +90,15 @@ export default function CircleOverviewPage({ circleId }: { circleId: number }) {
+             <CardTitle className="text-sm font-bold flex items-center gap-2 text-indigo-700">🌙 أوسمة الحلقة</CardTitle>
+           </CardHeader>
+           <CardContent className="pt-0">
+-            <div className="flex flex-wrap gap-2">
++            <div className="flex flex-wrap gap-4">
+               {data.badges.map(b => (
+-                <span
++                <BadgeChip
+                   key={b.badgeId}
+-                  className="inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 text-sm font-semibold"
+-                  style={{ backgroundColor: `${b.color}22`, color: b.color }}
+-                >
+-                  {(b.thumb || b.image) ? (
+-                    <img src={`${import.meta.env.BASE_URL}${b.thumb || b.image}`} alt={b.name} className="w-10 h-10 object-contain shrink-0" />
+-                  ) : (
+-                    <span className="text-lg shrink-0">{b.emoji}</span>
++                  badge={b}
++                  trailing={(b as any).timesAwarded > 1 && (
++                    <span className="text-[10px] font-normal opacity-70"> (تكررت {(b as any).timesAwarded} مرة)</span>
+                   )}
+-                  <span className="flex flex-col items-start">
+-                    <span>{b.name}{(b as any).timesAwarded > 1 && <span className="text-[10px] font-normal opacity-70"> (تكررت {(b as any).timesAwarded} مرة)</span>}</span>
+-                    <span className="text-[11px] font-normal opacity-80">{b.subtitle}</span>
+-                  </span>
+-                </span>
++                />
+               ))}
+             </div>
+           </CardContent>
+diff --git a/artifacts/sana-quran/src/pages/my-circle.tsx b/artifacts/sana-quran/src/pages/my-circle.tsx
+index 8fb0678..0e21940 100644
+--- a/artifacts/sana-quran/src/pages/my-circle.tsx
++++ b/artifacts/sana-quran/src/pages/my-circle.tsx
+@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
+ import { useListStudents, useGetCurrentUser, useListRecords } from "@workspace/api-client-react";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Badge } from "@/components/ui/badge";
++import { BadgeChip } from "@/components/badges/BadgeChip";
+ import { Button } from "@/components/ui/button";
+ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+ import { Users, Archive, Loader2, MessageCircle, BookOpen, CalendarDays, CheckCircle2, History } from "lucide-react";
+@@ -339,23 +340,9 @@ export default function MyCirclePage() {
+             </CardTitle>
+           </CardHeader>
+           <CardContent className="pt-0">
+-            <div className="flex flex-wrap gap-2">
++            <div className="flex flex-wrap gap-4">
+               {liveCircleBadges.map((b: any) => (
+-                <span
+-                  key={`live-${b.badgeId}`}
+-                  className="inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 text-sm font-semibold"
+-                  style={{ backgroundColor: `${b.color}22`, color: b.color }}
+-                >
+-                  {(b.thumb || b.image) ? (
+-                    <img src={`${import.meta.env.BASE_URL}${b.thumb || b.image}`} alt={b.name} className="w-10 h-10 object-contain shrink-0" />
+-                  ) : (
+-                    <span className="text-lg shrink-0">{b.emoji}</span>
+-                  )}
+-                  <span className="flex flex-col items-start">
+-                    <span>{b.name}</span>
+-                    <span className="text-[11px] font-normal opacity-80">{b.subtitle}</span>
+-                  </span>
+-                </span>
++                <BadgeChip key={`live-${b.badgeId}`} badge={b} />
+               ))}
+               {circleBadges.map((b: any) => (
+                 <span key={b.id} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 text-indigo-900 px-3 py-1.5 text-sm font-semibold">
+diff --git a/artifacts/sana-quran/src/pages/my-progress.tsx b/artifacts/sana-quran/src/pages/my-progress.tsx
+index 64fa63d..da19298 100644
+--- a/artifacts/sana-quran/src/pages/my-progress.tsx
++++ b/artifacts/sana-quran/src/pages/my-progress.tsx
+@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
++import { BadgeChip } from "@/components/badges/BadgeChip";
+ import { Input } from "@/components/ui/input";
+ import { TrendingUp, Calendar, Users, ExternalLink, Volume2, MessageSquare, AlertTriangle, Target, Plus, CheckCircle2, Circle, BookOpen, Loader2, Trash2, Clock } from "lucide-react";
+ import { formatPages } from "@/lib/quran";
+@@ -363,23 +364,9 @@ export default function MyProgressPage() {
+                 <CardTitle className="text-sm font-bold flex items-center gap-2">🌟 أوسمتي</CardTitle>
+               </CardHeader>
+               <CardContent className="pt-0">
+-                <div className="flex flex-wrap gap-2">
++                <div className="flex flex-wrap gap-4">
+                   {myLiveBadges.map((b: any) => (
+-                    <span
+-                      key={b.badgeId}
+-                      className="inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 text-sm font-semibold"
+-                      style={{ backgroundColor: `${b.color}22`, color: b.color }}
+-                    >
+-                      {(b.thumb || b.image) ? (
+-                        <img src={`${import.meta.env.BASE_URL}${b.thumb || b.image}`} alt={b.name} className="w-10 h-10 object-contain shrink-0" />
+-                      ) : (
+-                        <span className="text-lg shrink-0">{b.emoji}</span>
+-                      )}
+-                      <span className="flex flex-col items-start">
+-                        <span>{b.name}</span>
+-                        <span className="text-[11px] font-normal opacity-80">{b.subtitle}</span>
+-                      </span>
+-                    </span>
++                    <BadgeChip key={b.badgeId} badge={b} />
+                   ))}
+                 </div>
+               </CardContent>
+diff --git a/artifacts/sana-quran/src/pages/weekly-absence-groups.tsx b/artifacts/sana-quran/src/pages/weekly-absence-groups.tsx
+index a051907..2592e6e 100644
+--- a/artifacts/sana-quran/src/pages/weekly-absence-groups.tsx
++++ b/artifacts/sana-quran/src/pages/weekly-absence-groups.tsx
+@@ -45,6 +45,8 @@ interface GroupsResponse {
+   weekEnd: string;
+   availableTracks: string[];
+   groups: Record<string, CircleGroupItem[]>;
++  /** حلقات بدون أي إدخال بيانات هالأسبوع — ما تدخل مجموعة "صفر غياب" ولا أي مجموعة ثانية */
++  noData?: { id: number; name: string; track: string }[];
+ }
+ 
+ const GROUP_CONFIG: { key: string; label: string; badge: string; bg: string; text: string; border: string }[] = [
+@@ -158,7 +160,7 @@ export default function WeeklyAbsenceGroupsPage() {
+ 
+       {loading ? (
+         <div className="text-center py-10 text-muted-foreground text-sm">جاري التحميل...</div>
+-      ) : !data || totalCircles === 0 ? (
++      ) : !data || (totalCircles === 0 && !(data.noData && data.noData.length > 0)) ? (
+         <Card className="border-0 shadow-sm">
+           <CardContent className="py-10 text-center text-muted-foreground text-sm">
+             لا توجد بيانات لهذا الأسبوع
+@@ -200,6 +202,27 @@ export default function WeeklyAbsenceGroupsPage() {
+               </Card>
+             );
+           })}
++
++          {data.noData && data.noData.length > 0 && (
++            <Card className="border-0 shadow-sm border-r-4 border-r-gray-300">
++              <CardHeader className="pb-3">
++                <CardTitle className="text-sm font-bold flex items-center gap-2 text-gray-600">
++                  بدون إدخال بيانات هالأسبوع
++                  <Badge className="bg-gray-100 text-gray-600 border-0 text-xs">{data.noData.length}</Badge>
++                </CardTitle>
++              </CardHeader>
++              <CardContent className="pt-0 space-y-2">
++                {data.noData.map(c => (
++                  <div key={c.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5">
++                    <span className="font-semibold text-sm text-gray-600">{c.name}</span>
++                    <span className="text-xs text-gray-500 opacity-70 flex items-center gap-1">
++                      <Users className="w-3 h-3" /> {c.track}
++                    </span>
++                  </div>
++                ))}
++              </CardContent>
++            </Card>
++          )}
+         </>
+       )}
+     </div>
+-- 
+2.43.0
+
