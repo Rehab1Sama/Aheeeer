@@ -1,0 +1,2 @@
+ALTER TABLE "exam_rotations" ADD COLUMN IF NOT EXISTS "teacher_scope" text NOT NULL DEFAULT 'girls';--> statement-breakpoint
+ALTER TABLE "exam_rotations" ADD COLUMN IF NOT EXISTS "selected_tracks" text NOT NULL DEFAULT '[]';

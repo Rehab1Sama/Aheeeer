@@ -43,4 +43,3 @@ jobs:
           git add -A
           git commit -m "Extract project to repository root" || echo "No changes to commit"
           git push
-          
