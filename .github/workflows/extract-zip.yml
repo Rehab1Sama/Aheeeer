@@ -1,0 +1,46 @@
+name: Extract ZIP to Root
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Extract ZIP to root
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "لم يتم العثور على ملف ZIP"
+            exit 1
+          fi
+
+          mkdir -p /tmp/extracted
+          unzip -q "$ZIP_FILE" -d /tmp/extracted
+
+          CONTENTS=(/tmp/extracted/*)
+
+          if [ ${#CONTENTS[@]} -eq 1 ] && [ -d "${CONTENTS[0]}" ]; then
+            cp -a "${CONTENTS[0]}/." ./
+          else
+            cp -a /tmp/extracted/. ./
+          fi
+
+          rm -f "$ZIP_FILE"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Extract project to repository root" || echo "No changes to commit"
+          git push
+          
