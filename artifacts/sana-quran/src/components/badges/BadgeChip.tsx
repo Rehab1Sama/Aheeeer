@@ -14,6 +14,7 @@ export interface BadgeChipData {
 export function BadgeChip({
   badge,
   size = 200,
+  compact = false,
 }: {
   badge: BadgeChipData;
   trailing?: React.ReactNode;
@@ -26,20 +27,24 @@ export function BadgeChip({
   // استخدام الصورة الأصلية أولًا وبنفس جودتها
   const src = badge.image || badge.thumb;
 
+  // الحجم الفعلي للوسام:
+  // في الوضع المضغوط نستخدم 160px بدل المساحة الكبيرة المرسلة من الصفحة.
+  const displaySize = compact ? Math.min(size, 160) : size;
+
   return (
     <div
-      className="inline-flex items-center justify-center overflow-hidden"
+      className="inline-flex items-start justify-center overflow-hidden"
       style={{
-        width: size,
-        height: size,
+        width: displaySize,
+        height: displaySize,
       }}
     >
       {src && !imgFailed ? (
         <div
-          className="flex items-center justify-center overflow-hidden"
+          className="flex items-start justify-center overflow-hidden"
           style={{
-            width: size,
-            height: size,
+            width: displaySize,
+            height: displaySize,
           }}
         >
           <img
@@ -51,6 +56,7 @@ export function BadgeChip({
             style={{
               width: "100%",
               height: "100%",
+              objectFit: "contain",
               transform: "scale(2.2)",
               transformOrigin: "center center",
             }}
@@ -61,9 +67,9 @@ export function BadgeChip({
         <span
           className="flex items-center justify-center"
           style={{
-            width: size,
-            height: size,
-            fontSize: size * 0.45,
+            width: displaySize,
+            height: displaySize,
+            fontSize: displaySize * 0.45,
           }}
           aria-hidden="true"
         >
