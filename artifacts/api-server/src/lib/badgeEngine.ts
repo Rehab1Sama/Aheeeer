@@ -155,17 +155,48 @@ export async function computeAllCirclesWeeklyMoonBadges(
 // صفحة "مستحقات الأوسمة")، بدل شهر تقويمي ثابت لازم ينتهي أولًا. الغلاف
 // الشهري (أدناه) موجود فقط للتوافق مع أي استخدام قديم بمعامل month=YYYY-MM.
 
-/** حضور كامل بلا أي غياب خلال [dateFrom, dateTo] (شاملة الطرفين). null لو ما فيه إدخال بيانات فعلي بالفترة. */
+/**
+ * حضور كامل بلا أي غياب خلال [dateFrom, dateTo] (شاملة الطرفين).
+ * null لو ما فيه إدخال بيانات فعلي **وكامل** بالفترة.
+ *
+ * 🐛 تصحيح (نفس فكرة تصحيح hasAnyRecord لأقمر الحلقة أعلاه): سابقًا كانت
+ * الدالة تمنح الوسام بمجرد وجود سجلات وما فيها أي غياب — حتى لو كانت
+ * السجلات تغطي جزء بسيط من الفترة بس (طالبة انضمت متأخرة، رجعت من إجازة،
+ * أو نقص إدخال لبقية الأيام). الحين لازم يكون عندها سجل بكل يوم من أيام
+ * الإدخال المتوقعة لحلقتها ضمن الفترة كاملة، وإلا تُعامل معاملة "ما فيه
+ * إدخال كافٍ" (null) — مو استحقاق فعلي.
+ */
 export async function computeStudentPerfectAttendanceInRange(
   studentId: number,
   dateFrom: string,
   dateTo: string,
 ): Promise<EarnedBadge | null> {
-  const recs = await db.select({ isAbsent: recordsTable.isAbsent })
+  const [student] = await db.select({ circleId: studentsTable.circleId, isArchived: studentsTable.isArchived })
+    .from(studentsTable).where(eq(studentsTable.id, studentId));
+  if (!student?.circleId || student.isArchived) return null;
+
+  const [circle] = await db.select({ name: circlesTable.name, trackType: circlesTable.trackType, trackId: circlesTable.trackId })
+    .from(circlesTable).where(eq(circlesTable.id, student.circleId));
+  if (!circle) return null;
+
+  const dataEntryType = circle.trackId
+    ? ((await db.select().from(tracksTable).where(eq(tracksTable.id, circle.trackId)))[0]?.dataEntryType ?? circle.trackType ?? "girls")
+    : (circle.trackType ?? "girls");
+
+  const expectedDates: string[] = [];
+  for (let d = dateFrom; d <= dateTo; d = addDaysStr(d, 1)) {
+    if (isEntryExpectedOn(dataEntryType, circle.name, d)) expectedDates.push(d);
+  }
+  if (expectedDates.length === 0) return null;
+
+  const recs = await db.select({ date: recordsTable.date, isAbsent: recordsTable.isAbsent })
     .from(recordsTable)
     .where(and(eq(recordsTable.studentId, studentId), gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
 
-  if (recs.length === 0) return null; // ما فيه إدخال بيانات فعلي بالفترة
+  const recordedDates = new Set(recs.map(r => r.date));
+  const fullyRecorded = expectedDates.every(d => recordedDates.has(d));
+  if (!fullyRecorded) return null; // إدخال ناقص لبعض الأيام المتوقعة — مو استحقاق فعلي بعد
+
   if (recs.some(r => r.isAbsent)) return null;
 
   const tierDef = getBadgeTier("monthly_perfect", 0);
@@ -382,6 +413,11 @@ export async function computeSupervisorWeeklyCommitment(
   supervisorNameId: number,
   weekStart: string = getLastCompletedWeekStart(),
 ): Promise<EarnedBadge | null> {
+  // مُعطَّل مؤقتًا بطلب من المستخدمة — ما يشتغل إلا بدءًا من هالتاريخ (أول أسبوع
+  // يُعلن جمعته القادمة). لو حبيتي تفعّلينه فورًا لاحقًا، غيّري التاريخ هنا.
+  const TRACK_SUPERVISOR_PRIDE_ACTIVE_FROM = "2026-09-13";
+  if (weekStart < TRACK_SUPERVISOR_PRIDE_ACTIVE_FROM) return null;
+
   const [nameRow] = await db.select().from(trackSupervisorNamesTable).where(eq(trackSupervisorNamesTable.id, supervisorNameId));
   if (!nameRow) return null;
 
