@@ -120,7 +120,11 @@ export interface ReviewPlan {
     isCompleted: boolean;
     isLocked: boolean;
   };
-  dayRecords?: Record<string, { reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean }>;
+  dayRecords?: Record<string, {
+    reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
+    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+  }>;
 }
 
 interface SurahRange {
@@ -444,6 +448,11 @@ function printPlan(plan: ReviewPlan, totalDays: number, planMode: "girls" | "fix
 }
 
 type DayStatus = "absent" | "ahead" | "ontrack" | "behind" | null;
+type DayRecordShape = {
+  reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
+  reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+  reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+};
 
 // Resolves the "pages actually done" value for a review record, using the field
 // convention that matches the plan's track: fixation/تثبيت stores its quota in
@@ -457,59 +466,84 @@ function getRecordDoneValue(
   return v ?? null;
 }
 
-// Computes a per-day status (absent/ahead/ontrack/behind/null) for every day up to
-// today, applying the same catch-up rule as the leadership overview: once the student
-// meets her quota on a later day, every behind/absent day strictly before that catch-up
-// day is forgiven and shown as ontrack — this works the same for both girls (مراجعة)
-// and fixation (تثبيت) plans.
+// Converts a (surah name, ayah number) position into one global ayah ordinal
+// (1 = الفاتحة:1, increasing sequentially through the whole Quran) so two
+// Quran positions ("النطاق") can be compared directly.
+const SURAH_ORDINAL_OFFSET = new Map<string, number>();
+{
+  let offset = 0;
+  for (const surah of [...SURAHS].sort((a, b) => a.number - b.number)) {
+    SURAH_ORDINAL_OFFSET.set(surah.name, offset);
+    offset += surah.ayahs;
+  }
+}
+function ayahOrdinal(surahName: string | null | undefined, ayahNumber: number | null | undefined): number | null {
+  if (!surahName || !Number.isInteger(ayahNumber)) return null;
+  const offset = SURAH_ORDINAL_OFFSET.get(surahName.trim());
+  if (offset == null) return null;
+  return offset + (ayahNumber as number);
+}
+
+// Resolves the "ayah position reached" (end of range) for a review record,
+// same track convention/fallback as getRecordDoneValue but for the range fields.
+function getRecordDoneEndOrdinal(planMode: "girls" | "fixation", rec: DayRecordShape | undefined): number | null {
+  if (!rec) return null;
+  const surahEnd = planMode === "fixation" ? (rec.reviewSurahEnd ?? rec.reviewFarSurahEnd) : rec.reviewFarSurahEnd;
+  const ayahEnd = planMode === "fixation" ? (rec.reviewAyahEnd ?? rec.reviewFarAyahEnd) : rec.reviewFarAyahEnd;
+  return ayahOrdinal(surahEnd, ayahEnd);
+}
+
+// Computes a per-day status (absent/ahead/ontrack/behind/null) for every day of
+// the plan, based on the QURAN RANGE the student has actually reached (farthest
+// ayah recorded so far) compared with the ayah each day's quota requires her to
+// have reached by then. Because this is cumulative, once she's genuinely ahead,
+// every day up to the point she's reached shows ahead/ontrack — including days
+// that haven't arrived yet on the calendar — and only days that have already
+// passed without her reaching them show behind.
 function computeDayStatuses(
   plan: ReviewPlan, dates: string[], currentDayNum: number, planMode: "girls" | "fixation",
 ): Map<number, DayStatus> {
   const map = new Map<number, DayStatus>();
   if (currentDayNum <= 0) return map;
-  const lastDayToCheck = Math.min(currentDayNum, dates.length);
 
   const recAt = (d: number) => {
     const ds = dates[d - 1];
-    return ds && plan.dayRecords ? plan.dayRecords[ds] : undefined;
+    return ds && plan.dayRecords ? (plan.dayRecords[ds] as DayRecordShape | undefined) : undefined;
   };
-  const quotaAt = (d: number) => plan.days.find(pd => pd.dayNumber === d)?.pages ?? 0;
+  const targetAt = (d: number) => {
+    const day = plan.days.find(pd => pd.dayNumber === d);
+    return ayahOrdinal(day?.surahEnd, day?.ayahEnd);
+  };
   const isSaturday = (d: number) => {
     const ds = dates[d - 1];
     return ds ? new Date(ds + "T12:00:00Z").getUTCDay() === 6 : false;
   };
 
-  const rawStatus = (d: number): DayStatus => {
+  // Farthest ayah position reached so far, from any non-absent record dated
+  // up to today (progress only moves forward, so the max is her true position).
+  let actualOrdinal: number | null = null;
+  for (let d = 1; d <= currentDayNum; d++) {
     const rec = recAt(d);
-    // Saturday: no data entry at the maqraah — never counts as a miss.
-    if (!rec && isSaturday(d)) return null;
-    if (rec?.isAbsent) return "absent";
-    const done = getRecordDoneValue(planMode, rec);
-    const quota = quotaAt(d);
-    if (done != null) {
-      if (quota <= 0) return "ontrack";
-      if (done > quota) return "ahead";
-      if (done >= quota) return "ontrack";
-      return "behind";
-    }
-    // No record yet: today just isn't entered yet (keep neutral theme colour);
-    // a past day with nothing entered is a genuine miss.
-    return d === currentDayNum ? null : "behind";
-  };
-
-  // Pass 1: last day the quota was actually met — the most recent catch-up point.
-  let lastCompletedDay = 0;
-  for (let d = 1; d <= lastDayToCheck; d++) {
-    const s = rawStatus(d);
-    if (s === "ontrack" || s === "ahead") lastCompletedDay = d;
+    if (!rec || rec.isAbsent) continue;
+    const ord = getRecordDoneEndOrdinal(planMode, rec);
+    if (ord != null && (actualOrdinal == null || ord > actualOrdinal)) actualOrdinal = ord;
   }
 
-  // Pass 2: forgive behind/absent days strictly before that catch-up — delay and
-  // absence both disappear the moment she catches up on a later day.
-  for (let d = 1; d <= lastDayToCheck; d++) {
-    let s = rawStatus(d);
-    if (d < lastCompletedDay && (s === "behind" || s === "absent")) s = "ontrack";
-    map.set(d, s);
+  for (let d = 1; d <= plan.days.length; d++) {
+    const rec = recAt(d);
+    if (rec?.isAbsent) { map.set(d, "absent"); continue; }
+    // Saturday: no data entry at the maqraah — never counts as a miss.
+    if (!rec && isSaturday(d)) { map.set(d, null); continue; }
+    const target = targetAt(d);
+    if (target == null) { map.set(d, null); continue; }
+    if (actualOrdinal != null && actualOrdinal > target) { map.set(d, "ahead"); continue; }
+    if (actualOrdinal != null && actualOrdinal === target) { map.set(d, "ontrack"); continue; }
+    // She hasn't reached this day's mark yet: only a genuine miss once the day
+    // has actually arrived; today with nothing entered yet stays neutral, and
+    // days still in the future aren't judged at all.
+    if (d < currentDayNum) { map.set(d, "behind"); continue; }
+    if (d === currentDayNum) { map.set(d, rec ? "behind" : null); continue; }
+    map.set(d, null);
   }
   return map;
 }
