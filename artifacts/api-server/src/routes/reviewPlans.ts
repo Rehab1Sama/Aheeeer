@@ -13,6 +13,7 @@ import {
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
+import { getPlanQuotaRanges, computeDayRanges, type DayRangeSegment } from "../lib/quranRanges";
 
 const router: IRouter = Router();
 
@@ -1712,6 +1713,20 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       return ayahOrdinal(surahEnd, ayahEnd);
     };
 
+    // Fallback for plans that don't store surahEnd/ayahEnd on the day itself
+    // (e.g. auto-computed ranges) — same computed segments the frontend table
+    // already uses to display the range, indexed by day order.
+    const quotaRanges = getPlanQuotaRanges(plan);
+    const computedRanges: Array<DayRangeSegment[]> | null =
+      quotaRanges.length > 0 ? computeDayRanges(quotaRanges, planDays) : null;
+    const computedTargetAt = (d: number): number | null => {
+      if (!computedRanges) return null;
+      const dayIdx = planDays.findIndex((pd: typeof allDays[0]) => pd.dayNumber === d);
+      const segs = dayIdx >= 0 ? computedRanges[dayIdx] : undefined;
+      const lastSeg = segs && segs.length > 0 ? segs[segs.length - 1] : undefined;
+      return lastSeg ? ayahOrdinal(lastSeg.surahEnd, lastSeg.ayahEnd) : null;
+    };
+
     // Walk backward from today (or yesterday, if today has no entry yet) to
     // find the required ayah position "as of today": the endpoint of the
     // nearest day at or before that has a defined target range (skips
@@ -1721,7 +1736,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     let targetOrdinal: number | null = null;
     for (let d = targetDayLimit; d >= 1; d--) {
       const day = planDays.find((pd: typeof allDays[0]) => pd.dayNumber === d);
-      const ord = ayahOrdinal(day?.surahEnd, day?.ayahEnd);
+      const ord = ayahOrdinal(day?.surahEnd, day?.ayahEnd) ?? computedTargetAt(d);
       if (ord != null) { targetOrdinal = ord; break; }
     }
 
