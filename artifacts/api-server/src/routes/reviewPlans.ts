@@ -49,6 +49,26 @@ function isValidQuranRange(
   return start.number < end.number || (start.number === end.number && (startAyah as number) <= (endAyah as number));
 }
 
+// Converts a (surah name, ayah number) position into a single global ayah
+// ordinal (1 = الفاتحة:1, increasing sequentially through the whole Quran).
+// This lets us compare two Quran positions ("النطاق") directly — e.g. is the
+// range the student actually reached further along than the range her plan
+// requires by today — instead of comparing derived page counts.
+const SURAH_ORDINAL_OFFSET = new Map<string, number>();
+{
+  let offset = 0;
+  for (const surah of [...QURAN_SURAHS].sort((a, b) => a.number - b.number)) {
+    SURAH_ORDINAL_OFFSET.set(surah.name, offset);
+    offset += surah.ayahs;
+  }
+}
+function ayahOrdinal(surahName: string | null | undefined, ayahNumber: number | null | undefined): number | null {
+  if (!surahName || !Number.isInteger(ayahNumber)) return null;
+  const offset = SURAH_ORDINAL_OFFSET.get(surahName.trim());
+  if (offset == null) return null;
+  return offset + (ayahNumber as number);
+}
+
 function getPlanTypeForTrack(trackType: string): PlanType | null {
   if (GIRLS_TRACK_TYPES.includes(trackType)) return "girls_review";
   if (FIXATION_TRACK_TYPES.includes(trackType)) return "fixation";
@@ -611,7 +631,11 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
   // reads reviewFarPages; fixation reads reviewPages (falling back to reviewFarPages
   // for any legacy record entered before the fields were split) — never mixed up.
   // Use DISTINCT ON (date) ordered by updated_at DESC to pick the latest record per day
-  let dayRecords: Record<string, { reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean }> = {};
+  let dayRecords: Record<string, {
+    reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
+    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+  }> = {};
   if (isLockablePlanType && plan.startDate) {
     const planType = plan.planType as PlanType;
     const cycleDates = getPlanCycleDates(plan.startDate, planType);
@@ -621,6 +645,10 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
         reviewFarPages: recordsTable.reviewFarPages,
         reviewPages: recordsTable.reviewPages,
         isAbsent: recordsTable.isAbsent,
+        reviewFarSurahEnd: recordsTable.reviewFarSurahEnd,
+        reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
+        reviewSurahEnd: recordsTable.reviewSurahEnd,
+        reviewAyahEnd: recordsTable.reviewAyahEnd,
       })
       .from(recordsTable)
       .where(and(
@@ -632,7 +660,11 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     // Keep only the latest record per date (first occurrence after ordering by updatedAt desc)
     for (const r of recs) {
       if (!dayRecords[r.date]) {
-        dayRecords[r.date] = { reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent };
+        dayRecords[r.date] = {
+          reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent,
+          reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
+          reviewSurahEnd: r.reviewSurahEnd, reviewAyahEnd: r.reviewAyahEnd,
+        };
       }
     }
   }
@@ -1565,7 +1597,11 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
 
   const studentIdsForRecords = statusPlans.map((p: typeof activePlans[0]) => p.studentId);
   // Key by `${studentId}:${circleId}` so records from another circle (e.g. after a transfer) never leak into this plan's status.
-  type DayRecord = { reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean };
+  type DayRecord = {
+    reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
+    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+  };
   const dayRecordsByStudentCircle = new Map<string, Record<string, DayRecord>>();
   if (studentIdsForRecords.length > 0 && allDatesSet.size > 0) {
     const recordsRaw = await db
@@ -1576,6 +1612,10 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         reviewFarPages: recordsTable.reviewFarPages,
         reviewPages: recordsTable.reviewPages,
         isAbsent: recordsTable.isAbsent,
+        reviewFarSurahEnd: recordsTable.reviewFarSurahEnd,
+        reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
+        reviewSurahEnd: recordsTable.reviewSurahEnd,
+        reviewAyahEnd: recordsTable.reviewAyahEnd,
       })
       .from(recordsTable)
       .where(and(
@@ -1587,7 +1627,11 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       const key = `${r.studentId}:${r.circleId}`;
       let m = dayRecordsByStudentCircle.get(key);
       if (!m) { m = {}; dayRecordsByStudentCircle.set(key, m); }
-      if (!m[r.date]) m[r.date] = { reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent };
+      if (!m[r.date]) m[r.date] = {
+        reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent,
+        reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
+        reviewSurahEnd: r.reviewSurahEnd, reviewAyahEnd: r.reviewAyahEnd,
+      };
     }
   }
 
@@ -1611,31 +1655,29 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       if (!rec) return null;
       return planType === "fixation" ? (rec.reviewPages ?? rec.reviewFarPages) : rec.reviewFarPages;
     };
-    let hasAhead = false, hasOntrack = false, unresolvedDelayDays = 0;
+    let unresolvedDelayDays = 0;
 
     const evaluateDay = (dayNumber: number) => {
-      const day = planDays.find((d: typeof allDays[0]) => d.dayNumber === dayNumber);
       const dateStr = cycleDates[dayNumber - 1];
       const rec = dateStr ? dayRecords[dateStr] : undefined;
       // Saturday: no data entry (girls only — never appears in a fixation cycle) — skip if no record
       if (!rec && dateStr && new Date(dateStr + "T12:00:00Z").getUTCDay() === 6) return;
       // Absence counts as a plan delay (forgiven by catching up later)
       if (rec?.isAbsent) { unresolvedDelayDays++; return; }
+      const day = planDays.find((d: typeof allDays[0]) => d.dayNumber === dayNumber);
       const quota = day?.pages ?? 0;
       const done = getDone(rec);
       if (done != null) {
-        if (quota <= 0) hasOntrack = true;
-        else if (done > quota) hasAhead = true;
-        else if (done >= quota) hasOntrack = true;
-        else unresolvedDelayDays++;
+        if (quota > 0 && done < quota) unresolvedDelayDays++;
       } else {
         unresolvedDelayDays++;
       }
     };
 
-    // Pass 1: find the last day the student fully completed their quota.
-    // Any missed days BEFORE that catch-up day are permanently forgiven —
-    // even if today's data hasn't been entered yet.
+    // Pass 1 (kept as-is — feeds only the "٣ تأخيرات بدون تدارك" alert, not the
+    // ahead/ontrack/behind status below): find the last day the student fully
+    // completed their quota. Any missed days BEFORE that catch-up day are
+    // permanently forgiven — even if today's data hasn't been entered yet.
     let lastCompletedDay = 0;
     for (let d = 1; d <= currentDay; d++) {
       const dateStr = cycleDates[d - 1];
@@ -1648,17 +1690,60 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     }
 
     // Pass 2: evaluate only days AFTER the last catch-up (genuine unresolved misses).
-    // If any catch-up exists, the forgiven period counts as ontrack at minimum.
-    if (lastCompletedDay > 0) hasOntrack = true;
     for (let d = lastCompletedDay + 1; d < currentDay; d++) evaluateDay(d);
 
-    // Also factor in today's entry for today's contribution to the status.
+    // Also factor in today's entry for today's contribution to unresolvedDelayDays.
     const todayDateStr = cycleDates[currentDay - 1];
     const todayRec = todayDateStr ? dayRecords[todayDateStr] : undefined;
     const todayDone = getDone(todayRec);
     if (todayRec && !todayRec.isAbsent && todayDone != null) evaluateDay(currentDay);
 
-    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : hasAhead ? "ahead" : hasOntrack ? "ontrack" : null;
+    // --- Status (behind/ontrack/ahead): computed on the QURAN RANGE itself —
+    // comparing the ayah position the student actually reached against the
+    // ayah position her plan requires her to have reached by today — not by
+    // summing page counts. This is what fixes students who are genuinely
+    // further along overall (they reached a later ayah than required) being
+    // wrongly flagged "behind" just because today's entry alone was short of
+    // today's page quota.
+    const getDoneEnd = (rec: DayRecord | undefined): number | null => {
+      if (!rec) return null;
+      const surahEnd = planType === "fixation" ? (rec.reviewSurahEnd ?? rec.reviewFarSurahEnd) : rec.reviewFarSurahEnd;
+      const ayahEnd = planType === "fixation" ? (rec.reviewAyahEnd ?? rec.reviewFarAyahEnd) : rec.reviewFarAyahEnd;
+      return ayahOrdinal(surahEnd, ayahEnd);
+    };
+
+    // Walk backward from today (or yesterday, if today has no entry yet) to
+    // find the required ayah position "as of today": the endpoint of the
+    // nearest day at or before that has a defined target range (skips
+    // Saturdays / no-quota days, which don't move the target).
+    const todayHasRecord = !!(cycleDates[currentDay - 1] && dayRecords[cycleDates[currentDay - 1]!]);
+    const targetDayLimit = todayHasRecord ? currentDay : currentDay - 1;
+    let targetOrdinal: number | null = null;
+    for (let d = targetDayLimit; d >= 1; d--) {
+      const day = planDays.find((pd: typeof allDays[0]) => pd.dayNumber === d);
+      const ord = ayahOrdinal(day?.surahEnd, day?.ayahEnd);
+      if (ord != null) { targetOrdinal = ord; break; }
+    }
+
+    // Actual position reached: the farthest ayah endpoint recorded across any
+    // non-absent day up to that same limit (progress through the Quran only
+    // moves forward, so the max is the student's true current position).
+    let actualOrdinal: number | null = null;
+    for (let d = 1; d <= targetDayLimit; d++) {
+      const dateStr = cycleDates[d - 1];
+      const rec = dateStr ? dayRecords[dateStr] : undefined;
+      if (!rec || rec.isAbsent) continue;
+      const ord = getDoneEnd(rec);
+      if (ord != null && (actualOrdinal == null || ord > actualOrdinal)) actualOrdinal = ord;
+    }
+
+    const status: PlanStatus = targetOrdinal == null
+      ? null
+      : actualOrdinal == null ? "behind"
+      : actualOrdinal > targetOrdinal ? "ahead"
+      : actualOrdinal < targetOrdinal ? "behind"
+      : "ontrack";
+
     return { status, unresolvedDelayDays };
   }
 
