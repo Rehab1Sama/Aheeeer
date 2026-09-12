@@ -345,6 +345,88 @@ export function juzListToQuotaRanges(juzNumbers: number[]): DayQuotaRange[] {
     .map(n => ({ ...JUZ_RANGES[n - 1]! }));
 }
 
+export interface SurahAlignedDay {
+  surahs: string[];
+  pages: number;
+  surahStart: string;
+  ayahStart: number;
+  surahEnd: string;
+  ayahEnd: number;
+}
+
+// يوزّع النصاب على الأيام بحيث كل يوم يبدأ من أول آية بسورة (بدون تقسيم سورة نص نص).
+// إذا سورة ما كملت النصاب اليومي، تُضاف السورة التالية لنفس اليوم.
+// إذا سورة وحدها تتجاوز النصاب اليومي، تُعطى ليوم واحد كاملة (تقريب لأعلى).
+// direction "forward": نبدأ من anchorSurahName ونتقدّم للأمام (نحو الناس).
+// direction "backward": نعتبر anchorSurahName هي نهاية النطاق ونرجع للخلف (نحو الفاتحة).
+export function computeSurahAlignedDays(
+  anchorSurahName: string,
+  totalDays: number,
+  dailyTargetPages: number,
+  direction: "forward" | "backward" = "forward",
+): SurahAlignedDay[] {
+  const anchor = getSurahByName(anchorSurahName);
+  if (!anchor) return [];
+
+  const result: SurahAlignedDay[] = [];
+  let prevTotal = 0;
+
+  if (direction === "backward") {
+    let n = anchor.number;
+    for (let day = 0; day < totalDays && n >= 1; day++) {
+      const bucket: number[] = [n];
+      let curTotal = calculatePages(SURAHS[n - 1].name, 1, anchor.name, anchor.ayahs);
+      let n2 = n;
+      while (curTotal - prevTotal < dailyTargetPages - 1e-9 && n2 > 1) {
+        n2 -= 1;
+        bucket.push(n2);
+        curTotal = calculatePages(SURAHS[n2 - 1].name, 1, anchor.name, anchor.ayahs);
+      }
+      const dayPages = Math.round((curTotal - prevTotal) * 2) / 2;
+      const ordered = [...bucket].reverse(); // من الأقدم رقمًا للأحدث
+      const startSurah = SURAHS[ordered[0] - 1]!;
+      const endSurah = SURAHS[ordered[ordered.length - 1] - 1]!;
+      result.push({
+        surahs: ordered.map(x => SURAHS[x - 1]!.name),
+        pages: dayPages,
+        surahStart: startSurah.name,
+        ayahStart: 1,
+        surahEnd: endSurah.name,
+        ayahEnd: endSurah.ayahs,
+      });
+      prevTotal = curTotal;
+      n = n2 - 1;
+    }
+  } else {
+    let n = anchor.number;
+    for (let day = 0; day < totalDays && n <= 114; day++) {
+      const bucket: number[] = [n];
+      let curTotal = calculatePages(anchor.name, 1, SURAHS[n - 1].name, SURAHS[n - 1].ayahs);
+      let n2 = n;
+      while (curTotal - prevTotal < dailyTargetPages - 1e-9 && n2 < 114) {
+        n2 += 1;
+        bucket.push(n2);
+        curTotal = calculatePages(anchor.name, 1, SURAHS[n2 - 1].name, SURAHS[n2 - 1].ayahs);
+      }
+      const dayPages = Math.round((curTotal - prevTotal) * 2) / 2;
+      const startSurah = SURAHS[bucket[0] - 1]!;
+      const endSurah = SURAHS[bucket[bucket.length - 1] - 1]!;
+      result.push({
+        surahs: bucket.map(x => SURAHS[x - 1]!.name),
+        pages: dayPages,
+        surahStart: startSurah.name,
+        ayahStart: 1,
+        surahEnd: endSurah.name,
+        ayahEnd: endSurah.ayahs,
+      });
+      prevTotal = curTotal;
+      n = n2 + 1;
+    }
+  }
+
+  return result;
+}
+
 export function formatPages(pages: number | null | undefined): string {
   if (!pages && pages !== 0) return "-";
   // Use Arabic comma for decimal
