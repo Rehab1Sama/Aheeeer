@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { SURAHS, calculatePages, computeDayRanges, juzListToQuotaRanges, type DayQuotaRange, type DayRangeSegment } from "@/lib/quran";
+import { SURAHS, calculatePages, computeDayRanges, juzListToQuotaRanges, computeSurahAlignedDays, getSurahByName, type DayQuotaRange, type DayRangeSegment } from "@/lib/quran";
 import { BookOpen, Plus, Trash2, RefreshCw, Loader2, AlertCircle, ChevronRight, ChevronLeft, CalendarDays, CheckCircle2, X, Lock, Printer } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -983,6 +983,9 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
   const [quantity, setQuantity] = useState<"half" | "full" | "double">("full");
   const [fixationMode, setFixationMode] = useState<"auto" | "manual">("manual");
   const [fixationStart, setFixationStart] = useState({ surah: "الفاتحة", ayah: 1 });
+  // "forward": نبدأ من نقطة البداية ونتقدّم نحو الناس (مثال: البقرة تصاعدياً)
+  // "backward": نقطة البداية هي آخر نقطة، ونرجع للخلف نحو الفاتحة (مثال: الناس تنازلياً)
+  const [fixationDirection, setFixationDirection] = useState<"forward" | "backward">("forward");
 
   const getFixationDailyPages = useCallback((value: "half" | "full" | "double") => {
     if (value === "half") return 0.5;
@@ -991,17 +994,15 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
   }, []);
 
   const buildFixationDays = useCallback((value: "half" | "full" | "double", count = 24): DayEntry[] =>
-    computeDayRanges(
-      [{ surahStart: fixationStart.surah, ayahStart: fixationStart.ayah, surahEnd: "الناس", ayahEnd: 6 }],
-      Array.from({ length: count }, (_, idx) => ({ pages: getFixationDailyPages(value) })),
-    ).map((segments, idx) => ({
-      dayNumber: idx + 1,
-      pages: getFixationDailyPages(value),
-      surahStart: segments[0]?.surahStart,
-      ayahStart: segments[0]?.ayahStart,
-      surahEnd: segments[segments.length - 1]?.surahEnd,
-      ayahEnd: segments[segments.length - 1]?.ayahEnd,
-    })), [fixationStart, getFixationDailyPages]);
+    computeSurahAlignedDays(fixationStart.surah, count, getFixationDailyPages(value), fixationDirection)
+      .map((day, idx) => ({
+        dayNumber: idx + 1,
+        pages: day.pages,
+        surahStart: day.surahStart,
+        ayahStart: day.ayahStart,
+        surahEnd: day.surahEnd,
+        ayahEnd: day.ayahEnd,
+      })), [fixationStart, fixationDirection, getFixationDailyPages]);
   const [startDate, setStartDate] = useState(cycleStartDate ?? today);
   const [themeColor, setThemeColor] = useState(PLAN_COLORS[1].color);
   const [days, setDays] = useState<DayEntry[]>([]);
@@ -1021,7 +1022,9 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
 
   const fixationDailyPages = getFixationDailyPages(quantity);
   const fixationAvailablePages = isFixation
-    ? calculatePages(fixationStart.surah, fixationStart.ayah, "الناس", 6)
+    ? (fixationDirection === "forward"
+        ? calculatePages(fixationStart.surah, 1, "الناس", 6)
+        : calculatePages("الفاتحة", 1, fixationStart.surah, getSurahByName(fixationStart.surah)?.ayahs ?? 1))
     : 0;
   const fixationHasEnoughContent = !isFixation || fixationAvailablePages >= fixationDailyPages * totalDays;
 
@@ -1101,15 +1104,19 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
         planMode: isFixation ? fixationMode : wizardMode,
       };
       if (isFixation) {
+        const computedDays = buildFixationDays(quantity, totalDays);
         body.quantity = quantity;
+        body.fixationDirection = fixationDirection;
         body.quotaType = "surah";
-        body.quotaSurahStart = fixationStart.surah;
-        body.quotaAyahStart = fixationStart.ayah;
-        body.quotaSurahEnd = "الناس";
-        body.quotaAyahEnd = 6;
-        body.totalPages = getFixationDailyPages(quantity) * totalDays;
+        // نقطتا البداية والنهاية الفعليتان تُشتقّان من أول وآخر يوم محسوب فعلياً
+        // (بعد التقريب لأعلى لعدم تقسيم أي سورة)، وليس من مدخلات المستخدم مباشرة.
+        body.quotaSurahStart = computedDays[0]?.surahStart ?? fixationStart.surah;
+        body.quotaAyahStart = computedDays[0]?.ayahStart ?? 1;
+        body.quotaSurahEnd = computedDays[computedDays.length - 1]?.surahEnd ?? "الناس";
+        body.quotaAyahEnd = computedDays[computedDays.length - 1]?.ayahEnd ?? 6;
+        body.totalPages = computedDays.reduce((sum, d) => sum + (d.pages ?? 0), 0);
         if (fixationMode === "auto") {
-          body.days = buildFixationDays(quantity, totalDays);
+          body.days = computedDays;
         }
       } else {
         body.quotaType = quotaType;
@@ -1158,7 +1165,22 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
           return (
             <div className="space-y-4">
               <div className="space-y-2">
-                <p className="text-sm font-medium">بداية التثبيت</p>
+                <p className="text-sm font-medium">اتجاه الخطة</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setFixationDirection("forward")}
+                    className={`rounded-xl border-2 p-3 text-sm text-center ${fixationDirection === "forward" ? "border-primary bg-primary/5" : "border-border"}`}>
+                    <p className="font-bold">تصاعدي</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">من نقطة البداية نحو الناس</p>
+                  </button>
+                  <button type="button" onClick={() => setFixationDirection("backward")}
+                    className={`rounded-xl border-2 p-3 text-sm text-center ${fixationDirection === "backward" ? "border-primary bg-primary/5" : "border-border"}`}>
+                    <p className="font-bold">تنازلي</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">من نقطة البداية رجوعاً للفاتحة</p>
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{fixationDirection === "forward" ? "بداية التثبيت" : "نقطة الانطلاق (سيُحسب الرجوع منها للخلف)"}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <select
                     className="border rounded-lg p-2 text-sm bg-background"
@@ -1174,10 +1196,15 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
                     placeholder="آية البداية"
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  كل يوم بيبدأ من أول آية بالسورة تلقائياً (بدون تقسيم سورة)، فآية البداية هنا للتوجيه فقط.
+                </p>
               </div>
               {!fixationHasEnoughContent && (
                 <p className="text-xs text-destructive bg-destructive/10 rounded-lg p-2">
-                  نقطة البداية لا تحتوي على صفحات كافية لإكمال ٢٤ يومًا بهذه الكمية. اختاري نقطة أسبق أو كمية أقل.
+                  {fixationDirection === "forward"
+                    ? "نقطة البداية لا تحتوي على صفحات كافية لإكمال ٢٤ يومًا بهذه الكمية للأمام. اختاري نقطة أسبق أو كمية أقل."
+                    : "نقطة البداية لا تحتوي على صفحات كافية للرجوع للخلف ٢٤ يومًا بهذه الكمية. اختاري نقطة لاحقة أو كمية أقل."}
                 </p>
               )}
               <p className="text-sm text-muted-foreground">اختاري الكمية اليومية لخطة التثبيت (٦ أسابيع × ٤ أيام)</p>
