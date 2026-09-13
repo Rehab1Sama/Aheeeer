@@ -176,7 +176,7 @@ export function calculatePages(
   let startAyahNum  = startAyah;
   let endAyahNum    = endAyah;
 
-  // إذا كانت البداية بعد النهاية في المصحف، اعكس الترتيب تلقائياً
+  // إذا كانت البداية بعد النهاية في المصحف، اعكس الترتيب تلقائيًا
   const rawStartIdx = findWajhIdx(startSurahNum, startAyahNum);
   const rawEndIdx   = findWajhIdx(endSurahNum, endAyahNum);
   if (rawStartIdx > rawEndIdx) {
