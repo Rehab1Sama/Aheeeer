@@ -1108,12 +1108,19 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
         body.quantity = quantity;
         body.fixationDirection = fixationDirection;
         body.quotaType = "surah";
-        // نقطتا البداية والنهاية الفعليتان تُشتقّان من أول وآخر يوم محسوب فعلياً
-        // (بعد التقريب لأعلى لعدم تقسيم أي سورة)، وليس من مدخلات المستخدم مباشرة.
-        body.quotaSurahStart = computedDays[0]?.surahStart ?? fixationStart.surah;
-        body.quotaAyahStart = computedDays[0]?.ayahStart ?? 1;
-        body.quotaSurahEnd = computedDays[computedDays.length - 1]?.surahEnd ?? "الناس";
-        body.quotaAyahEnd = computedDays[computedDays.length - 1]?.ayahEnd ?? 6;
+        // نقطتا البداية والنهاية المحفوظتان لازم تكونان بترتيب رقم السورة تصاعدياً
+        // (start <= end) بغض النظر عن اتجاه عرض الأيام، لأن هذا ما يتوقعه الخادم.
+        // بالتنازلي، أول يوم معروض (الناس) هو رقمياً "النهاية"، وآخر يوم (الأبعد للخلف) هو "البداية".
+        const chronoFirst = fixationDirection === "backward"
+          ? computedDays[computedDays.length - 1]
+          : computedDays[0];
+        const chronoLast = fixationDirection === "backward"
+          ? computedDays[0]
+          : computedDays[computedDays.length - 1];
+        body.quotaSurahStart = chronoFirst?.surahStart ?? fixationStart.surah;
+        body.quotaAyahStart = chronoFirst?.ayahStart ?? 1;
+        body.quotaSurahEnd = chronoLast?.surahEnd ?? "الناس";
+        body.quotaAyahEnd = chronoLast?.ayahEnd ?? 6;
         body.totalPages = computedDays.reduce((sum, d) => sum + (d.pages ?? 0), 0);
         if (fixationMode === "auto") {
           body.days = computedDays;
