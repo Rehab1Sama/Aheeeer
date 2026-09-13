@@ -608,10 +608,15 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
   }
 
   // For lockable plans, fetch review records for per-day colour coding. girls_review
-  // reads reviewFarPages; fixation reads reviewPages (falling back to reviewFarPages
-  // for any legacy record entered before the fields were split) — never mixed up.
+  // reads reviewFarPages/reviewFarSurahEnd/reviewFarAyahEnd; fixation reads
+  // reviewPages/reviewSurahEnd/reviewAyahEnd (falling back to the "far" fields for
+  // any legacy record entered before the fields were split) — never mixed up.
   // Use DISTINCT ON (date) ordered by updated_at DESC to pick the latest record per day
-  let dayRecords: Record<string, { reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean }> = {};
+  let dayRecords: Record<string, {
+    reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
+    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+  }> = {};
   if (isLockablePlanType && plan.startDate) {
     const planType = plan.planType as PlanType;
     const cycleDates = getPlanCycleDates(plan.startDate, planType);
@@ -621,6 +626,10 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
         reviewFarPages: recordsTable.reviewFarPages,
         reviewPages: recordsTable.reviewPages,
         isAbsent: recordsTable.isAbsent,
+        reviewFarSurahEnd: recordsTable.reviewFarSurahEnd,
+        reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
+        reviewSurahEnd: recordsTable.reviewSurahEnd,
+        reviewAyahEnd: recordsTable.reviewAyahEnd,
       })
       .from(recordsTable)
       .where(and(
@@ -632,7 +641,11 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     // Keep only the latest record per date (first occurrence after ordering by updatedAt desc)
     for (const r of recs) {
       if (!dayRecords[r.date]) {
-        dayRecords[r.date] = { reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent };
+        dayRecords[r.date] = {
+          reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent,
+          reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
+          reviewSurahEnd: r.reviewSurahEnd, reviewAyahEnd: r.reviewAyahEnd,
+        };
       }
     }
   }
