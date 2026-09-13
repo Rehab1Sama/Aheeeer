@@ -509,11 +509,6 @@ export function computeSurahAlignedDays(
       curSurah = n2; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0;
     }
   }
-  }
-
-  return result;
-}
-  }
 
   return result;
 }
