@@ -436,18 +436,29 @@ export function computeSurahAlignedDays(
       const bucket: number[] = [curSurah];
       let cum = fullLen;
       let n2 = curSurah + 1;
+      let partialEndAyah: number | null = null;
       while (cum < dailyTargetPages - EPS && n2 <= 114) {
         const full = pagesOfSurah(n2);
+        if (full >= SAFE_SPLIT_THRESHOLD - EPS) {
+          // السورة التالية طويلة بأمان — لا نبلعها كاملة، نأخذ جزءًا دقيقًا يكمّل اليوم فقط
+          const needed = dailyTargetPages - cum;
+          partialEndAyah = sliceAyahEndForPages(n2, 1, needed);
+          bucket.push(n2);
+          cum += calculatePages(SURAHS[n2 - 1]!.name, 1, SURAHS[n2 - 1]!.name, partialEndAyah);
+          break;
+        }
         bucket.push(n2); cum += full; n2 += 1;
       }
       const lastN = bucket[bucket.length - 1]!;
+      const bucketEndAyah = partialEndAyah ?? SURAHS[lastN - 1]!.ayahs;
       result.push({
         surahs: bucket.map(x => SURAHS[x - 1]!.name),
         pages: Math.round(cum * 2) / 2,
         surahStart: SURAHS[curSurah - 1]!.name, ayahStart: 1,
-        surahEnd: SURAHS[lastN - 1]!.name, ayahEnd: SURAHS[lastN - 1]!.ayahs,
+        surahEnd: SURAHS[lastN - 1]!.name, ayahEnd: bucketEndAyah,
       });
-      curSurah = n2; curAyah = 1;
+      if (partialEndAyah !== null) { curSurah = lastN; curAyah = partialEndAyah + 1; }
+      else { curSurah = n2; curAyah = 1; }
     }
   } else {
     let curSurah = anchor.number;
@@ -495,18 +506,39 @@ export function computeSurahAlignedDays(
       const bucket: number[] = [curSurah];
       let cum = fullLen;
       let n2 = curSurah - 1;
+      let partialStartAyah: number | null = null;
       while (cum < dailyTargetPages - EPS && n2 >= 1) {
         const full = pagesOfSurah(n2);
+        if (full >= SAFE_SPLIT_THRESHOLD - EPS) {
+          // السورة السابقة طويلة بأمان — لا نبلعها كاملة، نأخذ جزءًا دقيقًا من آخرها يكمّل اليوم فقط
+          const needed = dailyTargetPages - cum;
+          const endIdx = findWajhIdx(n2, SURAHS[n2 - 1]!.ayahs);
+          const neededUnits = Math.max(1, Math.round(needed / 0.5));
+          let idx = endIdx; let count = 1;
+          while (count < neededUnits && idx - 1 >= 0) { idx -= 1; count += 1; }
+          const [s0, a0] = MUSHAF_PAGES[idx]!;
+          partialStartAyah = s0 === n2 ? a0 : 1;
+          bucket.push(n2);
+          cum += calculatePages(SURAHS[n2 - 1]!.name, partialStartAyah, SURAHS[n2 - 1]!.name, SURAHS[n2 - 1]!.ayahs);
+          break;
+        }
         bucket.push(n2); cum += full; n2 -= 1;
       }
       const lastN = bucket[bucket.length - 1]!;
+      const bucketStartAyah = partialStartAyah ?? 1;
       result.push({
         surahs: [...bucket].reverse().map(x => SURAHS[x - 1]!.name),
         pages: Math.round(cum * 2) / 2,
-        surahStart: SURAHS[lastN - 1]!.name, ayahStart: 1,
+        surahStart: SURAHS[lastN - 1]!.name, ayahStart: bucketStartAyah,
         surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: curAyah,
       });
-      curSurah = n2; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0;
+      if (partialStartAyah !== null) {
+        curSurah = lastN;
+        curAyah = partialStartAyah - 1;
+        if (curAyah < 1) { curSurah = lastN - 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0; }
+      } else {
+        curSurah = n2; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0;
+      }
     }
   }
 
