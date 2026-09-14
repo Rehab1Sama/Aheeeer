@@ -752,15 +752,14 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
       if (!Array.isArray(days) || days.length !== PLAN_TOTAL_DAYS.fixation) {
         res.status(400).json({ error: "يجب أن تحتوي خطة التثبيت على ٢٤ يومًا" }); return;
       }
-      const dailyPages = getFixationPagesPerDay(quantity);
       const dayNumbers = new Set<number>();
       for (const day of days) {
         if (!day || !Number.isInteger(day.dayNumber) || day.dayNumber < 1 || day.dayNumber > 24 || dayNumbers.has(day.dayNumber)) {
           res.status(400).json({ error: "أيام خطة التثبيت غير صالحة" }); return;
         }
         dayNumbers.add(day.dayNumber);
-        if (typeof day.pages !== "number" || day.pages < dailyPages - 1e-9) {
-          res.status(400).json({ error: "يجب ألا تقل كمية أي يوم عن الكمية اليومية المختارة" }); return;
+        if (typeof day.pages !== "number" || day.pages < 0) {
+          res.status(400).json({ error: "قيمة صفحات اليوم غير صالحة" }); return;
         }
         const hasAnyRange = day.surahStart || day.ayahStart || day.surahEnd || day.ayahEnd;
         const hasCompleteRange = isValidQuranRange(day.surahStart, day.ayahStart, day.surahEnd, day.ayahEnd);
