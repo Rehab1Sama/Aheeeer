@@ -366,6 +366,21 @@ function sliceAyahEndForPages(surahNum: number, startAyah: number, neededPages: 
   return SURAHS[surahNum - 1]!.ayahs; // احتياط: ما لازم يصير طالما تأكدنا سلفًا أن السورة تكفي
 }
 
+// نفس الفكرة بالاتجاه المعاكس: يحسب أول آية ضمن surahNum بحيث النطاق منها إلى
+// endAyah = neededPages، رجوعًا للخلف بدقة نصف وجه.
+function sliceAyahStartForPages(surahNum: number, endAyah: number, neededPages: number): number {
+  const neededUnits = Math.max(1, Math.round(neededPages / 0.5));
+  const endIdx = findWajhIdx(surahNum, endAyah);
+  let idx = endIdx;
+  let count = 1;
+  while (count < neededUnits && idx - 1 >= 0) {
+    idx -= 1;
+    count += 1;
+  }
+  const [s0, a0] = MUSHAF_PAGES[idx]!;
+  return s0 === surahNum ? a0 : 1;
+}
+
 export interface SurahAlignedDay {
   surahs: string[];
   pages: number;
@@ -375,10 +390,15 @@ export interface SurahAlignedDay {
   ayahEnd: number;
 }
 
-// يوزّع النصاب على الأيام بمنطق هجين:
-// - سور قصيرة: تنضم لبعضها حتى تكمل النصاب اليومي (كل يوم يبدأ من أول آية بسورة).
-// - سورة طويلة (طولها بمفردها ≥ النصاب اليومي): تُقسّم على عدة أيام بدقة نصف وجه
-//   (اليوم الأول يبدأ من أول آية، الأيام التالية تكمل من حيث انتهى اليوم السابق).
+// حد أمان: لا نحاول التقسيم الدقيق داخل سورة إلا إذا كان طولها الكامل يتجاوز هذا
+// الحد بوضوح — لأن السور القصيرة المتلاصقة (نهايات جزء عمّ) قد "تشارك" بداية
+// وجهها مع السورة التالية، فيصبح التقسيم الدقيق جوّها غير موثوق.
+const SAFE_SPLIT_THRESHOLD = 2.0;
+
+// يوزّع النصاب على الأيام بمنطق موحّد لكل يوم: يستهلك من الموضع الحالي (سواء
+// كان أول سورة جديدة أو بقية سورة طويلة من يوم سابق)، وإذا ما كفى النصاب
+// اليومي يكمل من السورة (السور) التالية بنفس اليوم — بدون تجزئة إلى فروع
+// منفصلة، عشان ما تصير أيام "بقايا" صغيرة متبادلة مع أيام كبيرة.
 // direction "forward": نبدأ من anchorSurahName ونتقدّم للأمام (نحو الناس).
 // direction "backward": نعتبر anchorSurahName نقطة النهاية ونرجع للخلف (نحو الفاتحة).
 export function computeSurahAlignedDays(
@@ -396,149 +416,78 @@ export function computeSurahAlignedDays(
   const result: SurahAlignedDay[] = [];
   const EPS = 1e-9;
 
-  // حد أمان: لا نحاول التقسيم الدقيق داخل سورة إلا إذا كان طولها الكامل يتجاوز هذا
-  // الحد بوضوح — لأن السور القصيرة المتلاصقة (نهايات جزء عمّ) قد "تشارك" بداية
-  // وجهها مع السورة التالية، فيصبح التقسيم الدقيق جوّها غير موثوق.
-  const SAFE_SPLIT_THRESHOLD = 2.0;
-
   if (direction === "forward") {
     let curSurah = anchor.number;
     let curAyah = 1;
     for (let day = 0; day < totalDays && curSurah <= 114; day++) {
-      const fullLen = pagesOfSurah(curSurah);
-      if (curAyah === 1 && fullLen >= Math.max(dailyTargetPages, SAFE_SPLIT_THRESHOLD) - EPS) {
-        // سورة طويلة بأمان — نقسّمها بدقة نصف وجه، وقد يستمر الباقي أيام تالية
-        const endAyah = sliceAyahEndForPages(curSurah, curAyah, dailyTargetPages);
-        const pages = calculatePages(SURAHS[curSurah - 1]!.name, curAyah, SURAHS[curSurah - 1]!.name, endAyah);
-        result.push({
-          surahs: [SURAHS[curSurah - 1]!.name], pages,
-          surahStart: SURAHS[curSurah - 1]!.name, ayahStart: curAyah,
-          surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: endAyah,
-        });
-        if (endAyah >= SURAHS[curSurah - 1]!.ayahs) { curSurah += 1; curAyah = 1; }
-        else { curAyah = endAyah + 1; }
-        continue;
-      }
-      if (curAyah > 1) {
-        // استكمال سورة طويلة بدأت بيوم سابق
-        const endAyah = sliceAyahEndForPages(curSurah, curAyah, dailyTargetPages);
-        const pages = calculatePages(SURAHS[curSurah - 1]!.name, curAyah, SURAHS[curSurah - 1]!.name, endAyah);
-        result.push({
-          surahs: [SURAHS[curSurah - 1]!.name], pages,
-          surahStart: SURAHS[curSurah - 1]!.name, ayahStart: curAyah,
-          surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: endAyah,
-        });
-        if (endAyah >= SURAHS[curSurah - 1]!.ayahs) { curSurah += 1; curAyah = 1; }
-        else { curAyah = endAyah + 1; }
-        continue;
-      }
-      // سور قصيرة: نجمعها كاملة (بدون تقسيم) حتى نكمل/نتجاوز النصاب اليومي بأقل تجاوز ممكن
-      const bucket: number[] = [curSurah];
-      let cum = fullLen;
-      let n2 = curSurah + 1;
-      let partialEndAyah: number | null = null;
-      while (cum < dailyTargetPages - EPS && n2 <= 114) {
-        const full = pagesOfSurah(n2);
-        if (full >= SAFE_SPLIT_THRESHOLD - EPS) {
-          // السورة التالية طويلة بأمان — لا نبلعها كاملة، نأخذ جزءًا دقيقًا يكمّل اليوم فقط
-          const needed = dailyTargetPages - cum;
-          partialEndAyah = sliceAyahEndForPages(n2, 1, needed);
-          bucket.push(n2);
-          cum += calculatePages(SURAHS[n2 - 1]!.name, 1, SURAHS[n2 - 1]!.name, partialEndAyah);
-          break;
+      const bucket: Array<{ n: number; start: number; end: number }> = [];
+      let cum = 0;
+      while (cum < dailyTargetPages - EPS && curSurah <= 114) {
+        const lastAyah = SURAHS[curSurah - 1]!.ayahs;
+        const avail = calculatePages(SURAHS[curSurah - 1]!.name, curAyah, SURAHS[curSurah - 1]!.name, lastAyah);
+        const needed = dailyTargetPages - cum;
+        const fullLen = pagesOfSurah(curSurah);
+        if (avail <= needed + EPS) {
+          // نأخذ باقي هذي السورة كاملاً وننتقل للتالية
+          bucket.push({ n: curSurah, start: curAyah, end: lastAyah });
+          cum += avail;
+          curSurah += 1; curAyah = 1;
+        } else {
+          const endAyah = fullLen >= SAFE_SPLIT_THRESHOLD - EPS
+            ? sliceAyahEndForPages(curSurah, curAyah, needed)
+            : lastAyah; // سورة قصيرة مشتركة الحدود — نأخذها كاملة احتياطًا
+          const piecePages = calculatePages(SURAHS[curSurah - 1]!.name, curAyah, SURAHS[curSurah - 1]!.name, endAyah);
+          bucket.push({ n: curSurah, start: curAyah, end: endAyah });
+          cum += piecePages;
+          if (endAyah >= lastAyah) { curSurah += 1; curAyah = 1; }
+          else { curAyah = endAyah + 1; }
         }
-        bucket.push(n2); cum += full; n2 += 1;
       }
-      const lastN = bucket[bucket.length - 1]!;
-      const bucketEndAyah = partialEndAyah ?? SURAHS[lastN - 1]!.ayahs;
+      if (bucket.length === 0) break;
+      const first = bucket[0]!;
+      const last = bucket[bucket.length - 1]!;
       result.push({
-        surahs: bucket.map(x => SURAHS[x - 1]!.name),
+        surahs: bucket.map(b => SURAHS[b.n - 1]!.name),
         pages: Math.round(cum * 2) / 2,
-        surahStart: SURAHS[curSurah - 1]!.name, ayahStart: 1,
-        surahEnd: SURAHS[lastN - 1]!.name, ayahEnd: bucketEndAyah,
+        surahStart: SURAHS[first.n - 1]!.name, ayahStart: first.start,
+        surahEnd: SURAHS[last.n - 1]!.name, ayahEnd: last.end,
       });
-      if (partialEndAyah !== null) { curSurah = lastN; curAyah = partialEndAyah + 1; }
-      else { curSurah = n2; curAyah = 1; }
     }
   } else {
     let curSurah = anchor.number;
     let curAyah = anchor.ayahs; // نبدأ من آخر آية بسورة المرساة ونرجع للخلف
     for (let day = 0; day < totalDays && curSurah >= 1; day++) {
-      const fullLen = pagesOfSurah(curSurah);
-      const isFullSurahRemaining = curAyah === SURAHS[curSurah - 1]!.ayahs;
-      if (isFullSurahRemaining && fullLen >= Math.max(dailyTargetPages, SAFE_SPLIT_THRESHOLD) - EPS) {
-        // سورة طويلة بأمان — نرجع للخلف جوّها بدقة نصف وجه
-        const startIdx = findWajhIdx(curSurah, curAyah);
-        const neededUnits = Math.max(1, Math.round(dailyTargetPages / 0.5));
-        let idx = startIdx; let count = 1;
-        while (count < neededUnits && idx - 1 >= 0) { idx -= 1; count += 1; }
-        const [s0, a0] = MUSHAF_PAGES[idx]!;
-        const startAyah = s0 === curSurah ? a0 : 1;
-        const pages = calculatePages(SURAHS[curSurah - 1]!.name, startAyah, SURAHS[curSurah - 1]!.name, curAyah);
-        result.push({
-          surahs: [SURAHS[curSurah - 1]!.name], pages,
-          surahStart: SURAHS[curSurah - 1]!.name, ayahStart: startAyah,
-          surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: curAyah,
-        });
-        if (startAyah <= 1) { curSurah -= 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0; }
-        else { curAyah = startAyah - 1; }
-        continue;
-      }
-      if (!isFullSurahRemaining) {
-        // استكمال سورة طويلة (بقي جزء منها من يوم سابق)
-        const startIdx = findWajhIdx(curSurah, curAyah);
-        const neededUnits = Math.max(1, Math.round(dailyTargetPages / 0.5));
-        let idx = startIdx; let count = 1;
-        while (count < neededUnits && idx - 1 >= 0) { idx -= 1; count += 1; }
-        const [s0, a0] = MUSHAF_PAGES[idx]!;
-        const startAyah = s0 === curSurah ? Math.max(a0, 1) : 1;
-        const pages = calculatePages(SURAHS[curSurah - 1]!.name, startAyah, SURAHS[curSurah - 1]!.name, curAyah);
-        result.push({
-          surahs: [SURAHS[curSurah - 1]!.name], pages,
-          surahStart: SURAHS[curSurah - 1]!.name, ayahStart: startAyah,
-          surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: curAyah,
-        });
-        if (startAyah <= 1) { curSurah -= 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0; }
-        else { curAyah = startAyah - 1; }
-        continue;
-      }
-      // سور قصيرة: نجمعها كاملة (بدون تقسيم) رجوعًا للخلف حتى نكمل/نتجاوز النصاب بأقل تجاوز ممكن
-      const bucket: number[] = [curSurah];
-      let cum = fullLen;
-      let n2 = curSurah - 1;
-      let partialStartAyah: number | null = null;
-      while (cum < dailyTargetPages - EPS && n2 >= 1) {
-        const full = pagesOfSurah(n2);
-        if (full >= SAFE_SPLIT_THRESHOLD - EPS) {
-          // السورة السابقة طويلة بأمان — لا نبلعها كاملة، نأخذ جزءًا دقيقًا من آخرها يكمّل اليوم فقط
-          const needed = dailyTargetPages - cum;
-          const endIdx = findWajhIdx(n2, SURAHS[n2 - 1]!.ayahs);
-          const neededUnits = Math.max(1, Math.round(needed / 0.5));
-          let idx = endIdx; let count = 1;
-          while (count < neededUnits && idx - 1 >= 0) { idx -= 1; count += 1; }
-          const [s0, a0] = MUSHAF_PAGES[idx]!;
-          partialStartAyah = s0 === n2 ? a0 : 1;
-          bucket.push(n2);
-          cum += calculatePages(SURAHS[n2 - 1]!.name, partialStartAyah, SURAHS[n2 - 1]!.name, SURAHS[n2 - 1]!.ayahs);
-          break;
+      const bucket: Array<{ n: number; start: number; end: number }> = [];
+      let cum = 0;
+      while (cum < dailyTargetPages - EPS && curSurah >= 1) {
+        const avail = calculatePages(SURAHS[curSurah - 1]!.name, 1, SURAHS[curSurah - 1]!.name, curAyah);
+        const needed = dailyTargetPages - cum;
+        const fullLen = pagesOfSurah(curSurah);
+        if (avail <= needed + EPS) {
+          // نأخذ من أول هذي السورة إلى curAyah كاملاً وننتقل للسابقة
+          bucket.push({ n: curSurah, start: 1, end: curAyah });
+          cum += avail;
+          curSurah -= 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0;
+        } else {
+          const startAyah = fullLen >= SAFE_SPLIT_THRESHOLD - EPS
+            ? sliceAyahStartForPages(curSurah, curAyah, needed)
+            : 1; // سورة قصيرة مشتركة الحدود — نأخذها كاملة احتياطًا
+          const piecePages = calculatePages(SURAHS[curSurah - 1]!.name, startAyah, SURAHS[curSurah - 1]!.name, curAyah);
+          bucket.push({ n: curSurah, start: startAyah, end: curAyah });
+          cum += piecePages;
+          if (startAyah <= 1) { curSurah -= 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0; }
+          else { curAyah = startAyah - 1; }
         }
-        bucket.push(n2); cum += full; n2 -= 1;
       }
-      const lastN = bucket[bucket.length - 1]!;
-      const bucketStartAyah = partialStartAyah ?? 1;
+      if (bucket.length === 0) break;
+      const first = bucket[0]!; // أول قطعة استُهلكت = رقميًا الأعلى = "نهاية" اليوم بترتيب العرض
+      const last = bucket[bucket.length - 1]!; // آخر قطعة = رقميًا الأدنى = "بداية" اليوم
       result.push({
-        surahs: [...bucket].reverse().map(x => SURAHS[x - 1]!.name),
+        surahs: [...bucket].reverse().map(b => SURAHS[b.n - 1]!.name),
         pages: Math.round(cum * 2) / 2,
-        surahStart: SURAHS[lastN - 1]!.name, ayahStart: bucketStartAyah,
-        surahEnd: SURAHS[curSurah - 1]!.name, ayahEnd: curAyah,
+        surahStart: SURAHS[last.n - 1]!.name, ayahStart: last.start,
+        surahEnd: SURAHS[first.n - 1]!.name, ayahEnd: first.end,
       });
-      if (partialStartAyah !== null) {
-        curSurah = lastN;
-        curAyah = partialStartAyah - 1;
-        if (curAyah < 1) { curSurah = lastN - 1; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0; }
-      } else {
-        curSurah = n2; curAyah = curSurah >= 1 ? SURAHS[curSurah - 1]!.ayahs : 0;
-      }
     }
   }
 
