@@ -452,17 +452,20 @@ type DayRecordShape = {
   reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
   reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
   reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+  memorizeSurahEnd: string | null; memorizeAyahEnd: number | null; memorizePages: number | null;
 };
 
-// Resolves the "pages actually done" value for a review record, using the field
-// convention that matches the plan's track: fixation/تثبيت stores its quota in
-// reviewPages (with a legacy fallback to reviewFarPages), girls_review uses reviewFarPages.
+// Resolves the "pages actually done" value for a review record. Which day's a
+// تثبيت (fixation) plan is decided by the PLAN ITSELF (plan.quantity is only
+// ever set for fixation plans, regardless of the student's current circle) —
+// تثبيت reads النصاب الجديد (memorizePages); خطة المراجعة reads المراجعة
+// البعيدة (reviewFarPages) always, regardless of track.
 function getRecordDoneValue(
-  planMode: "girls" | "fixation",
-  rec: { reviewFarPages: number | null; reviewPages: number | null } | undefined,
+  isFixationPlan: boolean,
+  rec: { reviewFarPages: number | null; memorizePages: number | null } | undefined,
 ): number | null {
   if (!rec) return null;
-  const v = planMode === "fixation" ? (rec.reviewPages ?? rec.reviewFarPages) : rec.reviewFarPages;
+  const v = isFixationPlan ? rec.memorizePages : rec.reviewFarPages;
   return v ?? null;
 }
 
@@ -484,12 +487,15 @@ function ayahOrdinal(surahName: string | null | undefined, ayahNumber: number | 
   return offset + (ayahNumber as number);
 }
 
-// Resolves the "ayah position reached" (end of range) for a review record,
-// same track convention/fallback as getRecordDoneValue but for the range fields.
-function getRecordDoneEndOrdinal(planMode: "girls" | "fixation", rec: DayRecordShape | undefined): number | null {
+// Resolves the "ayah position reached" (end of range) for a review record.
+// خطة التثبيت (isFixationPlan=true) → النصاب الجديد (memorizeSurahEnd/AyahEnd).
+// خطة المراجعة (isFixationPlan=false) → المراجعة البعيدة (reviewFarSurahEnd/AyahEnd).
+// This is decided by the plan itself (plan.quantity set ⇒ fixation plan),
+// never by the student's current circle track.
+function getRecordDoneEndOrdinal(isFixationPlan: boolean, rec: DayRecordShape | undefined): number | null {
   if (!rec) return null;
-  const surahEnd = planMode === "fixation" ? (rec.reviewSurahEnd ?? rec.reviewFarSurahEnd) : rec.reviewFarSurahEnd;
-  const ayahEnd = planMode === "fixation" ? (rec.reviewAyahEnd ?? rec.reviewFarAyahEnd) : rec.reviewFarAyahEnd;
+  const surahEnd = isFixationPlan ? rec.memorizeSurahEnd : rec.reviewFarSurahEnd;
+  const ayahEnd = isFixationPlan ? rec.memorizeAyahEnd : rec.reviewFarAyahEnd;
   return ayahOrdinal(surahEnd, ayahEnd);
 }
 
@@ -501,7 +507,7 @@ function getRecordDoneEndOrdinal(planMode: "girls" | "fixation", rec: DayRecordS
 // that haven't arrived yet on the calendar — and only days that have already
 // passed without her reaching them show behind.
 function computeDayStatuses(
-  plan: ReviewPlan, dates: string[], currentDayNum: number, planMode: "girls" | "fixation",
+  plan: ReviewPlan, dates: string[], currentDayNum: number, isFixationPlan: boolean,
   computedRanges?: DayRangeSegment[][] | null,
 ): Map<number, DayStatus> {
   const map = new Map<number, DayStatus>();
@@ -536,19 +542,23 @@ function computeDayStatuses(
   for (let d = 1; d <= currentDayNum; d++) {
     const rec = recAt(d);
     if (!rec || rec.isAbsent) continue;
-    const ord = getRecordDoneEndOrdinal(planMode, rec);
+    const ord = getRecordDoneEndOrdinal(isFixationPlan, rec);
     if (ord != null && (actualOrdinal == null || ord > actualOrdinal)) actualOrdinal = ord;
   }
 
   for (let d = 1; d <= plan.days.length; d++) {
     const rec = recAt(d);
+    const target = targetAt(d);
+    // Catch-up takes priority over a plain "absent" label: if she has since
+    // reached (or passed) this day's mark on a later day, that day is resolved
+    // — even if she was absent or behind on the day itself.
+    if (target != null && actualOrdinal != null && actualOrdinal >= target) {
+      map.set(d, actualOrdinal > target ? "ahead" : "ontrack"); continue;
+    }
     if (rec?.isAbsent) { map.set(d, "absent"); continue; }
     // Saturday: no data entry at the maqraah — never counts as a miss.
     if (!rec && isSaturday(d)) { map.set(d, null); continue; }
-    const target = targetAt(d);
     if (target == null) { map.set(d, null); continue; }
-    if (actualOrdinal != null && actualOrdinal > target) { map.set(d, "ahead"); continue; }
-    if (actualOrdinal != null && actualOrdinal === target) { map.set(d, "ontrack"); continue; }
     // She hasn't reached this day's mark yet: only a genuine miss once the day
     // has actually arrived; today with nothing entered yet stays neutral, and
     // days still in the future aren't judged at all.
@@ -582,7 +592,11 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
   // reserved for the next renewal.
   const planRanges = getPlanRanges(plan);
   const computedRanges = planRanges.length > 0 ? computeDayRanges(planRanges, plan.days) : null;
-  const dayStatuses = computeDayStatuses(plan, dates, currentDay, planMode, computedRanges);
+  // "isFixationPlan" is decided by the plan itself (quantity is only ever set on
+  // تثبيت plans, half/full/double), never by the student's current circle track —
+  // a طالبة may keep an old خطة مراجعة even after her circle later changes.
+  const isFixationPlan = plan.quantity != null;
+  const dayStatuses = computeDayStatuses(plan, dates, currentDay, isFixationPlan, computedRanges);
 
   const [expanded, setExpanded] = useState(false);
   const shownDays = expanded ? plan.days : plan.days.slice(0, 7);
@@ -698,7 +712,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
                   // girls (مراجعة) and fixation (تثبيت) plans. Once the student meets
                   // her quota on a later day, earlier behind/absent days are forgiven.
                   const rec = plan.dayRecords && dateStr ? plan.dayRecords[dateStr] : undefined;
-                  const doneToday = getRecordDoneValue(planMode, rec);
+                  const doneToday = getRecordDoneValue(isFixationPlan, rec);
                   const status: DayStatus = dayStatuses.get(day.dayNumber) ?? null;
 
                   const statusBg: Record<NonNullable<DayStatus>, string> = {
@@ -972,11 +986,13 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
   // Fixation: 3 steps (quantity → date+color → weeks)
   const maxSteps = isFixation ? 3 : 4;
 
-  const [quotaType, setQuotaType] = useState<"juz" | "surah">("juz");
-  // Juz: set of selected Juz numbers (1-30)
+  const [quotaType, setQuotaType] = useState<"juz" | "surah">("juz");  // Juz: set of selected Juz numbers (1-30)
   const [selectedJuz, setSelectedJuz] = useState<Set<number>>(new Set());
   // Surah: multiple ranges
   const [surahRanges, setSurahRanges] = useState<SurahRange[]>([{ ...DEFAULT_RANGE }]);
+  // اتجاه التوزيع لخطة المراجعة بنطاق سورة واحد (مثال: من الناس إلى العنكبوت
+  // تنازليًا) — نفس فكرة اتجاه التثبيت: كل يوم يبدأ من أول آية بسورة، بدون تقسيمها.
+  const [reviewDirection, setReviewDirection] = useState<"forward" | "backward">("forward");
 
   const [wizardMode, setWizardMode] = useState<"auto" | "manual">("auto");
   const [daysInitMode, setDaysInitMode] = useState<"none" | "auto" | "manual">("none");
@@ -1046,12 +1062,26 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
     }
   }, [open]);
 
+  const useSurahAlignedReview = quotaType === "surah" && surahRanges.length === 1 && reviewDirection === "backward";
+
   const generateAutoDays = useCallback(() => {
+    if (useSurahAlignedReview) {
+      const single = surahRanges[0]!;
+      const avgDaily = computedPages > 0 ? computedPages / totalDays : 0;
+      const aligned = computeSurahAlignedDays(single.surahStart, totalDays, avgDaily, "backward");
+      setTotalPages(Math.round(aligned.reduce((sum, d) => sum + d.pages, 0) * 2) / 2);
+      setDays(aligned.map((d, i) => ({
+        dayNumber: i + 1, pages: d.pages,
+        surahStart: d.surahStart, ayahStart: d.ayahStart,
+        surahEnd: d.surahEnd, ayahEnd: d.ayahEnd,
+      })));
+      return;
+    }
     const total = computedPages;
     setTotalPages(total);
     const dist = distribute(total, totalDays);
     setDays(dist.map((pages, i) => ({ dayNumber: i + 1, pages })));
-  }, [computedPages, totalDays]);
+  }, [computedPages, totalDays, useSurahAlignedReview, surahRanges]);
 
   const initManualDays = useCallback(() => {
     setDays(Array.from({ length: totalDays }, (_, i) => ({ dayNumber: i + 1 })));
@@ -1131,6 +1161,16 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
           body.quotaJuz = selectedJuz.size;
           // حفظ قائمة الأجزاء المختارة لاستخدامها في عرض النطاقات
           body.extraRanges = JSON.stringify(Array.from(selectedJuz).sort((a, b) => a - b));
+        } else if (useSurahAlignedReview) {
+          // بالاتجاه التنازلي، أول يوم (الناس) هو "النهاية" رقميًا وآخر يوم
+          // (الأبعد للخلف) هو "البداية" — نحفظهم بترتيب تصاعدي دايمًا (يطابق
+          // ما يتوقعه الخادم)، مع الإبقاء على ترتيب عرض الأيام كما هو.
+          const chronoFirst = days[days.length - 1];
+          const chronoLast = days[0];
+          body.quotaSurahStart = chronoFirst?.surahStart ?? surahRanges[0]?.surahStart;
+          body.quotaAyahStart = chronoFirst?.ayahStart ?? 1;
+          body.quotaSurahEnd = chronoLast?.surahEnd ?? surahRanges[0]?.surahEnd;
+          body.quotaAyahEnd = chronoLast?.ayahEnd ?? 1;
         } else {
           const firstRange = surahRanges[0];
           if (firstRange) {
@@ -1299,7 +1339,26 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
               {quotaType === "juz" ? (
                 <JuzGrid selectedJuz={selectedJuz} onChange={setSelectedJuz} />
               ) : (
-                <SurahRangesEditor ranges={surahRanges} onChange={setSurahRanges} />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setReviewDirection("forward")}
+                      className={`rounded-xl border-2 p-3 text-sm text-center ${reviewDirection === "forward" ? "border-primary bg-primary/5" : "border-border"}`}>
+                      <p className="font-bold">تصاعدي</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">من البداية إلى النهاية بالترتيب</p>
+                    </button>
+                    <button type="button" onClick={() => setReviewDirection("backward")}
+                      className={`rounded-xl border-2 p-3 text-sm text-center ${reviewDirection === "backward" ? "border-primary bg-primary/5" : "border-border"}`}>
+                      <p className="font-bold">تنازلي</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">من "البداية" رجوعًا لـ"النهاية"</p>
+                    </button>
+                  </div>
+                  {reviewDirection === "backward" && surahRanges.length > 1 && (
+                    <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">
+                      ⚠️ الاتجاه التنازلي يشتغل بنطاق واحد فقط — احذفي النطاقات الإضافية.
+                    </p>
+                  )}
+                  <SurahRangesEditor ranges={surahRanges} onChange={setSurahRanges} />
+                </div>
               )}
             </div>
           );
