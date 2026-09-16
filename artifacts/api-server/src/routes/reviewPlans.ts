@@ -13,7 +13,7 @@ import {
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
-import { getWajhIndex, computeDayRanges, getPlanQuotaRanges } from "../lib/quranRanges";
+import { getWajhIndex } from "../lib/quranRanges";
 
 const router: IRouter = Router();
 
@@ -1637,42 +1637,15 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     return out;
   }
 
-  // The plan's cumulative target position by the END of a given day number.
-  // reviewPlanDaysTable.surahEnd/ayahEnd is the cumulative end-of-range for
-  // that day when it's stored directly on the row. Plans built via the plain
-  // "توزيع صفحات" auto-generator only store `pages` per day — no surahEnd/
-  // ayahEnd — so for those we fall back to computeDayRanges(), which
-  // reconstructs the exact same cumulative per-day ranges from the plan's
-  // overall quota (quotaSurahStart→quotaSurahEnd / juz / extraRanges /
-  // reviewSourceSnapshot), the same way the frontend planning table already
-  // displays them. The origin of truth is always the quota range — never a
-  // raw page-count comparison.
-  function buildDayTargets(
-    planDays: typeof allDays,
-    plan: typeof activePlans[0],
-  ): { dayNumber: number; idx: number | null }[] {
-    const sortedDays = [...planDays].sort((a, b) => a.dayNumber - b.dayNumber);
-    const quotaRanges = getPlanQuotaRanges(plan);
-    const fallbackRanges = computeDayRanges(quotaRanges, sortedDays.map(d => ({ pages: d.pages })));
-    return sortedDays.map((day, i) => {
-      if (day.surahEnd && day.ayahEnd != null) {
-        return { dayNumber: day.dayNumber, idx: getWajhIndex(day.surahEnd, day.ayahEnd) };
-      }
-      const segs = fallbackRanges[i];
-      const lastSeg = segs && segs.length > 0 ? segs[segs.length - 1] : null;
-      return {
-        dayNumber: day.dayNumber,
-        idx: lastSeg ? getWajhIndex(lastSeg.surahEnd, lastSeg.ayahEnd) : null,
-      };
-    });
-  }
-
-  // Rest days with no assigned range (pages <= 0, so no target either way)
-  // fall back to the nearest earlier day that has one.
-  function getDayTargetIdx(dayNumber: number, dayTargets: { dayNumber: number; idx: number | null }[]): number | null {
+  // The plan's cumulative target position by the END of a given day number —
+  // reviewPlanDaysTable.surahEnd/ayahEnd is already the cumulative end-of-range
+  // for that day (each day's range continues where the previous one left off),
+  // so no summing is needed here either. Rest days with no assigned range
+  // (pages <= 0) fall back to the nearest earlier day that has one.
+  function getDayTargetIdx(dayNumber: number, planDays: typeof allDays): number | null {
     for (let d = dayNumber; d >= 1; d--) {
-      const t = dayTargets.find(t => t.dayNumber === d);
-      if (t?.idx != null) return t.idx;
+      const day = planDays.find((pd: typeof allDays[0]) => pd.dayNumber === d);
+      if (day?.surahEnd && day.ayahEnd != null) return getWajhIndex(day.surahEnd, day.ayahEnd);
     }
     return null;
   }
@@ -1688,13 +1661,13 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   // target sits at a HIGHER mushaf position than the last day's target, the
   // whole plan is running backward, and "progress" means the position going
   // DOWN, not up.
-  function getPlanDirection(dayTargets: { dayNumber: number; idx: number | null }[]): "asc" | "desc" {
-    const withTargets = dayTargets
-      .filter(t => t.idx != null)
-      .sort((a, b) => a.dayNumber - b.dayNumber);
+  function getPlanDirection(planDays: typeof allDays): "asc" | "desc" {
+    const withTargets = planDays
+      .filter((d: typeof allDays[0]) => d.surahEnd && d.ayahEnd != null)
+      .sort((a: typeof allDays[0], b: typeof allDays[0]) => a.dayNumber - b.dayNumber);
     if (withTargets.length < 2) return "asc"; // can't detect direction from a single day — default forward
-    const firstIdx = withTargets[0]!.idx!;
-    const lastIdx = withTargets[withTargets.length - 1]!.idx!;
+    const firstIdx = getWajhIndex(withTargets[0]!.surahEnd!, withTargets[0]!.ayahEnd!);
+    const lastIdx = getWajhIndex(withTargets[withTargets.length - 1]!.surahEnd!, withTargets[withTargets.length - 1]!.ayahEnd!);
     return firstIdx <= lastIdx ? "asc" : "desc";
   }
 
@@ -1711,8 +1684,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
     if (currentDay <= 0) return { status: null, unresolvedDelayDays: 0 }; // plan hasn't started yet
 
-    const dayTargets = buildDayTargets(planDays, plan);
-    const direction = getPlanDirection(dayTargets);
+    const direction = getPlanDirection(planDays);
     const dayRecords = dayRecordsByStudentCircle.get(`${plan.studentId}:${plan.circleId}`) ?? {};
 
     // Farthest position reached so far — a MAX for a forward plan, a MIN for a
@@ -1738,14 +1710,14 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     // furthest day whose target she's cleared is well-defined either way.
     let daysReached = 0;
     for (let d = 1; d <= currentDay; d++) {
-      const targetIdx = getDayTargetIdx(d, dayTargets);
+      const targetIdx = getDayTargetIdx(d, planDays);
       if (targetIdx == null) continue;
       const reached = direction === "asc" ? farthestIdx >= targetIdx : farthestIdx <= targetIdx;
       if (reached) daysReached = d;
     }
 
     const unresolvedDelayDays = Math.max(0, currentDay - daysReached);
-    const todayTargetIdx = getDayTargetIdx(currentDay, dayTargets);
+    const todayTargetIdx = getDayTargetIdx(currentDay, planDays);
     const isAhead = todayTargetIdx != null && (direction === "asc" ? farthestIdx > todayTargetIdx : farthestIdx < todayTargetIdx);
     const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
     return { status, unresolvedDelayDays };
