@@ -451,6 +451,7 @@ type DayStatus = "absent" | "ahead" | "ontrack" | "behind" | null;
 type DayRecordShape = {
   reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
   reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+  reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
   reviewSurahEnd: string | null; reviewAyahEnd: number | null;
   memorizeSurahEnd: string | null; memorizeAyahEnd: number | null; memorizePages: number | null;
 };
@@ -489,14 +490,36 @@ function ayahOrdinal(surahName: string | null | undefined, ayahNumber: number | 
 
 // Resolves the "ayah position reached" (end of range) for a review record.
 // خطة التثبيت (isFixationPlan=true) → النصاب الجديد (memorizeSurahEnd/AyahEnd).
-// خطة المراجعة (isFixationPlan=false) → المراجعة البعيدة (reviewFarSurahEnd/AyahEnd).
+// خطة المراجعة (isFixationPlan=false) → المراجعة البعيدة ١ و٢ (reviewFarSurahEnd/
+// AyahEnd AND reviewFar2SurahEnd/AyahEnd) — both count since a student may log
+// two separate far-review sessions in one day; whichever is farther (in the
+// plan's own direction, see resolveFarthest below) wins.
 // This is decided by the plan itself (plan.quantity set ⇒ fixation plan),
 // never by the student's current circle track.
-function getRecordDoneEndOrdinal(isFixationPlan: boolean, rec: DayRecordShape | undefined): number | null {
-  if (!rec) return null;
-  const surahEnd = isFixationPlan ? rec.memorizeSurahEnd : rec.reviewFarSurahEnd;
-  const ayahEnd = isFixationPlan ? rec.memorizeAyahEnd : rec.reviewFarAyahEnd;
-  return ayahOrdinal(surahEnd, ayahEnd);
+function getRecordDoneEndOrdinals(isFixationPlan: boolean, rec: DayRecordShape | undefined): number[] {
+  if (!rec) return [];
+  if (isFixationPlan) {
+    const ord = ayahOrdinal(rec.memorizeSurahEnd, rec.memorizeAyahEnd);
+    return ord != null ? [ord] : [];
+  }
+  const out: number[] = [];
+  const far1 = ayahOrdinal(rec.reviewFarSurahEnd, rec.reviewFarAyahEnd);
+  const far2 = ayahOrdinal(rec.reviewFar2SurahEnd, rec.reviewFar2AyahEnd);
+  if (far1 != null) out.push(far1);
+  if (far2 != null) out.push(far2);
+  return out;
+}
+
+// خطة تصاعدية (forward): كل يوم لاحق هدفه أبعد بالمصحف (رقم أكبر) — "متقدمة"
+// يعني وصلت لرقم أكبر من الهدف. خطة تنازلية (backward، مثل من الناس للعنكبوت):
+// كل يوم لاحق هدفه أبعد للخلف (رقم أصغر) — "متقدمة" يعني وصلت لرقم أصغر من
+// الهدف. نكتشف الاتجاه من هدفي أول وآخر يوم فيهم هدف صالح فعليًا بالخطة نفسها.
+function getPlanDirection(plan: ReviewPlan): "asc" | "desc" {
+  const withTargets = plan.days
+    .map(d => ayahOrdinal(d.surahEnd, d.ayahEnd))
+    .filter((v): v is number => v != null);
+  if (withTargets.length < 2) return "asc";
+  return withTargets[withTargets.length - 1]! < withTargets[0]! ? "desc" : "asc";
 }
 
 // Computes a per-day status (absent/ahead/ontrack/behind/null) for every day of
@@ -505,13 +528,25 @@ function getRecordDoneEndOrdinal(isFixationPlan: boolean, rec: DayRecordShape | 
 // have reached by then. Because this is cumulative, once she's genuinely ahead,
 // every day up to the point she's reached shows ahead/ontrack — including days
 // that haven't arrived yet on the calendar — and only days that have already
-// passed without her reaching them show behind.
+// passed without her reaching them show behind. Direction-aware: a plan that
+// runs backward through the Quran (e.g. من الناس إلى العنكبوت) is judged by
+// how far *back* she's gotten, not by a bigger ordinal number.
 function computeDayStatuses(
   plan: ReviewPlan, dates: string[], currentDayNum: number, isFixationPlan: boolean,
   computedRanges?: DayRangeSegment[][] | null,
 ): Map<number, DayStatus> {
   const map = new Map<number, DayStatus>();
   if (currentDayNum <= 0) return map;
+
+  const direction = getPlanDirection(plan);
+  // "farther along the plan's own direction" — for asc, bigger is farther;
+  // for desc, smaller is farther.
+  const isFarther = (a: number, b: number) => (direction === "asc" ? a > b : a < b);
+  const farthestOf = (values: number[]): number | null => {
+    let best: number | null = null;
+    for (const v of values) if (best == null || isFarther(v, best)) best = v;
+    return best;
+  };
 
   const recAt = (d: number) => {
     const ds = dates[d - 1];
@@ -536,14 +571,16 @@ function computeDayStatuses(
     return ds ? new Date(ds + "T12:00:00Z").getUTCDay() === 6 : false;
   };
 
-  // Farthest ayah position reached so far, from any non-absent record dated
-  // up to today (progress only moves forward, so the max is her true position).
+  // Farthest ayah position reached so far (in the plan's own direction), from
+  // any non-absent record dated up to today.
   let actualOrdinal: number | null = null;
   for (let d = 1; d <= currentDayNum; d++) {
     const rec = recAt(d);
     if (!rec || rec.isAbsent) continue;
-    const ord = getRecordDoneEndOrdinal(isFixationPlan, rec);
-    if (ord != null && (actualOrdinal == null || ord > actualOrdinal)) actualOrdinal = ord;
+    const dayFarthest = farthestOf(getRecordDoneEndOrdinals(isFixationPlan, rec));
+    if (dayFarthest != null && (actualOrdinal == null || isFarther(dayFarthest, actualOrdinal))) {
+      actualOrdinal = dayFarthest;
+    }
   }
 
   for (let d = 1; d <= plan.days.length; d++) {
@@ -552,8 +589,8 @@ function computeDayStatuses(
     // Catch-up takes priority over a plain "absent" label: if she has since
     // reached (or passed) this day's mark on a later day, that day is resolved
     // — even if she was absent or behind on the day itself.
-    if (target != null && actualOrdinal != null && actualOrdinal >= target) {
-      map.set(d, actualOrdinal > target ? "ahead" : "ontrack"); continue;
+    if (target != null && actualOrdinal != null && (actualOrdinal === target || isFarther(actualOrdinal, target))) {
+      map.set(d, actualOrdinal === target ? "ontrack" : "ahead"); continue;
     }
     if (rec?.isAbsent) { map.set(d, "absent"); continue; }
     // Saturday: no data entry at the maqraah — never counts as a miss.
