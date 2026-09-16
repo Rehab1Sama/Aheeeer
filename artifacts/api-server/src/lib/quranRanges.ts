@@ -6,10 +6,11 @@ export const MUSHAF_PAGES: [number, number, number][] = [[1,1,1],[1,4,1.5],[2,1,
 // Ayah counts per surah (index 0 = surah 1 = Al-Fatiha)
 export const AYAH_COUNTS: number[] = [
   7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,
-  112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,
-  59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,
-  52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,
-  21,11,8,8,19,5,8,8,11,11,8,3,5,4,5,6,5,5,4,3,5,4,3,5,3,5,3,3,3,3,3,3,3
+  112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,
+  54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,
+  14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,
+  29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,
+  11,8,3,9,5,4,7,3,6,3,5,4,5,6
 ];
 
 // --- Everything below is a straight port of
@@ -38,6 +39,18 @@ function _findWajhIdx(surahNum: number, ayahNum: number): number {
     else break;
   }
   return result;
+}
+
+// Linear "position in the mushaf" for a (surah name, ayah) pair — monotonically
+// increasing from the start of the Quran to the end. Used to compare how far a
+// student has reached against a plan day's cumulative target by AYAH RANGE
+// rather than by summed page counts, which avoids half-page rounding drift and
+// correctly recognizes a catch-up entered on a later day (see computePlanStatus
+// in reviewPlans.ts). Returns -1 if the surah name isn't recognized.
+export function getWajhIndex(surahName: string, ayahNum: number): number {
+  const surahIdx = QURAN_SURAHS.findIndex(s => s.name === surahName);
+  if (surahIdx === -1) return -1;
+  return _findWajhIdx(surahIdx + 1, ayahNum);
 }
 
 export function computeDayRanges(
