@@ -13,6 +13,7 @@ import {
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
+import { getWajhIndex } from "../lib/quranRanges";
 
 const router: IRouter = Router();
 
@@ -607,15 +608,18 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     };
   }
 
-  // For lockable plans, fetch review records for per-day colour coding. girls_review
-  // reads reviewFarPages/reviewFarSurahEnd/reviewFarAyahEnd; fixation reads
-  // reviewPages/reviewSurahEnd/reviewAyahEnd (falling back to the "far" fields for
-  // any legacy record entered before the fields were split) — never mixed up.
+  // For lockable plans, fetch review records for per-day colour coding. تثبيت
+  // compares only against التثبيت الجديد (memorizeSurahEnd/AyahEnd/Pages, the
+  // same column الفتيات use for الحفظ الجديد) — المراجعة (review*) is a
+  // separate, plan-untracked category for تثبيت. خطة المراجعة compares against
+  // المراجعة البعيدة ١ و٢ (reviewFar* AND reviewFar2*) — both are sent since
+  // either may represent her farthest point on a given day.
   // Use DISTINCT ON (date) ordered by updated_at DESC to pick the latest record per day
   let dayRecords: Record<string, {
-    reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
-    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
-    reviewSurahEnd: string | null; reviewAyahEnd: number | null;
+    memorizeSurahEnd: string | null; memorizeAyahEnd: number | null; memorizePages: number | null;
+    reviewFarPages: number | null; reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewFar2Pages: number | null; reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
+    isAbsent: boolean;
   }> = {};
   if (isLockablePlanType && plan.startDate) {
     const planType = plan.planType as PlanType;
@@ -623,13 +627,16 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     const recs = await db
       .select({
         date: recordsTable.date,
+        memorizeSurahEnd: recordsTable.memorizeSurahEnd,
+        memorizeAyahEnd: recordsTable.memorizeAyahEnd,
+        memorizePages: recordsTable.memorizePages,
         reviewFarPages: recordsTable.reviewFarPages,
-        reviewPages: recordsTable.reviewPages,
-        isAbsent: recordsTable.isAbsent,
         reviewFarSurahEnd: recordsTable.reviewFarSurahEnd,
         reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
-        reviewSurahEnd: recordsTable.reviewSurahEnd,
-        reviewAyahEnd: recordsTable.reviewAyahEnd,
+        reviewFar2Pages: recordsTable.reviewFar2Pages,
+        reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd,
+        reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
+        isAbsent: recordsTable.isAbsent,
       })
       .from(recordsTable)
       .where(and(
@@ -642,9 +649,10 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     for (const r of recs) {
       if (!dayRecords[r.date]) {
         dayRecords[r.date] = {
-          reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent,
-          reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
-          reviewSurahEnd: r.reviewSurahEnd, reviewAyahEnd: r.reviewAyahEnd,
+          memorizeSurahEnd: r.memorizeSurahEnd, memorizeAyahEnd: r.memorizeAyahEnd, memorizePages: r.memorizePages,
+          reviewFarPages: r.reviewFarPages, reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
+          reviewFar2Pages: r.reviewFar2Pages, reviewFar2SurahEnd: r.reviewFar2SurahEnd, reviewFar2AyahEnd: r.reviewFar2AyahEnd,
+          isAbsent: r.isAbsent,
         };
       }
     }
@@ -1559,7 +1567,19 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
 
   const studentIdsForRecords = statusPlans.map((p: typeof activePlans[0]) => p.studentId);
   // Key by `${studentId}:${circleId}` so records from another circle (e.g. after a transfer) never leak into this plan's status.
-  type DayRecord = { reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean };
+  // Plan-status comparison field is decided by TRACK, not by summing every category
+  // entered that day: تثبيت plans compare only against التثبيت الجديد (memorize*,
+  // the same column الفتيات use for الحفظ الجديد) — المراجعة (review*) is a
+  // separate, plan-untracked category for تثبيت and is intentionally excluded
+  // here. خطة المراجعة (girls_review) compares against المراجعة البعيدة ١ و٢
+  // (reviewFar* AND reviewFar2*) — both count, since a student may log two
+  // separate far-review passages on the same day.
+  type DayRecord = {
+    memorizeSurahEnd: string | null; memorizeAyahEnd: number | null;
+    reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+    reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
+    isAbsent: boolean;
+  };
   const dayRecordsByStudentCircle = new Map<string, Record<string, DayRecord>>();
   if (studentIdsForRecords.length > 0 && allDatesSet.size > 0) {
     const recordsRaw = await db
@@ -1567,8 +1587,12 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         studentId: recordsTable.studentId,
         circleId: recordsTable.circleId,
         date: recordsTable.date,
-        reviewFarPages: recordsTable.reviewFarPages,
-        reviewPages: recordsTable.reviewPages,
+        memorizeSurahEnd: recordsTable.memorizeSurahEnd,
+        memorizeAyahEnd: recordsTable.memorizeAyahEnd,
+        reviewFarSurahEnd: recordsTable.reviewFarSurahEnd,
+        reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
+        reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd,
+        reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
         isAbsent: recordsTable.isAbsent,
       })
       .from(recordsTable)
@@ -1581,15 +1605,75 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       const key = `${r.studentId}:${r.circleId}`;
       let m = dayRecordsByStudentCircle.get(key);
       if (!m) { m = {}; dayRecordsByStudentCircle.set(key, m); }
-      if (!m[r.date]) m[r.date] = { reviewFarPages: r.reviewFarPages, reviewPages: r.reviewPages, isAbsent: r.isAbsent };
+      if (!m[r.date]) m[r.date] = {
+        memorizeSurahEnd: r.memorizeSurahEnd, memorizeAyahEnd: r.memorizeAyahEnd,
+        reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
+        reviewFar2SurahEnd: r.reviewFar2SurahEnd, reviewFar2AyahEnd: r.reviewFar2AyahEnd,
+        isAbsent: r.isAbsent,
+      };
     }
   }
 
+
   type PlanStatus = "behind" | "ontrack" | "ahead" | null;
+
+  // How far (as a linear mushaf position, NOT a page-count sum) the student had
+  // reached as of a given day's record. تثبيت compares only against التثبيت
+  // الجديد (memorizeSurahEnd/AyahEnd) — المراجعة (review*) is untracked for plan
+  // status. خطة المراجعة compares against المراجعة البعيدة ١ و٢ (reviewFar* AND
+  // reviewFar2*) — both are returned as candidates since either may represent
+  // her farthest point that day. Comparing by ayah range means a catch-up entry
+  // spanning several days' worth of ayahs is recognized immediately, with no
+  // half-page rounding drift from summing "pages" values.
+  function getEndPositions(rec: DayRecord | undefined, planType: PlanType): number[] {
+    if (!rec) return [];
+    if (planType === "fixation") {
+      if (rec.memorizeSurahEnd && rec.memorizeAyahEnd != null) return [getWajhIndex(rec.memorizeSurahEnd, rec.memorizeAyahEnd)];
+      return [];
+    }
+    const out: number[] = [];
+    if (rec.reviewFarSurahEnd && rec.reviewFarAyahEnd != null) out.push(getWajhIndex(rec.reviewFarSurahEnd, rec.reviewFarAyahEnd));
+    if (rec.reviewFar2SurahEnd && rec.reviewFar2AyahEnd != null) out.push(getWajhIndex(rec.reviewFar2SurahEnd, rec.reviewFar2AyahEnd));
+    return out;
+  }
+
+  // The plan's cumulative target position by the END of a given day number —
+  // reviewPlanDaysTable.surahEnd/ayahEnd is already the cumulative end-of-range
+  // for that day (each day's range continues where the previous one left off),
+  // so no summing is needed here either. Rest days with no assigned range
+  // (pages <= 0) fall back to the nearest earlier day that has one.
+  function getDayTargetIdx(dayNumber: number, planDays: typeof allDays): number | null {
+    for (let d = dayNumber; d >= 1; d--) {
+      const day = planDays.find((pd: typeof allDays[0]) => pd.dayNumber === d);
+      if (day?.surahEnd && day.ayahEnd != null) return getWajhIndex(day.surahEnd, day.ayahEnd);
+    }
+    return null;
+  }
+
+  // Most plans move forward through the mushaf (day 1 near the start of the
+  // assigned range, the last day near its end). But some far-review plans are
+  // deliberately reversed — e.g. a plan scoped "العنكبوت → الناس" where the
+  // student actually STARTS at الناس and works backward toward العنكبوت (a
+  // common pattern since students often memorize the short surahs at the end
+  // of the mushaf first). The overall quotaSurahStart/quotaSurahEnd fields only
+  // describe the scope's boundaries, not which end the student starts from, so
+  // direction has to be read off the per-day targets themselves: if day 1's
+  // target sits at a HIGHER mushaf position than the last day's target, the
+  // whole plan is running backward, and "progress" means the position going
+  // DOWN, not up.
+  function getPlanDirection(planDays: typeof allDays): "asc" | "desc" {
+    const withTargets = planDays
+      .filter((d: typeof allDays[0]) => d.surahEnd && d.ayahEnd != null)
+      .sort((a: typeof allDays[0], b: typeof allDays[0]) => a.dayNumber - b.dayNumber);
+    if (withTargets.length < 2) return "asc"; // can't detect direction from a single day — default forward
+    const firstIdx = getWajhIndex(withTargets[0]!.surahEnd!, withTargets[0]!.ayahEnd!);
+    const lastIdx = getWajhIndex(withTargets[withTargets.length - 1]!.surahEnd!, withTargets[withTargets.length - 1]!.ayahEnd!);
+    return firstIdx <= lastIdx ? "asc" : "desc";
+  }
+
   // Returns both the overall status AND the count of genuine unresolved delay days
-  // (misses/absences after the last catch-up) — used for the "٣ تأخيرات بدون تدارك" alert.
-  // girls_review reads reviewFarPages; fixation reads reviewPages (falling back to
-  // reviewFarPages for any legacy record) — the two are never conflated.
+  // (how many plan-days' cumulative targets she hasn't reached yet) — used for
+  // the "٣ تأخيرات بدون تدارك" alert.
   function computePlanStatus(plan: typeof activePlans[0], planDays: typeof allDays): { status: PlanStatus; unresolvedDelayDays: number } {
     const planType = plan.planType as PlanType;
     const cycleDates = cycleDatesByPlan.get(plan.id);
@@ -1600,59 +1684,42 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
     if (currentDay <= 0) return { status: null, unresolvedDelayDays: 0 }; // plan hasn't started yet
 
+    const direction = getPlanDirection(planDays);
     const dayRecords = dayRecordsByStudentCircle.get(`${plan.studentId}:${plan.circleId}`) ?? {};
-    const getDone = (rec: DayRecord | undefined): number | null => {
-      if (!rec) return null;
-      return planType === "fixation" ? (rec.reviewPages ?? rec.reviewFarPages) : rec.reviewFarPages;
-    };
-    let hasAhead = false, hasOntrack = false, unresolvedDelayDays = 0;
 
-    const evaluateDay = (dayNumber: number) => {
-      const day = planDays.find((d: typeof allDays[0]) => d.dayNumber === dayNumber);
-      const dateStr = cycleDates[dayNumber - 1];
-      const rec = dateStr ? dayRecords[dateStr] : undefined;
-      // Saturday: no data entry (girls only — never appears in a fixation cycle) — skip if no record
-      if (!rec && dateStr && new Date(dateStr + "T12:00:00Z").getUTCDay() === 6) return;
-      // Absence counts as a plan delay (forgiven by catching up later)
-      if (rec?.isAbsent) { unresolvedDelayDays++; return; }
-      const quota = day?.pages ?? 0;
-      const done = getDone(rec);
-      if (done != null) {
-        if (quota <= 0) hasOntrack = true;
-        else if (done > quota) hasAhead = true;
-        else if (done >= quota) hasOntrack = true;
-        else unresolvedDelayDays++;
-      } else {
-        unresolvedDelayDays++;
-      }
-    };
-
-    // Pass 1: find the last day the student fully completed their quota.
-    // Any missed days BEFORE that catch-up day are permanently forgiven —
-    // even if today's data hasn't been entered yet.
-    let lastCompletedDay = 0;
+    // Farthest position reached so far — a MAX for a forward plan, a MIN for a
+    // reversed one (moving further from day 1's starting point either way).
+    // This is never a sum: an entry's end-point already represents total
+    // progress up to that point, whether from normal pace or a catch-up.
+    let farthestIdx: number | null = null;
     for (let d = 1; d <= currentDay; d++) {
       const dateStr = cycleDates[d - 1];
       const rec = dateStr ? dayRecords[dateStr] : undefined;
-      const done = getDone(rec);
-      if (!rec || rec.isAbsent || done == null) continue;
-      const day = planDays.find((pd: typeof allDays[0]) => pd.dayNumber === d);
-      const quota = day?.pages ?? 0;
-      if (quota <= 0 || done >= quota) lastCompletedDay = d;
+      if (!rec || rec.isAbsent) continue;
+      for (const idx of getEndPositions(rec, planType)) {
+        if (farthestIdx == null) farthestIdx = idx;
+        else if (direction === "asc" && idx > farthestIdx) farthestIdx = idx;
+        else if (direction === "desc" && idx < farthestIdx) farthestIdx = idx;
+      }
     }
 
-    // Pass 2: evaluate only days AFTER the last catch-up (genuine unresolved misses).
-    // If any catch-up exists, the forgiven period counts as ontrack at minimum.
-    if (lastCompletedDay > 0) hasOntrack = true;
-    for (let d = lastCompletedDay + 1; d < currentDay; d++) evaluateDay(d);
+    if (farthestIdx == null) return { status: null, unresolvedDelayDays: 0 }; // no data entered yet at all
 
-    // Also factor in today's entry for today's contribution to the status.
-    const todayDateStr = cycleDates[currentDay - 1];
-    const todayRec = todayDateStr ? dayRecords[todayDateStr] : undefined;
-    const todayDone = getDone(todayRec);
-    if (todayRec && !todayRec.isAbsent && todayDone != null) evaluateDay(currentDay);
+    // How many of the plan's days (by their own cumulative target) has she
+    // actually reached — targets move monotonically in `direction`, so the
+    // furthest day whose target she's cleared is well-defined either way.
+    let daysReached = 0;
+    for (let d = 1; d <= currentDay; d++) {
+      const targetIdx = getDayTargetIdx(d, planDays);
+      if (targetIdx == null) continue;
+      const reached = direction === "asc" ? farthestIdx >= targetIdx : farthestIdx <= targetIdx;
+      if (reached) daysReached = d;
+    }
 
-    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : hasAhead ? "ahead" : hasOntrack ? "ontrack" : null;
+    const unresolvedDelayDays = Math.max(0, currentDay - daysReached);
+    const todayTargetIdx = getDayTargetIdx(currentDay, planDays);
+    const isAhead = todayTargetIdx != null && (direction === "asc" ? farthestIdx > todayTargetIdx : farthestIdx < todayTargetIdx);
+    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
     return { status, unresolvedDelayDays };
   }
 
