@@ -4,9 +4,10 @@
 //
 // getUTCDay(): الأحد=0، الاثنين=1، الثلاثاء=2، الأربعاء=3، الخميس=4، الجمعة=5، السبت=6
 
-const SUN_TO_WED = [0, 1, 2, 3];          // الأحد-الأربعاء (مشكاة/أمهات/أطفال)
+const SUN_TO_WED = [0, 1, 2, 3];          // الأحد-الأربعاء (مشكاة/أطفال)
 const SUN_TO_THU = [0, 1, 2, 3, 4];      // الأحد-الخميس (فتيات/تثبيت)
 const TUESDAY_ONLY = [2];                // الثلاثاء فقط (مشكاة ٢ و٥)
+const WEDNESDAY_ONLY = [3];              // الأربعاء فقط (الأمهات: إدخال أسبوعي واحد)
 
 // حلقات مشكاة ٢ و٥ تحديدًا تشتغل الثلاثاء فقط، بقية حلقات مشكاة من الأحد للأربعاء
 const SPECIAL_MISHKAH_NAME = /مشكاة\s*[25٢٥](\D|$)/;
@@ -17,7 +18,8 @@ const SPECIAL_MISHKAH_NAME = /مشكاة\s*[25٢٥](\D|$)/;
  * جدول الأيام:
  * - مشكاة ٢ و٥: الثلاثاء فقط [2]
  * - مشكاة (الباقي): الأحد-الأربعاء [0,1,2,3]
- * - أمهات/أطفال: الأحد-الأربعاء [0,1,2,3]
+ * - أمهات: الأربعاء فقط [3] — إدخال أسبوعي واحد يتحوّل تلقائيًا لسجلات الأحد-الأربعاء
+ * - أطفال: الأحد-الأربعاء [0,1,2,3]
  * - فتيات/تثبيت: الأحد-الخميس [0,1,2,3,4]
  */
 export function getExpectedEntryDays(
@@ -27,7 +29,10 @@ export function getExpectedEntryDays(
   if (dataEntryType === "recitation") {
     return SPECIAL_MISHKAH_NAME.test(circleName ?? "") ? TUESDAY_ONLY : SUN_TO_WED;
   }
-  if (dataEntryType === "mothers" || dataEntryType === "children") {
+  if (dataEntryType === "mothers") {
+    return WEDNESDAY_ONLY;
+  }
+  if (dataEntryType === "children") {
     return SUN_TO_WED;
   }
   // الأنواع العادية: فتيات (girls)، تثبيت (fixation)، وأي نوع آخر
