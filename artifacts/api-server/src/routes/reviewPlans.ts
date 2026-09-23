@@ -867,31 +867,36 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
 
             const totalNewcomerPages = newcomerDays.reduce((s, d) => s + (d.pages ?? 0), 0);
 
-            // Cancel any previous plan
-            await db.update(reviewPlansTable)
-              .set({ status: "cancelled" })
-              .where(and(
-                eq(reviewPlansTable.studentId, studentId),
-                eq(reviewPlansTable.circleId, circleId),
-                eq(reviewPlansTable.status, "active")
-              ));
+            // إصلاح: لف الإلغاء والإنشاء بمعاملة واحدة — إما الاثنين يصيرون أو
+            // ولا وحدة، عشان ما تفضل الطالبة بدون خطة لو فشل الإنشاء بعد الإلغاء.
+            const { plan, savedDays } = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+              await tx.update(reviewPlansTable)
+                .set({ status: "cancelled" })
+                .where(and(
+                  eq(reviewPlansTable.studentId, studentId),
+                  eq(reviewPlansTable.circleId, circleId),
+                  eq(reviewPlansTable.status, "active")
+                ));
 
-            const [plan] = await db.insert(reviewPlansTable).values({
-              studentId, circleId,
-              planType: "girls_review",
-              status: "active",
-              quotaType: "surah",
-              planMode: "manual",
-              totalPages: totalNewcomerPages || null,
-              startDate: cycleStartDate, // use cycle start date so UI shows القائدة's date
-              themeColor: themeColor ?? "#E8D5F5",
-            }).returning();
+              const [newPlan] = await tx.insert(reviewPlansTable).values({
+                studentId, circleId,
+                planType: "girls_review",
+                status: "active",
+                quotaType: "surah",
+                planMode: "manual",
+                totalPages: totalNewcomerPages || null,
+                startDate: cycleStartDate, // use cycle start date so UI shows القائدة's date
+                themeColor: themeColor ?? "#E8D5F5",
+              }).returning();
 
-            const savedDays = newcomerDays.length > 0
-              ? await db.insert(reviewPlanDaysTable).values(
-                  newcomerDays.map(d => ({ planId: plan.id!, ...d }))
-                ).returning()
-              : [];
+              const newSavedDays = newcomerDays.length > 0
+                ? await tx.insert(reviewPlanDaysTable).values(
+                    newcomerDays.map(d => ({ planId: newPlan.id!, ...d }))
+                  ).returning()
+                : [];
+
+              return { plan: newPlan, savedDays: newSavedDays };
+            });
 
             res.status(201).json({
               ...plan,
@@ -935,56 +940,62 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
       ? distribute(sourceTotal, PLAN_TOTAL_DAYS.girls_review).map((pages, index) => ({ dayNumber: index + 1, pages }))
       : days;
 
-    // Cancel any previous active plan
-    await db.update(reviewPlansTable)
-      .set({ status: "cancelled" })
-      .where(and(
-        eq(reviewPlansTable.studentId, studentId),
-        eq(reviewPlansTable.circleId, circleId),
-        eq(reviewPlansTable.status, "active")
-      ));
-
     const fixationTotalPages = planType === "fixation"
       ? (typeof totalPages === "number" ? totalPages : getFixationPagesPerDay(quantity) * 24)
       : undefined;
 
-    const [plan] = await db.insert(reviewPlansTable).values({
-      studentId,
-      circleId,
-      planType,
-      status: "active",
-      quotaType: hasRecordedSources ? null : quotaType ?? null,
-      quotaJuz: hasRecordedSources ? null : quotaJuz ?? null,
-      quotaSurahStart: hasRecordedSources ? null : quotaSurahStart ?? null,
-      quotaAyahStart: hasRecordedSources ? null : quotaAyahStart ?? null,
-      quotaSurahEnd: hasRecordedSources ? null : quotaSurahEnd ?? null,
-      quotaAyahEnd: hasRecordedSources ? null : quotaAyahEnd ?? null,
-      extraRanges: hasRecordedSources ? null : extraRanges ?? null,
-      reviewSourceSnapshot: hasRecordedSources ? JSON.stringify(sourceSnapshot) : null,
-      planMode: hasRecordedSources ? "auto" : planMode ?? null,
-      totalPages: hasRecordedSources ? sourceTotal : (planType === "fixation" ? fixationTotalPages : totalPages ?? null),
-      quantity: quantity ?? null,
-      startDate,
-      themeColor: themeColor ?? "#E8D5F5",
-    }).returning();
+    // إصلاح: لف إلغاء الخطة القديمة وإنشاء الجديدة بمعاملة واحدة — سابقاً
+    // كانت خطوتين منفصلتين، فلو فشل الإنشاء بعد الإلغاء تفضل الطالبة بدون
+    // خطة نشطة بدون أي تنبيه (هذا كان سبب حالات "سوّت خطة وما تظهر").
+    const { plan, savedDays } = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+      await tx.update(reviewPlansTable)
+        .set({ status: "cancelled" })
+        .where(and(
+          eq(reviewPlansTable.studentId, studentId),
+          eq(reviewPlansTable.circleId, circleId),
+          eq(reviewPlansTable.status, "active")
+        ));
 
-    if (sourceDays.length > 0) {
-      await db.insert(reviewPlanDaysTable).values(
-        sourceDays.map((d: any) => ({
-          planId: plan.id,
-          dayNumber: d.dayNumber,
-          surahStart: d.surahStart ?? null,
-          ayahStart: d.ayahStart ?? null,
-          surahEnd: d.surahEnd ?? null,
-          ayahEnd: d.ayahEnd ?? null,
-          pages: d.pages ?? null,
-        }))
-      );
-    }
+      const [newPlan] = await tx.insert(reviewPlansTable).values({
+        studentId,
+        circleId,
+        planType,
+        status: "active",
+        quotaType: hasRecordedSources ? null : quotaType ?? null,
+        quotaJuz: hasRecordedSources ? null : quotaJuz ?? null,
+        quotaSurahStart: hasRecordedSources ? null : quotaSurahStart ?? null,
+        quotaAyahStart: hasRecordedSources ? null : quotaAyahStart ?? null,
+        quotaSurahEnd: hasRecordedSources ? null : quotaSurahEnd ?? null,
+        quotaAyahEnd: hasRecordedSources ? null : quotaAyahEnd ?? null,
+        extraRanges: hasRecordedSources ? null : extraRanges ?? null,
+        reviewSourceSnapshot: hasRecordedSources ? JSON.stringify(sourceSnapshot) : null,
+        planMode: hasRecordedSources ? "auto" : planMode ?? null,
+        totalPages: hasRecordedSources ? sourceTotal : (planType === "fixation" ? fixationTotalPages : totalPages ?? null),
+        quantity: quantity ?? null,
+        startDate,
+        themeColor: themeColor ?? "#E8D5F5",
+      }).returning();
 
-    const savedDays = await db.select().from(reviewPlanDaysTable)
-      .where(eq(reviewPlanDaysTable.planId, plan.id))
-      .orderBy(reviewPlanDaysTable.dayNumber);
+      if (sourceDays.length > 0) {
+        await tx.insert(reviewPlanDaysTable).values(
+          sourceDays.map((d: any) => ({
+            planId: newPlan.id,
+            dayNumber: d.dayNumber,
+            surahStart: d.surahStart ?? null,
+            ayahStart: d.ayahStart ?? null,
+            surahEnd: d.surahEnd ?? null,
+            ayahEnd: d.ayahEnd ?? null,
+            pages: d.pages ?? null,
+          }))
+        );
+      }
+
+      const newSavedDays = await tx.select().from(reviewPlanDaysTable)
+        .where(eq(reviewPlanDaysTable.planId, newPlan.id))
+        .orderBy(reviewPlanDaysTable.dayNumber);
+
+      return { plan: newPlan, savedDays: newSavedDays };
+    });
 
     res.status(201).json({
       ...plan,
@@ -1566,6 +1577,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   }
 
   const studentIdsForRecords = statusPlans.map((p: typeof activePlans[0]) => p.studentId);
+
   // Key by `${studentId}:${circleId}` so records from another circle (e.g. after a transfer) never leak into this plan's status.
   // Plan-status comparison field is decided by TRACK, not by summing every category
   // entered that day: تثبيت plans compare only against التثبيت الجديد (memorize*,
@@ -1674,22 +1686,24 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   // Returns both the overall status AND the count of genuine unresolved delay days
   // (how many plan-days' cumulative targets she hasn't reached yet) — used for
   // the "٣ تأخيرات بدون تدارك" alert.
-  function computePlanStatus(plan: typeof activePlans[0], planDays: typeof allDays): { status: PlanStatus; unresolvedDelayDays: number } {
+  function computePlanStatus(plan: typeof activePlans[0], planDays: typeof allDays): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[] } {
     const planType = plan.planType as PlanType;
     const cycleDates = cycleDatesByPlan.get(plan.id);
-    if (!cycleDates) return { status: null, unresolvedDelayDays: 0 };
+    if (!cycleDates) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] };
     const today = getTodayMecca();
     const totalDays = PLAN_TOTAL_DAYS[planType];
     const dayIdx = cycleDates.indexOf(today);
     const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
-    if (currentDay <= 0) return { status: null, unresolvedDelayDays: 0 }; // plan hasn't started yet
+    if (currentDay <= 0) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] }; // plan hasn't started yet
 
     const direction = getPlanDirection(planDays);
     const dayRecords = dayRecordsByStudentCircle.get(`${plan.studentId}:${plan.circleId}`) ?? {};
 
     // Farthest position reached so far — a MAX for a forward plan, a MIN for a
     // reversed one (moving further from day 1's starting point either way).
-    // This is never a sum: an entry's end-point already represents total
+    // This already looks across ALL entered records up to today, so a later
+    // day's catch-up entry naturally covers earlier days too (الخطة متسلسلة):
+    // this is never a sum, an entry's end-point already represents total
     // progress up to that point, whether from normal pace or a catch-up.
     let farthestIdx: number | null = null;
     for (let d = 1; d <= currentDay; d++) {
@@ -1703,11 +1717,14 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       }
     }
 
-    if (farthestIdx == null) return { status: null, unresolvedDelayDays: 0 }; // no data entered yet at all
+    if (farthestIdx == null) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] };
 
     // How many of the plan's days (by their own cumulative target) has she
     // actually reached — targets move monotonically in `direction`, so the
     // furthest day whose target she's cleared is well-defined either way.
+    // A day counts as "reached" once farthestIdx clears its target, REGARDLESS
+    // of whether that specific day has its own record — a later day's entry
+    // resolves every earlier day it covers, since the plan is sequential.
     let daysReached = 0;
     for (let d = 1; d <= currentDay; d++) {
       const targetIdx = getDayTargetIdx(d, planDays);
@@ -1716,11 +1733,29 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       if (reached) daysReached = d;
     }
 
-    const unresolvedDelayDays = Math.max(0, currentDay - daysReached);
+    // أيام لسا "معلّقة": ما فيها سجل مباشر لهذا اليوم بالذات، ولا وصلت
+    // الطالبة مستهدفها حتى بأحدث نقطة معروفة (farthestIdx) — هذي فقط تُلوَّن
+    // كـ"لم تُدخل المشرفة الأنصبة"، ولا تُحسب تأخيراً على الطالبة (ما لها
+    // ذنب). يوم وصل مستهدفه (ولو عبر سجل يوم لاحق، لأن الخطة متسلسلة) ما
+    // يُعتبر معلّقاً بعد الآن حتى لو ما فيه سجل خاص فيه هو نفسه.
+    const missingSupervisorDates: string[] = [];
+    for (let d = 1; d <= currentDay; d++) {
+      const dateStr = cycleDates[d - 1];
+      if (!dateStr) continue;
+      const rec = dayRecords[dateStr];
+      const targetIdx = getDayTargetIdx(d, planDays);
+      const reached = targetIdx != null && (direction === "asc" ? farthestIdx >= targetIdx : farthestIdx <= targetIdx);
+      if (!rec && !reached) missingSupervisorDates.push(dateStr);
+    }
+
+    // التأخير الحقيقي المحسوب على الطالبة = أيام بعد آخر نقطة وصلتها، لكن
+    // فقط الأيام اللي فيها فعلاً سجل مُدخل يثبت قصوراً حقيقياً — أيام بدون
+    // أي سجل (missingSupervisorDates) تُستثنى من هذا العدّ تماماً.
+    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingSupervisorDates.length);
     const todayTargetIdx = getDayTargetIdx(currentDay, planDays);
     const isAhead = todayTargetIdx != null && (direction === "asc" ? farthestIdx > todayTargetIdx : farthestIdx < todayTargetIdx);
     const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
-    return { status, unresolvedDelayDays };
+    return { status, unresolvedDelayDays, missingSupervisorDates };
   }
 
   // Whether the student's attendance record for TODAY (within this plan's own
@@ -1737,11 +1772,34 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
 
   // "٣ تأخيرات بدون تدارك" alert list — visible only to leader/deputy/track_supervisor.
   const DELAY_ALERT_THRESHOLD = 3;
+  // تنبيه منفصل: المشرفة ما دخّلت بيانات أنصبة هذي الطالبة من أسبوع (٧ أيام
+  // متتالية بدون أي سجل) — هذا قصور تسجيل من المشرفة، مو تأخير حفظ من
+  // الطالبة، فما يدخل حساب unresolvedDelayDays أعلاه، لكن لازم يوصل للقيادة
+  // بشكل منفصل عشان ما يختفي كلياً وراء "الطالبة ما لها ذنب".
+  const SUPERVISOR_GAP_ALERT_THRESHOLD = 7;
   const circleById = new Map(circles.map(c => [c.id, c]));
   const delayAlerts: Array<{
     studentId: number; studentName: string; circleId: number; circleName: string;
     planType: PlanType; unresolvedDelayDays: number;
   }> = [];
+  const supervisorGapAlerts: Array<{
+    studentId: number; studentName: string; circleId: number; circleName: string;
+    planType: PlanType; gapDays: number;
+  }> = [];
+
+  // آخر N يوم متتالية (من اليوم الحالي رجوعاً) بدون أي سجل مُدخل إطلاقاً —
+  // يُحتسب فقط لو كانت متتالية من اليوم نفسه، عشان يعكس "توقف حالي مستمر"
+  // لا فجوة قديمة انحلّت لاحقاً (تلك مغطاة أصلاً بمنطق missingSupervisorDates).
+  function trailingGapDays(missingDates: string[], cycleDates: string[], currentDay: number): number {
+    const missingSet = new Set(missingDates);
+    let gap = 0;
+    for (let d = currentDay; d >= 1; d--) {
+      const dateStr = cycleDates[d - 1];
+      if (dateStr && missingSet.has(dateStr)) gap++;
+      else break;
+    }
+    return gap;
+  }
 
   const result = circles.map(circle => {
     const students = allStudents.filter(s => s.circleId === circle.id);
@@ -1765,6 +1823,25 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
             unresolvedDelayDays: statusResult.unresolvedDelayDays,
           });
         }
+        if (plan && statusResult) {
+          const cycleDates = cycleDatesByPlan.get(plan.id) ?? [];
+          const today = getTodayMecca();
+          const totalDays = PLAN_TOTAL_DAYS[plan.planType as PlanType];
+          const dayIdx = cycleDates.indexOf(today);
+          const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
+          const gap = trailingGapDays(statusResult.missingSupervisorDates, cycleDates, currentDay);
+          if (gap >= SUPERVISOR_GAP_ALERT_THRESHOLD) {
+            const c = circleById.get(plan.circleId);
+            supervisorGapAlerts.push({
+              studentId: s.id,
+              studentName: s.fullName,
+              circleId: plan.circleId,
+              circleName: c?.name ?? circle.name,
+              planType: plan.planType as PlanType,
+              gapDays: gap,
+            });
+          }
+        }
         return {
           studentId: s.id,
           studentName: s.fullName,
@@ -1787,6 +1864,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
             createdAt: plan.createdAt.toISOString(),
             days: planDays,
             status: statusResult?.status ?? null,
+            missingSupervisorDates: statusResult?.missingSupervisorDates ?? [],
             isAbsentToday: isAbsentToday(plan),
           } : null,
         };
@@ -1798,7 +1876,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   res.json({
     circles: result,
     cycleInfo,
-    ...(canSeeDelayAlerts ? { delayAlerts } : {}),
+    ...(canSeeDelayAlerts ? { delayAlerts, supervisorGapAlerts } : {}),
   });
 });
 
