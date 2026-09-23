@@ -1583,7 +1583,8 @@ export default function DataEntryPage() {
       {/* ── Entry tab content ── */}
       {activeTab === "entry" && (<>
 
-      {/* Step 1 — Date */}
+      {/* Step 1 — Date (مخفي لحلقات الأمهات: الإدخال أسبوعي وليس يوميًا) */}
+      {!isMothersEntry && (
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -1603,6 +1604,7 @@ export default function DataEntryPage() {
           </select>
         </CardContent>
       </Card>
+      )}
 
       {/* Circles progress bar */}
       {circlesProgress.total > 0 && (
