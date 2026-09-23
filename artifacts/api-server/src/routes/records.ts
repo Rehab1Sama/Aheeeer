@@ -182,6 +182,110 @@ router.post("/records/bulk", authenticate, async (req, res): Promise<void> => {
   res.json({ created, skipped });
 });
 
+// إدخال أسبوعي لحلقات الأمهات: يفتح يوم الأربعاء فقط، سطر واحد لكل طالبة
+// (نصاب حفظ + نصاب مراجعة للأسبوع + عدد أيام الغياب)، ويتحوّل تلقائيًا
+// إلى 4 سجلات يومية (الأحد–الأربعاء) في نفس جدول السجلات — بدون أي تعديل
+// على نظام الأوسمة/التقارير القائم على هذا الجدول.
+router.post("/records/mothers-weekly", authenticate, async (req, res): Promise<void> => {
+  if (!["leader", "deputy", "data_entry", "teacher", "supervisor"].includes(req.userRole!)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const { circleId, wednesdayDate, students } = req.body as {
+    circleId?: number;
+    wednesdayDate?: string;
+    students?: any[];
+  };
+  if (!circleId || !wednesdayDate || !Array.isArray(students)) {
+    res.status(400).json({ error: "circleId و wednesdayDate و students مطلوبة" });
+    return;
+  }
+  const wed = new Date(wednesdayDate + "T12:00:00Z");
+  if (isNaN(wed.getTime()) || wed.getUTCDay() !== 3) {
+    res.status(400).json({ error: "يجب أن يكون التاريخ يوم أربعاء" });
+    return;
+  }
+  if (!await allowedDataEntryRole(req, Number(circleId))) {
+    res.status(403).json({ error: "دورك لا يسمح بإدخال بيانات هذه الحلقة" });
+    return;
+  }
+
+  // تأكيد أن الحلقة فعلًا من نوع "أمهات"
+  const [circle] = await db.select({ id: circlesTable.id, circleType: circlesTable.trackType, trackId: circlesTable.trackId })
+    .from(circlesTable).where(eq(circlesTable.id, Number(circleId)));
+  if (!circle) { res.status(404).json({ error: "الحلقة غير موجودة" }); return; }
+  const [track] = circle.trackId
+    ? await db.select({ dataEntryType: tracksTable.dataEntryType }).from(tracksTable).where(eq(tracksTable.id, circle.trackId))
+    : [];
+  const dataEntryType = track?.dataEntryType ?? circle.circleType;
+  if (dataEntryType !== "mothers") {
+    res.status(400).json({ error: "هذا الإدخال الأسبوعي خاص بحلقات الأمهات فقط" });
+    return;
+  }
+
+  // أيام الأسبوع الأربعة: الأحد، الاثنين، الثلاثاء، الأربعاء
+  const sunday = new Date(wed.getTime() - 3 * 86400000);
+  const dates = [0, 1, 2, 3].map(i => new Date(sunday.getTime() + i * 86400000).toISOString().slice(0, 10));
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const s of students) {
+    const studentId = Number(s?.studentId);
+    if (!studentId) { skipped++; continue; }
+    const [enrollment] = await db.select({ id: studentEnrollmentsTable.id }).from(studentEnrollmentsTable).where(and(
+      eq(studentEnrollmentsTable.studentId, studentId),
+      eq(studentEnrollmentsTable.circleId, Number(circleId)),
+      eq(studentEnrollmentsTable.isArchived, false),
+    ));
+    if (!enrollment) { skipped++; continue; }
+
+    const absenceCount = Math.max(0, Math.min(4, Number(s.absenceCount) || 0));
+    const absentDates = dates.slice(0, absenceCount);
+    const presentDates = dates.slice(absenceCount);
+    const lastPresentDate = presentDates[presentDates.length - 1] ?? null;
+
+    // إعادة إدخال الأسبوع تستبدل سجلات نفس الطالبة/الحلقة لنفس الأيام الأربعة (إدخال قابل للتعديل)
+    await db.delete(recordsTable).where(and(
+      eq(recordsTable.studentId, studentId),
+      eq(recordsTable.circleId, Number(circleId)),
+      inArray(recordsTable.date, dates),
+    ));
+
+    for (const date of dates) {
+      if (absentDates.includes(date)) {
+        await db.insert(recordsTable).values({
+          studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: true,
+        });
+      } else if (date === lastPresentDate) {
+        await db.insert(recordsTable).values({
+          studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: false,
+          memorizeSurahStart: s.memorizeSurahStart ?? null,
+          memorizeAyahStart: s.memorizeAyahStart ?? null,
+          memorizeSurahEnd: s.memorizeSurahEnd ?? null,
+          memorizeAyahEnd: s.memorizeAyahEnd ?? null,
+          memorizePages: s.memorizePages ?? 0,
+          reviewSurahStart: s.reviewSurahStart ?? null,
+          reviewAyahStart: s.reviewAyahStart ?? null,
+          reviewSurahEnd: s.reviewSurahEnd ?? null,
+          reviewAyahEnd: s.reviewAyahEnd ?? null,
+          reviewPages: s.reviewPages ?? 0,
+        });
+      } else {
+        // يوم حضور بدون نصاب (النصاب موضوع كله على آخر يوم حضور)
+        await db.insert(recordsTable).values({
+          studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: false,
+        });
+      }
+    }
+    created++;
+
+    checkAndCreateLowMemorizationAlert(studentId, req.userId!).catch(() => {});
+  }
+
+  res.json({ created, skipped, dates });
+});
+
 // إدخال يوم الخميس تلقائيًا: مراجعة عامة لكل محفوظ الأحد–الأربعاء
 router.post("/records/thursday-bulk", authenticate, async (req, res): Promise<void> => {
   if (req.userRole !== "leader") {
