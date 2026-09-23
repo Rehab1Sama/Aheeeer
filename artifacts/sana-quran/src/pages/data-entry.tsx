@@ -96,6 +96,18 @@ function isThursdayDate(dateStr: string): boolean {
   return new Date(dateStr + "T12:00:00Z").getUTCDay() === 4;
 }
 
+// نافذة إدخال الأمهات الأسبوعي: تفتح الأربعاء وتبقى مفتوحة الخميس والجمعة
+// (نفس أسبوع الأربعاء)، عشان تقدر المعلمة تتدارك لو ما قدرت تدخل بالضبط
+// يوم الأربعاء. تُغلق بعدها لين الأربعاء الجاي.
+function getMothersWeeklyWindow(): { open: boolean; wednesdayDate: string } {
+  const todayStr = getMeccaToday();
+  const today = new Date(todayStr + "T12:00:00Z");
+  const dow = today.getUTCDay(); // الأحد=0 ... الأربعاء=3 ... الجمعة=5
+  if (dow < 3 || dow > 5) return { open: false, wednesdayDate: "" };
+  const wed = new Date(today.getTime() - (dow - 3) * 86400000);
+  return { open: true, wednesdayDate: wed.toISOString().slice(0, 10) };
+}
+
 const THURSDAY_QUOTA_EXCLUDED_TYPES = ["recitation", "children", "mothers"];
 
 function nextPosition(surahName: string, ayah: number): { surah: string; ayah: string } {
@@ -686,6 +698,12 @@ export default function DataEntryPage() {
   const [bulkEditingStudent, setBulkEditingStudent] = useState<number | null>(null);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
+  // ── الإدخال الأسبوعي لحلقات الأمهات (يفتح الأربعاء فقط) ──────────────────
+  const [mothersWeekly, setMothersWeekly] = useState<
+    Record<number, { memorize: SectionState; review: SectionState; absenceCount: string }>
+  >({});
+  const [mothersWeeklySubmitting, setMothersWeeklySubmitting] = useState(false);
+
   // Assigned circles for data_entry users
   const [assignedCircles, setAssignedCircles] = useState<any[]>([]);
   useEffect(() => {
@@ -952,6 +970,7 @@ export default function DataEntryPage() {
   );
 
   const isMothersEntry = selectedCircle?.dataEntryType === "mothers";
+  const mothersWeeklyWindow = useMemo(() => getMothersWeeklyWindow(), []);
   const isThursdaySelected = isThursdayDate(selectedDate);
   const isThursdayQuotaCircle =
     isThursdaySelected && !!selectedCircle && !THURSDAY_QUOTA_EXCLUDED_TYPES.includes(selectedCircle.dataEntryType);
@@ -976,6 +995,88 @@ export default function DataEntryPage() {
       .then(d => setPlanDayQuotas(d.quotas ?? {}))
       .catch(() => setPlanDayQuotas({}));
   }, [isThursdayQuotaCircle, selectedCircleId, selectedDate]);
+
+  // تصفير صفوف الإدخال الأسبوعي للأمهات عند تغيير الحلقة
+  useEffect(() => {
+    setMothersWeekly({});
+  }, [selectedCircleId]);
+
+  const getMothersRow = useCallback(
+    (studentId: number) =>
+      mothersWeekly[studentId] ?? { memorize: emptySection(), review: emptySection(), absenceCount: "0" },
+    [mothersWeekly],
+  );
+
+  const updateMothersRow = useCallback(
+    (studentId: number, patch: Partial<{ memorize: SectionState; review: SectionState; absenceCount: string }>) => {
+      setMothersWeekly((prev) => ({
+        ...prev,
+        [studentId]: { ...(prev[studentId] ?? { memorize: emptySection(), review: emptySection(), absenceCount: "0" }), ...patch },
+      }));
+    },
+    [],
+  );
+
+  const handleMothersWeeklySave = async () => {
+    if (!selectedCircleId) return;
+    const token = getToken();
+    if (!token) return;
+
+    const rows = studentsInCircle.filter((s: any) => !s.onLeave);
+    const missing: string[] = [];
+    const students = rows.map((student: any) => {
+      const row = getMothersRow(student.studentId);
+      const absenceCount = Math.max(0, Math.min(4, Number(row.absenceCount) || 0));
+      const payload: any = { studentId: student.studentId, absenceCount };
+      if (absenceCount < 4) {
+        const memOk = row.memorize.surahStart && row.memorize.surahEnd;
+        const revOk = row.review.surahStart && row.review.surahEnd;
+        if (!memOk || !revOk) { missing.push(student.studentName); return null; }
+        payload.memorizeSurahStart = row.memorize.surahStart;
+        payload.memorizeAyahStart = Number(row.memorize.ayahStart) || 1;
+        payload.memorizeSurahEnd = row.memorize.surahEnd;
+        payload.memorizeAyahEnd = Number(row.memorize.ayahEnd) || 1;
+        payload.memorizePages = calcPages(row.memorize);
+        payload.reviewSurahStart = row.review.surahStart;
+        payload.reviewAyahStart = Number(row.review.ayahStart) || 1;
+        payload.reviewSurahEnd = row.review.surahEnd;
+        payload.reviewAyahEnd = Number(row.review.ayahEnd) || 1;
+        payload.reviewPages = calcPages(row.review);
+      }
+      return payload;
+    }).filter(Boolean);
+
+    if (missing.length > 0) {
+      toast({
+        title: "نصاب ناقص",
+        description: `أكملي نصاب الحفظ والمراجعة لـ: ${missing.join("، ")} (أو اختاري غياب ٤ أيام لو ما حضرت الأسبوع كامل)`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (students.length === 0) return;
+
+    setMothersWeeklySubmitting(true);
+    try {
+      const res = await fetch(`${BASE}/api/records/mothers-weekly`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ circleId: selectedCircleId, wednesdayDate: mothersWeeklyWindow.wednesdayDate, students }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "فشل الحفظ");
+      }
+      const data = await res.json();
+      toast({ title: `تم حفظ إدخال الأسبوع ✓ (${data.created} طالبة)` });
+      setMothersWeekly({});
+      invalidateQueries();
+    } catch (e: any) {
+      toast({ title: "خطأ في حفظ إدخال الأسبوع", description: e.message, variant: "destructive" });
+    } finally {
+      setMothersWeeklySubmitting(false);
+    }
+  };
 
   // Last-10-days memorization records for Thursday quota review
   const quotaDateFrom = useMemo(() => {
@@ -1789,8 +1890,174 @@ export default function DataEntryPage() {
         </Card>
       )}
 
+      {/* Step 3 — الإدخال الأسبوعي لحلقات الأمهات (يفتح الأربعاء فقط، سطر واحد لكل طالبة) */}
+      {selectedCircleId && !isTeacherAbsent && !supervisorBlockedFromEntry && isMothersEntry && (
+        !mothersWeeklyWindow.open ? (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <CalendarDays className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-bold text-blue-800 text-sm">الإدخال الأسبوعي يفتح الأربعاء</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  إدخال بيانات حلقات الأمهات مرة واحدة كل أسبوع — يفتح الأربعاء ويبقى متاحًا لين الجمعة
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                الإدخال الأسبوعي — الأمهات
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                لكل طالبة: نصاب الحفظ ونصاب المراجعة للأسبوع كامل (من/إلى)، وعدد أيام الغياب. يتحوّل تلقائيًا لسجلات الأحد-الأربعاء ({mothersWeeklyWindow.wednesdayDate}).
+              </p>
+            </CardHeader>
+            <CardContent>
+              {studentsInCircle.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">لا يوجد طالبات في هذه الحلقة</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {studentsInCircle.filter((s: any) => !s.onLeave).map((student: any) => {
+                    const row = getMothersRow(student.studentId);
+                    const fullAbsence = Number(row.absenceCount) >= 4;
+                    return (
+                      <div key={student.studentId} className="rounded-xl border border-border p-3 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-sm">{student.studentName}</p>
+                          {student.hasRecord && (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">✓ أُدخل هذا الأسبوع</Badge>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">عدد أيام الغياب هذا الأسبوع</Label>
+                          <select
+                            className="mt-1 w-full border border-input rounded-lg px-2.5 py-2 text-sm bg-background text-right"
+                            value={row.absenceCount}
+                            onChange={(e) => updateMothersRow(student.studentId, { absenceCount: e.target.value })}
+                          >
+                            {[0, 1, 2, 3, 4].map((n) => (
+                              <option key={n} value={n}>{n === 0 ? "بدون غياب" : `${n} ${n === 1 ? "يوم" : "أيام"}`}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {!fullAbsence && (
+                          <>
+                            <div>
+                              <Label className="text-[11px] text-muted-foreground">نصاب الحفظ (من/إلى)</Label>
+                              <div className="grid grid-cols-2 gap-2 mt-1">
+                                <div className="flex gap-1.5">
+                                  <select
+                                    className="flex-1 min-w-0 border border-input rounded-lg px-2 py-2 text-xs bg-background text-right"
+                                    value={row.memorize.surahStart}
+                                    onChange={(e) => updateMothersRow(student.studentId, { memorize: { ...row.memorize, surahStart: e.target.value } })}
+                                  >
+                                    <option value="">من سورة</option>
+                                    {SURAHS.map((s) => <option key={s.number} value={s.name}>{s.name}</option>)}
+                                  </select>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    placeholder="آية"
+                                    className="w-16 shrink-0 text-xs px-2"
+                                    value={row.memorize.ayahStart}
+                                    onChange={(e) => updateMothersRow(student.studentId, { memorize: { ...row.memorize, ayahStart: e.target.value } })}
+                                  />
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <select
+                                    className="flex-1 min-w-0 border border-input rounded-lg px-2 py-2 text-xs bg-background text-right"
+                                    value={row.memorize.surahEnd}
+                                    onChange={(e) => updateMothersRow(student.studentId, { memorize: { ...row.memorize, surahEnd: e.target.value } })}
+                                  >
+                                    <option value="">إلى سورة</option>
+                                    {SURAHS.map((s) => <option key={s.number} value={s.name}>{s.name}</option>)}
+                                  </select>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    placeholder="آية"
+                                    className="w-16 shrink-0 text-xs px-2"
+                                    value={row.memorize.ayahEnd}
+                                    onChange={(e) => updateMothersRow(student.studentId, { memorize: { ...row.memorize, ayahEnd: e.target.value } })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <Label className="text-[11px] text-muted-foreground">نصاب المراجعة (من/إلى)</Label>
+                              <div className="grid grid-cols-2 gap-2 mt-1">
+                                <div className="flex gap-1.5">
+                                  <select
+                                    className="flex-1 min-w-0 border border-input rounded-lg px-2 py-2 text-xs bg-background text-right"
+                                    value={row.review.surahStart}
+                                    onChange={(e) => updateMothersRow(student.studentId, { review: { ...row.review, surahStart: e.target.value } })}
+                                  >
+                                    <option value="">من سورة</option>
+                                    {SURAHS.map((s) => <option key={s.number} value={s.name}>{s.name}</option>)}
+                                  </select>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    placeholder="آية"
+                                    className="w-16 shrink-0 text-xs px-2"
+                                    value={row.review.ayahStart}
+                                    onChange={(e) => updateMothersRow(student.studentId, { review: { ...row.review, ayahStart: e.target.value } })}
+                                  />
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <select
+                                    className="flex-1 min-w-0 border border-input rounded-lg px-2 py-2 text-xs bg-background text-right"
+                                    value={row.review.surahEnd}
+                                    onChange={(e) => updateMothersRow(student.studentId, { review: { ...row.review, surahEnd: e.target.value } })}
+                                  >
+                                    <option value="">إلى سورة</option>
+                                    {SURAHS.map((s) => <option key={s.number} value={s.name}>{s.name}</option>)}
+                                  </select>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    placeholder="آية"
+                                    className="w-16 shrink-0 text-xs px-2"
+                                    value={row.review.ayahEnd}
+                                    onChange={(e) => updateMothersRow(student.studentId, { review: { ...row.review, ayahEnd: e.target.value } })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <Button
+                    className="w-full gap-2"
+                    onClick={handleMothersWeeklySave}
+                    disabled={mothersWeeklySubmitting}
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {mothersWeeklySubmitting ? "جاري الحفظ..." : "حفظ إدخال الأسبوع"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      )}
+
       {/* Step 3 — Students list */}
-      {selectedCircleId && !isTeacherAbsent && !supervisorBlockedFromEntry && !isThursdayQuotaCircle && (
+      {selectedCircleId && !isTeacherAbsent && !supervisorBlockedFromEntry && !isThursdayQuotaCircle && !isMothersEntry && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
