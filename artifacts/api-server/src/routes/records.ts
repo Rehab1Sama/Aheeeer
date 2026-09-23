@@ -187,10 +187,6 @@ router.post("/records/bulk", authenticate, async (req, res): Promise<void> => {
 // إلى 4 سجلات يومية (الأحد–الأربعاء) في نفس جدول السجلات — بدون أي تعديل
 // على نظام الأوسمة/التقارير القائم على هذا الجدول.
 router.post("/records/mothers-weekly", authenticate, async (req, res): Promise<void> => {
-  if (!["leader", "deputy", "data_entry", "teacher", "supervisor"].includes(req.userRole!)) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
   const { circleId, wednesdayDate, students } = req.body as {
     circleId?: number;
     wednesdayDate?: string;
