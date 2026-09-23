@@ -47,6 +47,7 @@ type PlanSummary = {
   createdAt: string;
   days: DayEntry[];
   status: "behind" | "ontrack" | "ahead" | null;
+  missingSupervisorDates?: string[];
   isAbsentToday?: boolean;
 };
 
@@ -284,12 +285,15 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
               const dateStr = dates[day.dayNumber - 1];
               const isToday = day.dayNumber === currentDay;
               const isPast = day.dayNumber < currentDay;
+              const isMissingSupervisorDay = !!dateStr && !!plan.missingSupervisorDates?.includes(dateStr) && isPast;
               return (
                 <tr
                   key={day.dayNumber}
                   className={`border-t border-border/20 ${isToday ? "font-semibold" : ""}`}
                   style={
-                    isToday
+                    isMissingSupervisorDay
+                      ? { background: "#fde8e8" }
+                      : isToday
                       ? { background: plan.themeColor + "70" }
                       : isPast
                       ? { opacity: 0.4 }
@@ -313,6 +317,10 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
             })}
           </tbody>
         </table>
+      </div>
+      <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
+        <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#fde8e8" }} />
+        <span>لم تُدخل المشرفة الأنصبة</span>
       </div>
     </div>
   );
