@@ -5,11 +5,12 @@
 // راجعي lib/badgeDefinitions.ts للأسماء والنصوص والدرجات.
 // ============================================================================
 
-import { db, recordsTable, circlesTable, studentsTable, tracksTable, dailyCircleTasksTable, trackSupervisorNamesTable, reviewPlansTable, reviewPlanDaysTable, globalSettingsTable } from "@workspace/db";
+import { db, recordsTable, circlesTable, studentsTable, studentEnrollmentsTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, trackSupervisorNamesTable, reviewPlansTable, reviewPlanDaysTable, globalSettingsTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { getLastCompletedWeekStart, addDaysStr, getMakkahDay, minutesSinceMakkahDayStart, ONE_AM_MINUTES_SINCE_DAY_START } from "./date";
 import { computeShortcoming } from "../routes/shortcomings";
 import { isEntryExpectedOn } from "./dataEntrySchedule";
+import { isCircleFullyRecorded, type RosterStudent, type LeaveRange } from "./weeklyCompleteness";
 import { getPlanCycleDates, getEffectiveEndDate, PLAN_TOTAL_DAYS, type PlanType } from "../routes/reviewPlans";
 import { getBadgeTier, type BadgeTierDefinition } from "./badgeDefinitions";
 
@@ -40,6 +41,10 @@ function tierToEarned(badgeId: string, t: BadgeTierDefinition): EarnedBadge {
  * فعلًا ويتجاهل الطالبات اللي ما انسجل حضورهن إطلاقًا. الحين hasAnyRecord ما
  * تصير true إلا لو *كل* طالبات الحلقة النشيطات عندهن سجل (حاضر أو غايب) مرة
  * على الأقل بالأسبوع — أي إدخال جزئي يُعامل معاملة "ما فيه إدخال أصلًا".
+ *
+ * ✅ استثناءات عادلة: لا يُطلب إدخال (١) في أيام غياب المعلمة المسجّلة بجدول
+ * teacher_absences، ولا (٢) للطالبة في أيام إجازتها الرسمية. المنطق كله في
+ * lib/weeklyCompleteness.ts. عدّ الغياب نفسه (absenceCount) ما تغيّر.
  */
 export async function getCircleAbsenceCounts(weekStart: string, weekEnd: string, circleIds?: number[]) {
   const recordConditions = [gte(recordsTable.date, weekStart), lte(recordsTable.date, weekEnd)];
@@ -66,17 +71,40 @@ export async function getCircleAbsenceCounts(weekStart: string, weekEnd: string,
     (async () => {
       const studentConditions = [eq(studentsTable.isArchived, false)];
       if (circleIds && circleIds.length > 0) studentConditions.push(inArray(studentsTable.circleId, circleIds));
-      return db.select({ id: studentsTable.id, circleId: studentsTable.circleId }).from(studentsTable).where(and(...studentConditions));
+      return db.select({ id: studentsTable.id, circleId: studentsTable.circleId, leaveStart: studentsTable.leaveStart, leaveEnd: studentsTable.leaveEnd }).from(studentsTable).where(and(...studentConditions));
     })(),
   ]);
+
+  // أيام غياب المعلمة + إجازات التسجيل (enrollments) خلال الأسبوع — تُستثنى من شرط الاكتمال
+  const teacherAbsentByCircle = new Map<number, Set<string>>();
+  const enrollmentLeave = new Map<string, LeaveRange>(); // مفتاح: studentId|circleId
+  {
+    const taConditions = [gte(teacherAbsencesTable.date, weekStart), lte(teacherAbsencesTable.date, weekEnd)];
+    if (circleIds && circleIds.length > 0) taConditions.push(inArray(teacherAbsencesTable.circleId, circleIds));
+    const enrConditions = [eq(studentEnrollmentsTable.isArchived, false)];
+    if (circleIds && circleIds.length > 0) enrConditions.push(inArray(studentEnrollmentsTable.circleId, circleIds));
+    const [taRows, enrRows] = await Promise.all([
+      db.select({ circleId: teacherAbsencesTable.circleId, date: teacherAbsencesTable.date }).from(teacherAbsencesTable).where(and(...taConditions)),
+      db.select({ studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId, leaveStart: studentEnrollmentsTable.leaveStart, leaveEnd: studentEnrollmentsTable.leaveEnd })
+        .from(studentEnrollmentsTable).where(and(...enrConditions)),
+    ]);
+    for (const t of taRows) {
+      let set = teacherAbsentByCircle.get(t.circleId);
+      if (!set) { set = new Set(); teacherAbsentByCircle.set(t.circleId, set); }
+      set.add(t.date);
+    }
+    for (const e of enrRows) {
+      if (e.leaveStart && e.leaveEnd) enrollmentLeave.set(`${e.studentId}|${e.circleId}`, { start: e.leaveStart, end: e.leaveEnd });
+    }
+  }
   const trackById = new Map(allTracks.map(t => [t.id, t]));
 
-  const activeIdsByCircle = new Map<number, number[]>();
+  const activeByCircle = new Map<number, RosterStudent[]>();
   for (const s of activeStudents) {
     if (s.circleId == null) continue;
-    let ids = activeIdsByCircle.get(s.circleId);
-    if (!ids) { ids = []; activeIdsByCircle.set(s.circleId, ids); }
-    ids.push(s.id);
+    let list = activeByCircle.get(s.circleId);
+    if (!list) { list = []; activeByCircle.set(s.circleId, list); }
+    list.push({ id: s.id, leaveStart: s.leaveStart, leaveEnd: s.leaveEnd });
   }
 
   // الأيام الخمسة (أحد-خميس) ضمن نطاق هذا الأسبوع — نفلترها لكل حلقة حسب
@@ -85,8 +113,8 @@ export async function getCircleAbsenceCounts(weekStart: string, weekEnd: string,
 
   const hasAnyRecord = new Set<number>();
   for (const circle of circlesInfo) {
-    const activeIds = activeIdsByCircle.get(circle.id);
-    if (!activeIds || activeIds.length === 0) continue;
+    const roster = activeByCircle.get(circle.id);
+    if (!roster || roster.length === 0) continue;
 
     const dataEntryType = circle.trackId
       ? (trackById.get(circle.trackId)?.dataEntryType ?? circle.trackType ?? "girls")
@@ -95,10 +123,19 @@ export async function getCircleAbsenceCounts(weekStart: string, weekEnd: string,
     const expectedDates = weekDates.filter(d => isEntryExpectedOn(dataEntryType, circle.name, d));
     if (expectedDates.length === 0) continue; // احتياطي، ما يفترض يصير
 
-    // كل طالبة نشيطة لازم عندها سجل بكل يوم من أيام الحلقة المتوقعة (مو يوم واحد بس)
-    const fullyRecorded = activeIds.every(studentId => {
-      const dates = recordedDatesByStudent.get(studentId);
-      return dates ? expectedDates.every(d => dates.has(d)) : false;
+    // كل طالبة نشيطة لازم عندها سجل بكل يوم من أيام الحلقة المتوقعة (مو يوم واحد بس)،
+    // عدا أيام غياب المعلمة وأيام إجازة الطالبة (انظري weeklyCompleteness.ts)
+    const enrollmentLeaveByStudent = new Map<number, LeaveRange>();
+    for (const st of roster) {
+      const l = enrollmentLeave.get(`${st.id}|${circle.id}`);
+      if (l) enrollmentLeaveByStudent.set(st.id, l);
+    }
+    const fullyRecorded = isCircleFullyRecorded({
+      students: roster,
+      expectedDates,
+      teacherAbsentDates: teacherAbsentByCircle.get(circle.id) ?? new Set<string>(),
+      recordedDatesByStudent,
+      enrollmentLeaveByStudent,
     });
     if (fullyRecorded) hasAnyRecord.add(circle.id);
   }
