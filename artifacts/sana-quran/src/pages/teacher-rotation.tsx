@@ -8,7 +8,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -49,7 +48,9 @@ export default function TeacherRotationPage(props: RotationPageProps) {
   return <RotationErrorBoundary><TeacherRotationInner {...props} /></RotationErrorBoundary>;
 }
 
-const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+// مصفوفة فارغة ثابتة: تمنع إنشاء مصفوفة جديدة كل رسم (سبب حلقة التحديث اللانهائية)
+const EMPTY: any[] = [];
+const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : (EMPTY as T[]));
 
 function TeacherRotationInner({ userRole, userId }: RotationPageProps) {
   const [showDialog, setShowDialog] = useState(false);
@@ -771,7 +772,7 @@ function TeacherRotationInner({ userRole, userId }: RotationPageProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} />
+              <input type="checkbox" className="w-4 h-4 accent-primary" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
               <Label>نشطة</Label>
             </div>
 
