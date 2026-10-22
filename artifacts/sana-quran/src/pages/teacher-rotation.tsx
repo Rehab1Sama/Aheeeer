@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Component, useState, useEffect, type ReactNode } from "react";
 import {
   useListExamRotations, useCreateExamRotation, useUpdateExamRotation, useDeleteExamRotation,
   useListExamAssignments, useSaveExamAssignments,
@@ -26,7 +26,32 @@ function toWhatsApp(phone: string): string {
   return `https://wa.me/${d}`;
 }
 
-export default function TeacherRotationPage({ userRole, userId }: RotationPageProps) {
+/** يمنع الصفحة البيضاء: يعرض رسالة الخطأ الحقيقية بدل اختفاء الصفحة */
+class RotationErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error("[teacher-rotation]", error); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="p-4 max-w-xl mx-auto" dir="rtl">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-2">
+          <p className="font-bold">حدث خطأ في صفحة الشقلبة</p>
+          <p dir="ltr" className="text-xs break-all">{String(this.state.error?.message ?? this.state.error)}</p>
+          <Button size="sm" onClick={() => this.setState({ error: null })}>إعادة المحاولة</Button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default function TeacherRotationPage(props: RotationPageProps) {
+  return <RotationErrorBoundary><TeacherRotationInner {...props} /></RotationErrorBoundary>;
+}
+
+const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+function TeacherRotationInner({ userRole, userId }: RotationPageProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [editingRotation, setEditingRotation] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -46,16 +71,21 @@ export default function TeacherRotationPage({ userRole, userId }: RotationPagePr
   const isTeacher   = userRole === "teacher";
   const canSummary  = isLeader || isDeputy || isTrackSup;
 
-  const { data: rotations = [] } = useListExamRotations({});
-  const { data: users = [] }     = useListUsers({});
-  const { data: circles = [] }   = useListCircles({});
-  const { data: tracks = [] }    = useListTracks({ query: { queryKey: ["tracks"] } });
+  const { data: rotationsRaw } = useListExamRotations({});
+  const rotations = asArray<any>(rotationsRaw);
+  const { data: usersRaw }     = useListUsers({});
+  const users = asArray<any>(usersRaw);
+  const { data: circlesRaw }   = useListCircles({});
+  const circles = asArray<any>(circlesRaw);
+  const { data: tracksRaw }    = useListTracks({ query: { queryKey: ["tracks"] } });
+  const tracks = asArray<any>(tracksRaw);
 
-  const { data: currentAssignments = [], isFetched: assignmentsFetched } = useListExamAssignments(
+  const { data: currentAssignmentsRaw, isFetched: assignmentsFetched } = useListExamAssignments(
     expandedId ?? 0,
     { query: { enabled: expandedId != null, queryKey: ["listExamAssignments", expandedId] } }
   );
 
+  const currentAssignments = asArray<any>(currentAssignmentsRaw);
   const createRot   = useCreateExamRotation();
   const updateRot   = useUpdateExamRotation();
   const deleteRot   = useDeleteExamRotation();
@@ -72,7 +102,7 @@ export default function TeacherRotationPage({ userRole, userId }: RotationPagePr
     setEditingRotation(r);
     setForm({
       name: r.name, startDate: r.startDate, endDate: r.endDate, isActive: r.isActive,
-      teacherScope: r.teacherScope ?? "girls", selectedTracks: r.selectedTracks ?? [],
+      teacherScope: r.teacherScope ?? "girls", selectedTracks: asArray<string>(r.selectedTracks),
     });
     setShowDialog(true);
   }
@@ -120,13 +150,15 @@ export default function TeacherRotationPage({ userRole, userId }: RotationPagePr
   // ─── computed from expanded rotation ────────────────────────────────────────
   const expandedRotation = rotations.find(r => r.id === expandedId);
   const rotationScope    = expandedRotation?.teacherScope ?? "girls";
-  const rotationTracks   = expandedRotation?.selectedTracks ?? [];
+  const rotationTracks   = asArray<string>(expandedRotation?.selectedTracks);
   const isGirlsCircle   = (c: any) => c.trackType === "girls" || String(c.trackType ?? "").startsWith("girls_");
   const isCircleInScope  = (c: any) => rotationScope === "girls" ? isGirlsCircle(c) : rotationTracks.includes(c.track);
   const scopedCircles    = circles.filter(isCircleInScope);
   const scopedCircleIds  = new Set(scopedCircles.map(c => c.id));
   const teachers         = users.filter(u => u.role === "teacher" && !u.isArchived && u.circleId != null && scopedCircleIds.has(u.circleId));
-  const availableTracks  = Array.from(new Set([...tracks.map(t => t.name), ...circles.map(c => c.track)])).filter(Boolean);
+  const availableTracks  = Array.from(new Set(
+    circles.filter(isGirlsCircle).map((c: any) => c?.track)
+  )).filter((x): x is string => typeof x === "string" && x.length > 0);
 
   // phone lookup
   const phoneByUserId: Record<number, string | null> = {};
@@ -377,7 +409,7 @@ export default function TeacherRotationPage({ userRole, userId }: RotationPagePr
                     <div className="text-sm text-muted-foreground">{rotation.startDate} — {rotation.endDate}</div>
                     <div className="text-xs text-primary mt-1">
                       {rotation.teacherScope === "selected_tracks"
-                        ? `المسارات: ${(rotation.selectedTracks ?? []).join("، ")}`
+                        ? `المسارات: ${asArray<string>(rotation.selectedTracks).join("، ")}`
                         : "معلمات مسارات الفتيات فقط"}
                     </div>
                   </div>
@@ -705,13 +737,19 @@ export default function TeacherRotationPage({ userRole, userId }: RotationPagePr
                 </button>
                 <button type="button" onClick={() => setForm(f => ({ ...f, teacherScope: "selected_tracks" }))}
                   className={`rounded-lg border p-3 text-right text-sm transition-colors ${form.teacherScope === "selected_tracks" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-                  <span className="font-semibold block">مسارات محددة</span>
-                  <span className="text-xs text-muted-foreground">الشقلبة بين المسارات المختارة فقط</span>
+                  <span className="font-semibold block">مسارات محددة من الفتيات</span>
+                  <span className="text-xs text-muted-foreground">أختار المسارات التي تتبادل معلماتها</span>
                 </button>
               </div>
               {form.teacherScope === "selected_tracks" && (
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">اختاري المسارات التي تتبادل معلماتها:</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">اختاري من مسارات الفتيات:</p>
+                    <button type="button" className="text-xs text-primary underline"
+                      onClick={() => setForm(f => ({ ...f, selectedTracks: f.selectedTracks.length === availableTracks.length ? [] : [...availableTracks] }))}>
+                      {form.selectedTracks.length === availableTracks.length ? "إلغاء الكل" : "تحديد الكل"}
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto">
                     {availableTracks.map(track => (
                       <label key={track} className="flex items-center gap-2 text-sm cursor-pointer">
