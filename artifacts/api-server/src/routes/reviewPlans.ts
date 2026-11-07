@@ -2099,11 +2099,7 @@ router.get("/review-plans/circle-day-quota", authenticate, async (req, res): Pro
     res.status(400).json({ error: "circleId and valid date required" }); return;
   }
 
-  const plans = await db.select({
-    id: reviewPlansTable.id,
-    studentId: reviewPlansTable.studentId,
-    startDate: reviewPlansTable.startDate,
-  }).from(reviewPlansTable).where(and(
+  const plans = await db.select().from(reviewPlansTable).where(and(
     eq(reviewPlansTable.circleId, circleId),
     eq(reviewPlansTable.status, "active"),
     eq(reviewPlansTable.planType, "girls_review"),
@@ -2118,17 +2114,32 @@ router.get("/review-plans/circle-day-quota", authenticate, async (req, res): Pro
     dayNumber: reviewPlanDaysTable.dayNumber,
     pages: reviewPlanDaysTable.pages,
   }).from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, planIds));
+  const daysByPlan = new Map<number, Array<{ dayNumber: number; pages: number | null }>>();
+  for (const d of allDays) {
+    const list = daysByPlan.get(d.planId) ?? [];
+    list.push({ dayNumber: d.dayNumber, pages: d.pages });
+    daysByPlan.set(d.planId, list);
+  }
+  // اتجاه كل طالبة (عادي أو عكسي بالسور) من حساب الخطة نفسه، ليكون نطاق الخميس على ترتيب مراجعتها.
+  const coverage = await loadGirlsCoverage(plans, daysByPlan);
 
-  const quotas: Record<number, { pages: number; dayNumber: number }> = {};
+  type Range = { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number };
+  const quotas: Record<number, { pages: number; dayNumber: number; ranges: Range[] }> = {};
   for (const plan of plans) {
     if (!plan.startDate) continue;
     const cycleDates = getCycleDates(plan.startDate, 21);
     const dayIdx = cycleDates.indexOf(date);
     if (dayIdx < 0) continue;
     const dayNumber = dayIdx + 1;
-    const planDay = allDays.find(d => d.planId === plan.id && d.dayNumber === dayNumber);
+    const sortedDays = [...(daysByPlan.get(plan.id) ?? [])].sort((x, y) => x.dayNumber - y.dayNumber);
+    const planDay = sortedDays.find(d => d.dayNumber === dayNumber);
     if (planDay && (planDay.pages ?? 0) > 0) {
-      quotas[plan.studentId] = { pages: planDay.pages ?? 0, dayNumber };
+      // نطاق نصيب اليوم: يُسجَّل مع صفحات المراجعة البعيدة عند «صح» يوم الخميس، وإلا لا يُحسب
+      // اليوم في حالة الخطة (المقارنة بالنطاق لا بالصفحات).
+      const dayRanges = coverage.get(plan.id)?.dayRanges
+        ?? computeDayRanges(getPlanQuotaRanges(plan), sortedDays);
+      const idx = sortedDays.findIndex(d => d.dayNumber === dayNumber);
+      quotas[plan.studentId] = { pages: planDay.pages ?? 0, dayNumber, ranges: (idx >= 0 ? dayRanges[idx] : undefined) ?? [] };
     }
   }
 

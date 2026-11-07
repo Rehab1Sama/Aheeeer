@@ -3159,6 +3159,16 @@ components:
           type: ["integer", "null"]
         reviewFarPages:
           type: ["number", "null"]
+        reviewFar2SurahStart:
+          type: ["string", "null"]
+        reviewFar2AyahStart:
+          type: ["integer", "null"]
+        reviewFar2SurahEnd:
+          type: ["string", "null"]
+        reviewFar2AyahEnd:
+          type: ["integer", "null"]
+        reviewFar2Pages:
+          type: ["number", "null"]
         reviewSurahStart:
           type: ["string", "null"]
         reviewAyahStart:
@@ -3225,6 +3235,16 @@ components:
         reviewFarAyahEnd:
           type: ["integer", "null"]
         reviewFarPages:
+          type: ["number", "null"]
+        reviewFar2SurahStart:
+          type: ["string", "null"]
+        reviewFar2AyahStart:
+          type: ["integer", "null"]
+        reviewFar2SurahEnd:
+          type: ["string", "null"]
+        reviewFar2AyahEnd:
+          type: ["integer", "null"]
+        reviewFar2Pages:
           type: ["number", "null"]
         reviewSurahStart:
           type: ["string", "null"]

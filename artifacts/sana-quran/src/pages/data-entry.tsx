@@ -981,7 +981,7 @@ export default function DataEntryPage() {
     ["children", "mothers"].includes(selectedCircle?.dataEntryType);
 
   // Plan day quotas for Thursday far review (reviewFarPages = خطة المراجعة)
-  const [planDayQuotas, setPlanDayQuotas] = useState<Record<number, { pages: number; dayNumber: number }>>({});
+  const [planDayQuotas, setPlanDayQuotas] = useState<Record<number, { pages: number; dayNumber: number; ranges?: { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }[] }>>({});
   useEffect(() => {
     if (!isThursdayQuotaCircle || !selectedCircleId || !selectedDate) {
       setPlanDayQuotas({});
@@ -1230,6 +1230,20 @@ export default function DataEntryPage() {
     // صح أو تقصير (الاثنين محسوبين حضورًا ونصابًا) + لها خطة → تُحسب المراجعة البعيدة تلقائياً بنصاب يوم الخطة
     if (passed && planQuota && planQuota.pages > 0) {
       payload.reviewFarPages = planQuota.pages;
+      // نطاق نصيب اليوم من الخطة (حالة الخطة تُقاس بالنطاق): المقطع الأول في المراجعة البعيدة ١ والثاني في ٢
+      const [r1, r2] = planQuota.ranges ?? [];
+      if (r1) {
+        payload.reviewFarSurahStart = r1.surahStart;
+        payload.reviewFarAyahStart = r1.ayahStart;
+        payload.reviewFarSurahEnd = r1.surahEnd;
+        payload.reviewFarAyahEnd = r1.ayahEnd;
+      }
+      if (r2) {
+        payload.reviewFar2SurahStart = r2.surahStart;
+        payload.reviewFar2AyahStart = r2.ayahStart;
+        payload.reviewFar2SurahEnd = r2.surahEnd;
+        payload.reviewFar2AyahEnd = r2.ayahEnd;
+      }
     }
     const existing = (circleRecords as any[]).find((r: any) => r.studentId === student.studentId);
     const onDone = () => {
