@@ -13,10 +13,10 @@ import {
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
-import { getWajhIndex, getPlanQuotaRanges } from "../lib/quranRanges";
+import { getWajhIndex, getPlanQuotaRanges, computeDayRanges } from "../lib/quranRanges";
 import {
   computeCurrentDay, hasStudentTargets, pagesDaysReached, plannedPagesThrough,
-  orderedPlanWajhs, coveredWajhSet, coverageProgress, coveredDayNumbers,
+  orderedPlanWajhs, coveredWajhSet, coverageProgress, coveredDayNumbers, wajhsToQuotaRanges,
   seedRangesFromOldPlan, isSaturdayDate, stripApprovedMemorization,
 } from "../lib/planProgress";
 
@@ -1722,7 +1722,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   // Returns both the overall status AND the count of genuine unresolved delay days
   // (how many plan-days' cumulative targets she hasn't reached yet) — used for
   // the "٣ تأخيرات بدون تدارك" alert.
-  function computePlanStatus(plan: typeof activePlans[0], planDays: typeof allDays): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[]; reversed?: boolean; coveredDays?: number[] } {
+  function computePlanStatus(plan: typeof activePlans[0], planDays: typeof allDays): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[]; reversed?: boolean; coveredDays?: number[]; dayRanges?: { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }[][] } {
     const planType = plan.planType as PlanType;
     const cycleDates = cycleDatesByPlan.get(plan.id);
     if (!cycleDates) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] };
@@ -1831,7 +1831,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     cycleDates: string[],
     currentDay: number,
     dayRecords: Record<string, DayRecord>,
-  ): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[]; reversed: boolean; coveredDays: number[] } {
+  ): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[]; reversed: boolean; coveredDays: number[]; dayRanges?: { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }[][] } {
     void plan;
     const entered: DayRecord["farRanges"] = [];
     let anyRecord = false;
@@ -1845,8 +1845,10 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     if (!anyRecord) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [], reversed: false, coveredDays: [] };
 
     const coveredSet = coveredWajhSet(entered);
-    const { daysReached, prefix, plannedWajhsToday, direction } = coverageProgress(planWajhs, planDays, currentDay, coveredSet);
-    const coveredDays = coveredDayNumbers(planWajhs, planDays, coveredSet);
+    const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, coveredSet);
+    const coveredDays = coveredDayNumbers(ordered, planDays, coveredSet);
+    const reversed = direction === "desc" && prefix > 0;
+    const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(ordered), planDays) : undefined;
     const missingAll: string[] = [];
     for (let d = 1; d <= currentDay; d++) {
       const dateStr = cycleDates[d - 1];
@@ -1857,7 +1859,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
     const isAhead = prefix > plannedWajhsToday + 1;
     const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
-    return { status, unresolvedDelayDays, missingSupervisorDates, reversed: direction === "desc" && prefix > 0, coveredDays };
+    return { status, unresolvedDelayDays, missingSupervisorDates, reversed, coveredDays, dayRanges };
   }
 
   // حالة الخطة بالصفحات (احتياطي): النصيب التراكمي المخطط مقابل صفحات المراجعة البعيدة
@@ -2007,6 +2009,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
             missingSupervisorDates: statusResult?.missingSupervisorDates ?? [],
             reversed: statusResult?.reversed ?? false,
             coveredDays: statusResult?.coveredDays,
+            dayRanges: statusResult?.dayRanges,
             isAbsentToday: isAbsentToday(plan),
           } : null,
         };

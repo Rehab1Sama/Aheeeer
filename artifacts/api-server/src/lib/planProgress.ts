@@ -9,7 +9,7 @@
 //  ٣. "اليوم الحالي" في أيام لا تدخل في الدورة (الجمعة للبنات؛ الخميس/الجمعة/السبت
 //     للتثبيت) كان يُرجِع طول الدورة + ١ بدل اليوم الصحيح.
 
-import { computeDayRanges, getPlanQuotaRanges, getWajhIndex } from "./quranRanges";
+import { computeDayRanges, getPlanQuotaRanges, getWajhIndex, MUSHAF_PAGES, wajhIndexToRange, type DayQuotaRange } from "./quranRanges";
 
 // ─── اليوم الحالي ─────────────────────────────────────────────────
 
@@ -185,6 +185,37 @@ export function orderedPlanWajhs(ranges: readonly WajhRangeLike[]): number[] {
   return out;
 }
 
+/**
+ * ترتيب الخطة العكسي: السور تُعكس (آخر سورة في الخطة أولًا) لكن كل سورة تبقى من أول آياتها صعودًا.
+ * الطالبة لا تختار الاتجاه؛ يُستنتج من نطاق المراجعة البعيدة المُدخل.
+ */
+export function surahReversedWajhs(planWajhs: readonly number[]): number[] {
+  const runs: number[][] = [];
+  let lastSurah = -1;
+  for (const w of planWajhs) {
+    const surah = MUSHAF_PAGES[w]?.[0] ?? -1;
+    if (runs.length === 0 || surah !== lastSurah) runs.push([]);
+    runs[runs.length - 1]!.push(w);
+    lastSurah = surah;
+  }
+  return runs.reverse().flat();
+}
+
+/** نطاقات (بداية/نهاية) تُقابل أوجهًا مرتّبة، لتغذية computeDayRanges بترتيب الخطة العكسي. */
+export function wajhsToQuotaRanges(wajhs: readonly number[]): DayQuotaRange[] {
+  const out: DayQuotaRange[] = [];
+  let i = 0;
+  while (i < wajhs.length) {
+    let j = i;
+    while (j + 1 < wajhs.length && wajhs[j + 1] === wajhs[j]! + 1) j++;
+    const a = wajhIndexToRange(wajhs[i]!);
+    const b = wajhIndexToRange(wajhs[j]!);
+    if (a && b) out.push({ surahStart: a.surahStart, ayahStart: a.ayahStart, surahEnd: b.surahEnd, ayahEnd: b.ayahEnd });
+    i = j + 1;
+  }
+  return out;
+}
+
 /** مجموعة الأوجه المغطّاة بنطاقات مُدخلة. */
 export function coveredWajhSet(ranges: readonly WajhRangeLike[]): Set<number> {
   const set = new Set<number>();
@@ -220,10 +251,11 @@ export function coverageProgress(
   days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
   currentDay: number,
   covered: ReadonlySet<number>,
-): { daysReached: number; prefix: number; plannedWajhsToday: number; direction: "asc" | "desc" } {
+): { daysReached: number; prefix: number; plannedWajhsToday: number; direction: "asc" | "desc"; ordered: number[] } {
   const prefixOf = (list: readonly number[]) => { let n = 0; while (n < list.length && covered.has(list[n]!)) n++; return n; };
   const fwd = prefixOf(planWajhs);
-  const rev = prefixOf([...planWajhs].reverse());
+  const reversedList = surahReversedWajhs(planWajhs);
+  const rev = prefixOf(reversedList);
   const direction: "asc" | "desc" = rev > fwd ? "desc" : "asc";
   const prefix = Math.max(fwd, rev);
   const sorted = [...days].sort((a, b) => a.dayNumber - b.dayNumber);
@@ -234,7 +266,7 @@ export function coverageProgress(
     cum += d.pages && d.pages > 0 ? Math.round(d.pages * 2) : 0;
     if (prefix + WAJH_TOLERANCE >= Math.min(cum, planWajhs.length)) daysReached = d.dayNumber;
   }
-  return { daysReached, prefix, plannedWajhsToday: Math.min(cum, planWajhs.length), direction };
+  return { daysReached, prefix, plannedWajhsToday: Math.min(cum, planWajhs.length), direction, ordered: direction === "desc" ? reversedList : [...planWajhs] };
 }
 
 /** آخر يوم تكفي صفحات الطالبة المنجزة (تراكميًا) لتغطية نصيبه التراكمي. */

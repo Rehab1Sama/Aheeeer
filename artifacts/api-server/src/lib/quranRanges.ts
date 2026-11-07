@@ -53,6 +53,31 @@ export function getWajhIndex(surahName: string, ayahNum: number): number {
   return _findWajhIdx(surahIdx + 1, ayahNum);
 }
 
+export function wajhIndexToRange(wajhIdx: number): DayRangeSegment | null {
+  const startEntry = MUSHAF_PAGES[wajhIdx];
+  if (!startEntry) return null;
+  const startSurah = QURAN_SURAHS[startEntry[0] - 1];
+  let endSurahNum: number;
+  let endAyahNum: number;
+  if (wajhIdx + 1 < MUSHAF_PAGES.length) {
+    const nextEntry = MUSHAF_PAGES[wajhIdx + 1]!;
+    if (nextEntry[1] > 1) {
+      endSurahNum = nextEntry[0];
+      endAyahNum  = nextEntry[1] - 1;
+    } else {
+      endSurahNum = nextEntry[0] - 1;
+      endAyahNum  = AYAH_COUNTS[nextEntry[0] - 2] ?? 1;
+    }
+  } else {
+    endSurahNum = 114;
+    endAyahNum  = 6;
+  }
+  const endSurah = QURAN_SURAHS[endSurahNum - 1];
+  if (!startSurah || !endSurah) return null;
+  return { surahStart: startSurah.name, ayahStart: startEntry[1], surahEnd: endSurah.name, ayahEnd: endAyahNum };
+}
+
+
 export function computeDayRanges(
   quotaRanges: DayQuotaRange[],
   days: Array<{ pages?: number | null }>
@@ -76,30 +101,6 @@ export function computeDayRanges(
   if (allWajhIndices.length === 0) return days.map(() => []);
 
   let pos = 0;
-
-  function wajhToRange(wajhIdx: number): DayRangeSegment | null {
-    const startEntry = MUSHAF_PAGES[wajhIdx];
-    if (!startEntry) return null;
-    const startSurah = QURAN_SURAHS[startEntry[0] - 1];
-    let endSurahNum: number;
-    let endAyahNum: number;
-    if (wajhIdx + 1 < MUSHAF_PAGES.length) {
-      const nextEntry = MUSHAF_PAGES[wajhIdx + 1]!;
-      if (nextEntry[1] > 1) {
-        endSurahNum = nextEntry[0];
-        endAyahNum  = nextEntry[1] - 1;
-      } else {
-        endSurahNum = nextEntry[0] - 1;
-        endAyahNum  = AYAH_COUNTS[nextEntry[0] - 2] ?? 1;
-      }
-    } else {
-      endSurahNum = 114;
-      endAyahNum  = 6;
-    }
-    const endSurah = QURAN_SURAHS[endSurahNum - 1];
-    if (!startSurah || !endSurah) return null;
-    return { surahStart: startSurah.name, ayahStart: startEntry[1], surahEnd: endSurah.name, ayahEnd: endAyahNum };
-  }
 
   return days.map(day => {
     if (!day.pages || day.pages <= 0 || pos >= allWajhIndices.length) return [];
@@ -127,7 +128,7 @@ export function computeDayRanges(
       const startEntry = MUSHAF_PAGES[segStartWajh];
       if (!startEntry) continue;
       const startSurah = QURAN_SURAHS[startEntry[0] - 1];
-      const endRange = wajhToRange(segEndWajh);
+      const endRange = wajhIndexToRange(segEndWajh);
       if (!startSurah || !endRange) continue;
       segments.push({
         surahStart: startSurah.name,

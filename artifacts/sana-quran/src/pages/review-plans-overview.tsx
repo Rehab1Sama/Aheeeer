@@ -50,6 +50,7 @@ type PlanSummary = {
   missingSupervisorDates?: string[];
   reversed?: boolean;
   coveredDays?: number[];
+  dayRanges?: DayRangeSegment[][];
   isAbsentToday?: boolean;
 };
 
@@ -262,7 +263,8 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
   const dates = getDayDates(plan.startDate, totalDays, mode);
   const today = getMeccaToday();
   const currentDay = getCurrentPlanDay(plan.startDate, totalDays, mode);
-  const computedRanges = getPlanRanges(plan).length > 0 ? computeDayRanges(getPlanRanges(plan), plan.days) : null;
+  // خطة عكسية السور (بدأت الطالبة من آخر سورة): الخادم يرسل نطاق كل يوم بترتيبها (آخر سورة أولًا، وكل سورة من أول آياتها).
+  const computedRanges = plan.dayRanges ?? (getPlanRanges(plan).length > 0 ? computeDayRanges(getPlanRanges(plan), plan.days) : null);
 
   if (!plan.days || plan.days.length === 0) {
     return (
