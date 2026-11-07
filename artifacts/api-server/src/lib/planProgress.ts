@@ -246,13 +246,43 @@ export function coveredDayNumbers(
   return out;
 }
 
+/** أوجه نصيب كل يوم بترتيب معيّن للخطة. */
+export function daySlices(
+  ordered: readonly number[],
+  days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
+): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  let pos = 0;
+  for (const d of [...days].sort((a, b) => a.dayNumber - b.dayNumber)) {
+    const cnt = d.pages && d.pages > 0 ? Math.round(d.pages * 2) : 0;
+    out.set(d.dayNumber, ordered.slice(pos, pos + cnt));
+    pos += cnt;
+  }
+  return out;
+}
+
+/**
+ * pendingDays: أيام مضت بلا أي سجل (لم تُدخل المشرفة، أو سبت). نصيبها يُفترض مُنجزًا مؤقتًا حتى لا
+ * ينقطع العدّ عندها: أدخلت المشرفة الأحد البقرة ١–٥ ولم تُدخل الاثنين، ثم الثلاثاء البقرة ٣٠–٤٠
+ * ← البقرة ٦–٢٩ نصيب يوم معلّق (يظهر «لم تُدخل المشرفة») لا تأخير، والثلاثاء محسوب.
+ * أما الغياب المسجَّل فلا يُفترض فيه شيء: نصيبه يبقى ناقصًا حتى تتداركه.
+ */
 export function coverageProgress(
   planWajhs: readonly number[],
   days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
   currentDay: number,
   covered: ReadonlySet<number>,
+  pendingDays: ReadonlySet<number> = new Set(),
 ): { daysReached: number; prefix: number; plannedWajhsToday: number; direction: "asc" | "desc"; ordered: number[] } {
-  const prefixOf = (list: readonly number[]) => { let n = 0; while (n < list.length && covered.has(list[n]!)) n++; return n; };
+  const prefixOf = (list: readonly number[]) => {
+    const presumed = new Set<number>();
+    if (pendingDays.size > 0) {
+      for (const [dn, ws] of daySlices(list, days)) if (pendingDays.has(dn)) ws.forEach((w) => presumed.add(w));
+    }
+    let n = 0;
+    while (n < list.length && (covered.has(list[n]!) || presumed.has(list[n]!))) n++;
+    return n;
+  };
   const fwd = prefixOf(planWajhs);
   const reversedList = surahReversedWajhs(planWajhs);
   const rev = prefixOf(reversedList);
@@ -331,19 +361,30 @@ export function evaluateCoverage(
   if (!anyRecord) return empty;
 
   const covered = coveredWajhSet(entered);
-  const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, covered);
+  const pending = new Set<number>();
+  for (let d = 1; d < lastDay; d++) if (!dayRecords[cycleDates[d - 1]!]) pending.add(d);
+  const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, covered, pending);
   const coveredDays = coveredDayNumbers(ordered, planDays, covered);
   const reversed = direction === "desc" && prefix > 0;
   const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(ordered), [...planDays].sort((a, b) => a.dayNumber - b.dayNumber)) : undefined;
 
-  const missingAll: string[] = [];
-  for (let d = 1; d <= lastDay; d++) {
+  // «لم تُدخل المشرفة»: يوم مضى بلا سجل ولم يُغطَّ نصيبه فعلًا بعد (السبت لا يُعرض أبدًا).
+  const slices = daySlices(ordered, planDays);
+  const missingSupervisorDates: string[] = [];
+  for (const d of pending) {
     const ds = cycleDates[d - 1]!;
-    if (dayRecords[ds]) continue;
-    if (d > daysReached) missingAll.push(ds);
+    const ws = slices.get(d) ?? [];
+    if (!isSaturdayDate(ds) && ws.length > 0 && !ws.every((w) => covered.has(w))) missingSupervisorDates.push(ds);
   }
-  const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
-  const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
+  // أيام التأخير = أيام بعد آخر يوم وصلته، لها سجل (حضور أو غياب) ونصيبها لم يُغطَّ (بسماح وجه).
+  // أيام بلا سجل لا تُعدّ على الطالبة، ويوم غياب واحد = تأخير يوم واحد (لا يتضاعف بالتراكم).
+  let unresolvedDelayDays = 0;
+  for (let d = daysReached + 1; d <= lastDay; d++) {
+    if (!dayRecords[cycleDates[d - 1]!]) continue;
+    const ws = slices.get(d) ?? [];
+    const missingW = ws.filter((w) => !covered.has(w)).length;
+    if (missingW > WAJH_TOLERANCE) unresolvedDelayDays++;
+  }
   const isAhead = prefix > plannedWajhsToday + 1;
   const status: CoverageStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
   return { status, unresolvedDelayDays, missingSupervisorDates, daysReached, reversed, coveredDays, dayRanges };
