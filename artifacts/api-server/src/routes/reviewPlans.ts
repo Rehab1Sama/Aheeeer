@@ -1724,9 +1724,20 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     // القياس الموضعي (سورة/آية) للخطط التي حدّدت الطالبة نطاق كل يوم فيها فقط. وما عداها
     // (الخطط المجدَّدة تلقائيًا وغيرها) يُقاس بالصفحات: أهداف مواضعها المحسوبة من اللقطة لا
     // تطابق ما تراجعه الطالبة فعلًا، فكانت تُنتج «متقدمة» و«متأخرة» خاطئتين.
-    if (!hasStudentTargets(planDays)) {
-      return computePagesStatus(plan, planDays, cycleDates, currentDay, dayRecords, planType);
+    // قرار الإدارة: خطة الطالبة وخطة الإدارة تُقاسان بنفس الطريقة (الصفحات) سواء في الإنشاء
+    // أو التجديد؛ فمن بدأت مراجعتها من آخر النطاق (أو عكسته) لا تُعدّ «متقدمة» بل تُحسب بصفحاتها.
+    // أيام بلا صفحات (خطط الطالبة القديمة) نُكمّلها بتوزيع إجمالي صفحات الخطة على الأيام.
+    {
+      const needsFill = planDays.some((d) => d.pages == null);
+      const filled = needsFill && (plan.totalPages ?? 0) > 0
+        ? (() => {
+            const dist = distribute(plan.totalPages as number, totalDays);
+            return planDays.map((d) => ({ ...d, pages: d.pages ?? dist[d.dayNumber - 1] ?? 0 }));
+          })()
+        : planDays;
+      return computePagesStatus(plan, filled, cycleDates, currentDay, dayRecords, planType);
     }
+    // eslint-disable-next-line no-unreachable
     const targetDays = planDays;
 
     const direction = getPlanDirection(targetDays);
