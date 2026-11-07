@@ -7,7 +7,7 @@ import { isFeatureEnabled, shouldHideShortcomings } from "@/lib/schoolConfig";
 import {
   Users, ClipboardList, BarChart3,
   UserCheck, UserX, Home, LogOut, Menu, X,
-  CalendarCheck, PenSquare, Headphones, BookUser, FileDown,
+  CalendarCheck, PenSquare, ClipboardPaste, Headphones, BookUser, FileDown,
   BarChart2, MessageSquare, Search, Clock, Archive, Layers,
   Calendar, ShoppingBag, Award, Shuffle, GraduationCap, AlertTriangle,
   ArrowLeftRight, Loader2, BookOpen, PlaneTakeoff, Bell, CheckCheck,
@@ -810,6 +810,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
     return filterNav([
       { href: "/", label: "حلقتي", icon: Users },
       ...(canSelfEnterData ? [{ href: "/data-entry", label: "إدخال البيانات", icon: PenSquare }] : []),
+      ...(canSelfEnterData ? [{ href: "/whatsapp-entry", label: "إدخال من الواتساب", icon: ClipboardPaste }] : []),
       { href: "/review-plans-overview", label: "خطط المراجعة", icon: BookOpen },
       { href: "/statistics", label: "الإحصائيات", icon: BarChart3, feature: "stats_general" },
       ...(!hideShortcomings ? [{ href: "/shortcomings", label: "التقصير", icon: AlertTriangle, feature: "shortcomings" }] : []),
@@ -836,6 +837,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
     return filterNav([
       { href: "/", label: "مساري", icon: Users },
       { href: "/data-entry", label: "إدخال البيانات", icon: PenSquare },
+      { href: "/whatsapp-entry", label: "إدخال من الواتساب", icon: ClipboardPaste },
       { href: "/review-plans-overview", label: "خطط المراجعة", icon: BookOpen },
       { href: "/certificates", label: "الشهادات الفصلية", icon: CertificateIcon },
       { href: "/circles", label: "الحلقات", icon: BookOpen },

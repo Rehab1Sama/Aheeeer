@@ -14,6 +14,10 @@ import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-or
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
 import { getWajhIndex } from "../lib/quranRanges";
+import {
+  computeCurrentDay, hasStudentTargets, pagesDaysReached, plannedPagesThrough,
+  seedRangesFromOldPlan, isSaturdayDate, stripApprovedMemorization,
+} from "../lib/planProgress";
 
 const router: IRouter = Router();
 
@@ -461,15 +465,26 @@ async function autoRenewPlan(
         if (parsed && parsed.version === 1) previousSnapshot = parsed as GirlsReviewSourceSnapshot;
       } catch { /* legacy/malformed snapshot — fall back to opaque base below */ }
     }
+    // أول تجديد لخطة أنشأتها الطالبة بنفسها (بلا لقطة): نحمل محتواها (النصاب أو نطاقات أيامها)
+    // داخل اللقطة بدل تحويله إلى رقم صفحات معتم، فلا تضيع أهدافها وترتيب مراجعتها.
+    let seedRanges: GirlsReviewSourceSnapshot["recordRanges"] = [];
+    if (!previousSnapshot) {
+      const oldDaysForSeed = await tx.select().from(reviewPlanDaysTable)
+        .where(eq(reviewPlanDaysTable.planId, oldPlan.id))
+        .orderBy(reviewPlanDaysTable.dayNumber);
+      seedRanges = seedRangesFromOldPlan(oldPlan, oldDaysForSeed);
+    }
     const base = previousSnapshot
       ? { dailyRecordPages: previousSnapshot.dailyRecordPages, dailyRecordCount: previousSnapshot.dailyRecordCount, recordRanges: previousSnapshot.recordRanges }
-      : { dailyRecordPages: oldPlan.totalPages ?? 0, dailyRecordCount: 0, recordRanges: [] as GirlsReviewSourceSnapshot["recordRanges"] };
+      : { dailyRecordPages: oldPlan.totalPages ?? 0, dailyRecordCount: 0, recordRanges: seedRanges };
     const sinceDate = previousSnapshot?.throughDate ?? dayBefore(oldPlan.startDate);
 
     const deltaSnapshot = await buildGirlsReviewSourceSnapshot(
       tx, studentId, circleId, throughDate, sinceDate,
     );
-    const sourceSnapshot = combineSnapshots(base, deltaSnapshot);
+    // النصاب الذي أنشأته الطالبة هو الأساس: نضيف إليه الحفظ اليومي المستجد فقط، ولا نضيف المحفوظ
+    // المعتمد/اليدوي فوقه (كان يُضاف في كل أول تجديد فيتضخم الإجمالي).
+    const sourceSnapshot = combineSnapshots(base, stripApprovedMemorization(deltaSnapshot));
     const total = snapshotTotalPages(sourceSnapshot);
     const hasRecordedSources = total > 0;
     const fallbackTotal = oldPlan.totalPages ?? (oldPlan.quotaJuz ?? 0) * 20;
@@ -505,6 +520,8 @@ async function autoRenewPlan(
     let savedDays: typeof reviewPlanDaysTable.$inferSelect[] = [];
     if (effectiveTotal > 0) {
       const dist = distribute(effectiveTotal, PLAN_TOTAL_DAYS.girls_review);
+      // أيام الخطة المجدَّدة بالصفحات فقط؛ محتواها (نطاقاتها) محمول في اللقطة وتعرضه الواجهة،
+      // ويُقاس التقدّم بالصفحات (انظر computePlanStatus).
       const inserted = await tx.insert(reviewPlanDaysTable).values(
         dist.map((pages, i) => ({ planId: newPlan.id, dayNumber: i + 1, pages }))
       ).returning();
@@ -557,7 +574,7 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
           const renewedCycleDates = getPlanCycleDates(planData.startDate!, planType);
           const renewedCycleEndDate = renewedCycleDates[renewedCycleDates.length - 1] ?? planData.startDate!;
           const renewedDayIdx = renewedCycleDates.indexOf(renewedToday);
-          const renewedCurrentDay = renewedDayIdx >= 0 ? renewedDayIdx + 1 : renewedToday < renewedCycleDates[0]! ? 0 : totalDays + 1;
+          const renewedCurrentDay = computeCurrentDay(renewedCycleDates, renewedToday, totalDays);
           const renewedIsCompleted = renewedToday > renewedCycleEndDate;
           const renewedCycleInfo = {
             cycleStartDate: planData.startDate!,
@@ -597,7 +614,7 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     const cycleDates = getPlanCycleDates(plan.startDate, planType);
     const cycleEndDate = cycleDates[cycleDates.length - 1] ?? plan.startDate;
     const dayIdx = cycleDates.indexOf(today);
-    const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
+    const currentDay = computeCurrentDay(cycleDates, today, totalDays);
     const isCompleted = today > cycleEndDate;
     cycleInfo = {
       cycleStartDate: plan.startDate,
@@ -1373,7 +1390,7 @@ router.get("/review-plans/cycle-info", authenticate, async (req, res): Promise<v
   const cycleEndDate = cycleDates[cycleDates.length - 1] ?? cycleStartDate;
   const today = getTodayMecca();
   const dayIdx = cycleDates.indexOf(today);
-  const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
+  const currentDay = computeCurrentDay(cycleDates, today, totalDays);
   const isCompleted = today > cycleEndDate;
 
   res.json({
@@ -1557,7 +1574,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const cycleEndDate = cycleDates[cycleDates.length - 1] ?? cycleStartDate;
     const today = getTodayMecca();
     const dayIdx = cycleDates.indexOf(today);
-    const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : 22;
+    const currentDay = computeCurrentDay(cycleDates, today, 21);
     // scheduledEndDate: a forced end date only counts as "the previous cycle is
     // being wound down" while it still lies before this (new) cycle's start.
     const scheduledEndDate = forcedCycleEndDate && forcedCycleEndDate < cycleStartDate ? forcedCycleEndDate : null;
@@ -1590,6 +1607,8 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     memorizeSurahEnd: string | null; memorizeAyahEnd: number | null;
     reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
     reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
+    // الصفحات المنجزة في اليوم (للحساب الاحتياطي بالصفحات): المراجعة البعيدة ١+٢ للبنات، التثبيت الجديد للتثبيت
+    farPages: number; memorizePages: number;
     isAbsent: boolean;
   };
   const dayRecordsByStudentCircle = new Map<string, Record<string, DayRecord>>();
@@ -1605,6 +1624,9 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
         reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd,
         reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
+        reviewFarPages: recordsTable.reviewFarPages,
+        reviewFar2Pages: recordsTable.reviewFar2Pages,
+        memorizePages: recordsTable.memorizePages,
         isAbsent: recordsTable.isAbsent,
       })
       .from(recordsTable)
@@ -1621,6 +1643,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         memorizeSurahEnd: r.memorizeSurahEnd, memorizeAyahEnd: r.memorizeAyahEnd,
         reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
         reviewFar2SurahEnd: r.reviewFar2SurahEnd, reviewFar2AyahEnd: r.reviewFar2AyahEnd,
+        farPages: (r.reviewFarPages ?? 0) + (r.reviewFar2Pages ?? 0), memorizePages: r.memorizePages ?? 0,
         isAbsent: r.isAbsent,
       };
     }
@@ -1693,11 +1716,20 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const today = getTodayMecca();
     const totalDays = PLAN_TOTAL_DAYS[planType];
     const dayIdx = cycleDates.indexOf(today);
-    const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
+    const currentDay = computeCurrentDay(cycleDates, today, totalDays);
     if (currentDay <= 0) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] }; // plan hasn't started yet
 
-    const direction = getPlanDirection(planDays);
     const dayRecords = dayRecordsByStudentCircle.get(`${plan.studentId}:${plan.circleId}`) ?? {};
+
+    // القياس الموضعي (سورة/آية) للخطط التي حدّدت الطالبة نطاق كل يوم فيها فقط. وما عداها
+    // (الخطط المجدَّدة تلقائيًا وغيرها) يُقاس بالصفحات: أهداف مواضعها المحسوبة من اللقطة لا
+    // تطابق ما تراجعه الطالبة فعلًا، فكانت تُنتج «متقدمة» و«متأخرة» خاطئتين.
+    if (!hasStudentTargets(planDays)) {
+      return computePagesStatus(plan, planDays, cycleDates, currentDay, dayRecords, planType);
+    }
+    const targetDays = planDays;
+
+    const direction = getPlanDirection(targetDays);
 
     // Farthest position reached so far — a MAX for a forward plan, a MIN for a
     // reversed one (moving further from day 1's starting point either way).
@@ -1727,7 +1759,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     // resolves every earlier day it covers, since the plan is sequential.
     let daysReached = 0;
     for (let d = 1; d <= currentDay; d++) {
-      const targetIdx = getDayTargetIdx(d, planDays);
+      const targetIdx = getDayTargetIdx(d, targetDays);
       if (targetIdx == null) continue;
       const reached = direction === "asc" ? farthestIdx >= targetIdx : farthestIdx <= targetIdx;
       if (reached) daysReached = d;
@@ -1738,22 +1770,62 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     // كـ"لم تُدخل المشرفة الأنصبة"، ولا تُحسب تأخيراً على الطالبة (ما لها
     // ذنب). يوم وصل مستهدفه (ولو عبر سجل يوم لاحق، لأن الخطة متسلسلة) ما
     // يُعتبر معلّقاً بعد الآن حتى لو ما فيه سجل خاص فيه هو نفسه.
-    const missingSupervisorDates: string[] = [];
+    // missingAll: كل يوم بلا سجل ولم تصله (يدخل في حساب التأخير كأنه معلّق لا تأخير).
+    // missingSupervisorDates: ما يُعرض ويُنبَّه عليه — بدون السبت (لا إدخال فيه أصلًا).
+    const missingAll: string[] = [];
     for (let d = 1; d <= currentDay; d++) {
       const dateStr = cycleDates[d - 1];
       if (!dateStr) continue;
       const rec = dayRecords[dateStr];
-      const targetIdx = getDayTargetIdx(d, planDays);
+      const targetIdx = getDayTargetIdx(d, targetDays);
       const reached = targetIdx != null && (direction === "asc" ? farthestIdx >= targetIdx : farthestIdx <= targetIdx);
-      if (!rec && !reached) missingSupervisorDates.push(dateStr);
+      if (!rec && !reached) missingAll.push(dateStr);
     }
+    const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
 
     // التأخير الحقيقي المحسوب على الطالبة = أيام بعد آخر نقطة وصلتها، لكن
     // فقط الأيام اللي فيها فعلاً سجل مُدخل يثبت قصوراً حقيقياً — أيام بدون
     // أي سجل (missingSupervisorDates) تُستثنى من هذا العدّ تماماً.
-    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingSupervisorDates.length);
-    const todayTargetIdx = getDayTargetIdx(currentDay, planDays);
+    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
+    const todayTargetIdx = getDayTargetIdx(currentDay, targetDays);
     const isAhead = todayTargetIdx != null && (direction === "asc" ? farthestIdx > todayTargetIdx : farthestIdx < todayTargetIdx);
+    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
+    return { status, unresolvedDelayDays, missingSupervisorDates };
+  }
+
+  // حالة الخطة بالصفحات (احتياطي): النصيب التراكمي المخطط مقابل صفحات المراجعة البعيدة
+  // المنجزة تراكميًا (التثبيت: التثبيت الجديد). نفس دلالات الحالة الموضعية: اليوم «وصلته»
+  // الطالبة إذا غطّت صفحاتها نصيبه التراكمي؛ ويوم بلا سجل ولم تصله «معلّق» لا تأخير.
+  function computePagesStatus(
+    plan: typeof activePlans[0],
+    planDays: typeof allDays,
+    cycleDates: string[],
+    currentDay: number,
+    dayRecords: Record<string, DayRecord>,
+    planType: PlanType,
+  ): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[] } {
+    void plan;
+    let done = 0;
+    let anyRecord = false;
+    for (let d = 1; d <= currentDay; d++) {
+      const dateStr = cycleDates[d - 1];
+      const rec = dateStr ? dayRecords[dateStr] : undefined;
+      if (!rec || rec.isAbsent) continue;
+      anyRecord = true;
+      done += planType === "fixation" ? rec.memorizePages : rec.farPages;
+    }
+    if (!anyRecord) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] };
+
+    const { daysReached } = pagesDaysReached(planDays, currentDay, done);
+    const missingAll: string[] = [];
+    for (let d = 1; d <= currentDay; d++) {
+      const dateStr = cycleDates[d - 1];
+      if (!dateStr || dayRecords[dateStr]) continue;
+      if (d > daysReached) missingAll.push(dateStr);
+    }
+    const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
+    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
+    const isAhead = done > plannedPagesThrough(planDays, currentDay) + 0.5;
     const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
     return { status, unresolvedDelayDays, missingSupervisorDates };
   }
@@ -1795,6 +1867,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     let gap = 0;
     for (let d = currentDay; d >= 1; d--) {
       const dateStr = cycleDates[d - 1];
+      if (dateStr && isSaturdayDate(dateStr)) continue; // لا إدخال في السبت: لا يُعدّ ولا يقطع التتابع
       if (dateStr && missingSet.has(dateStr)) gap++;
       else break;
     }
@@ -1828,7 +1901,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
           const today = getTodayMecca();
           const totalDays = PLAN_TOTAL_DAYS[plan.planType as PlanType];
           const dayIdx = cycleDates.indexOf(today);
-          const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : totalDays + 1;
+          const currentDay = computeCurrentDay(cycleDates, today, totalDays);
           const gap = trailingGapDays(statusResult.missingSupervisorDates, cycleDates, currentDay);
           if (gap >= SUPERVISOR_GAP_ALERT_THRESHOLD) {
             const c = circleById.get(plan.circleId);

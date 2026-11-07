@@ -7,6 +7,7 @@ import {
 import { eq, and, gte, lte, desc, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay, getMakkahDaysAgo } from "../lib/date";
+import { computeCurrentDay } from "../lib/planProgress";
 
 /** Returns all non-Friday dates from startDate up to totalDays count */
 function getCycleDates(startDate: string, totalDays: number): string[] {
@@ -219,7 +220,7 @@ router.get("/stats/stumbling", authenticate, async (req, res): Promise<void> => 
     const dayRecords = planRecordsByStudentCircle.get(`${studentId}:${circleId}`) ?? {};
 
     const dayIdx = cycleDates.indexOf(today);
-    const currentDay = dayIdx >= 0 ? dayIdx + 1 : today < cycleDates[0]! ? 0 : 22;
+    const currentDay = computeCurrentDay(cycleDates, today, cycleDates.length);
     if (currentDay <= 0) return 0;
 
     // Pass 1: find the last day the student completed their quota (catch-up checkpoint).

@@ -15,6 +15,7 @@ import StatisticsPage from "@/pages/statistics";
 import RegistrationManagePage from "@/pages/registration-manage";
 import AttendancePage from "@/pages/attendance";
 import DataEntryPage from "@/pages/data-entry";
+import WhatsappEntryPage from "@/pages/whatsapp-entry";
 import MyCirclePage from "@/pages/my-circle";
 import MyProgressPage from "@/pages/my-progress";
 import CircleOverviewPage from "@/pages/circle-overview";
@@ -182,6 +183,9 @@ function AppRoutes() {
         </Route>
         <Route path="/data-entry">
           {(isLeader || isDataEntry || isTrackSupervisor || canEnterData(user.role)) ? <DataEntryPage /> : <Redirect to="/" />}
+        </Route>
+        <Route path="/whatsapp-entry">
+          {(isLeader || isTrackSupervisor || canEnterData(user.role)) ? <WhatsappEntryPage /> : <Redirect to="/" />}
         </Route>
         <Route path="/registration">
           {isLeader && isFeatureEnabled("registration") ? <RegistrationManagePage /> : <Redirect to="/" />}
