@@ -87,7 +87,35 @@ const ALIASES: Record<string, string> = {
   الدهر: "الانسان",
   عمران: "ال عمران",
   "بني اسرائيل": "الاسراء",
+  عم: "النبا",
+  تبارك: "الملك",
 };
+
+// حدود الأجزاء (نفس JUZ_RANGES في quran.ts) لقراءة «جزء عم» و«جزء ٢٩»
+const JUZ_BOUNDS: Array<[string, number, string, number]> = [
+  ["الفاتحة",1,"البقرة",141],["البقرة",142,"البقرة",252],["البقرة",253,"آل عمران",92],["آل عمران",93,"النساء",23],
+  ["النساء",24,"النساء",147],["النساء",148,"المائدة",81],["المائدة",82,"الأنعام",110],["الأنعام",111,"الأعراف",87],
+  ["الأعراف",88,"الأنفال",40],["الأنفال",41,"التوبة",92],["التوبة",93,"هود",5],["هود",6,"يوسف",52],
+  ["يوسف",53,"إبراهيم",52],["الحجر",1,"النحل",128],["الإسراء",1,"الكهف",74],["الكهف",75,"طه",135],
+  ["الأنبياء",1,"الحج",78],["المؤمنون",1,"الفرقان",20],["الفرقان",21,"النمل",55],["النمل",56,"العنكبوت",45],
+  ["العنكبوت",46,"الأحزاب",30],["الأحزاب",31,"يس",27],["يس",28,"الزمر",31],["الزمر",32,"فصلت",46],
+  ["فصلت",47,"الجاثية",37],["الأحقاف",1,"الذاريات",30],["الذاريات",31,"الحديد",29],["المجادلة",1,"التحريم",12],
+  ["الملك",1,"المرسلات",50],["النبأ",1,"الناس",6],
+];
+const JUZ_NAMES: Record<string, number> = { "عم": 30, "تبارك": 29, "قد سمع": 28 };
+
+/** «جزء عم» / «الجزء ٢٩» / «جزء تبارك كامل» وحدها (بلا سور أو أرقام أخرى) → نطاق الجزء. */
+function detectJuz(text: string): ParsedRange | null {
+  const n = norm(text);
+  const m = /(?:^|\s)(?:ال)?جزء?\s+(عم|تبارك|قد سمع|\d{1,2})(?=\s|$)/.exec(n);
+  if (!m) return null;
+  const rest = n.replace(m[0], " ").replace(/(^|\s)(كامل|كامله|معكوس|بالعكس|من|الي|الاخير)(?=\s|$)/g, " ").trim();
+  if (rest) return null;
+  const num = /^\d+$/.test(m[1]!) ? Number(m[1]) : JUZ_NAMES[m[1]!];
+  const b = num ? JUZ_BOUNDS[num - 1] : undefined;
+  if (!b) return null;
+  return { surahStart: b[0], ayahStart: b[1], surahEnd: b[2], ayahEnd: b[3] };
+}
 
 interface SurahIndex {
   list: SurahInfo[];
@@ -107,7 +135,7 @@ function buildSurahIndex(list: SurahInfo[]): SurahIndex {
 const SKIP_WORDS = new Set([
   "سوره", "السوره", "من", "ايه", "ايات", "الايه", "الايات", "اية", "كامله", "كامل", "كاملة",
 ]);
-const UNIT_WORDS = new Set(["صفحه", "صفحات", "وجه", "اوجه", "جزء", "اجزاء", "حزب", "ربع", "ثمن"]);
+const UNIT_WORDS = new Set(["صفحه", "صفحات", "وجه", "اوجه", "جزء", "جز", "الجز", "اجزاء", "اجزا", "حزب", "ربع", "ثمن"]);
 const TO_WORDS = new Set(["الي", "حتي", "-"]);
 
 type Item =
@@ -218,7 +246,14 @@ export function parseRange(raw: string, surahs: SurahInfo[], index?: SurahIndex)
     return { raw: trimmed, range, status: all.length ? "check" : "ok", notes: all };
   };
 
-  if (units.length) {
+  const juz = detectJuz(trimmed);
+  if (juz) {
+    const bound = validateRange(juz, si);
+    return { raw: trimmed, range: juz, status: bound.length ? "check" : "ok", notes: bound };
+  }
+  // «جزء عم من النبأ ١ إلى النازعات ٢٠»: كلمة «جزء» هنا وصف، والنطاق مكتوب بالسور والآيات
+  const juzWordOnly = units.length > 0 && units.every((u) => u.w === "جز" || u.w === "جزء" || u.w === "الجز") && S.length > 0;
+  if (units.length && !juzWordOnly) {
     return checkField(trimmed, ["مكتوبة بالصفحات/الأجزاء — أحتاج أرقام الآيات"]);
   }
   if (S.length === 0) {

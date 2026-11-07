@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { SURAHS, calculatePages } from "@/lib/quran";
+import { SURAHS, calculatePages, computeDayRanges, type DayRangeSegment } from "@/lib/quran";
+import { getDayDates, getPlanRanges, type ReviewPlan } from "@/components/ReviewPlanSection";
 import { getInputFields } from "@/lib/schoolConfig";
 import { getMakkahDay } from "@/lib/date";
 import { parseCards, matchStudent, type ParsedCard, type ParsedField, type StudentRef } from "@/lib/cardParser";
@@ -95,6 +96,51 @@ function fmtPages(n: number): string {
   return n === 0 ? "0" : String(n);
 }
 
+// ─── خطة المراجعة: نصيب اليوم ومقارنة النطاق ─────────────────────
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const SURAH_OFFSET = new Map<string, number>();
+{
+  let off = 0;
+  for (const s of [...SURAHS].sort((a, b) => a.number - b.number)) { SURAH_OFFSET.set(s.name, off); off += s.ayahs; }
+}
+/** ترتيب الآية في المصحف كله (١ = الفاتحة ١) */
+function ayahOrd(surah: string, ayah: number): number | null {
+  const off = SURAH_OFFSET.get(surah);
+  return off == null ? null : off + ayah;
+}
+/** فترات الآيات (من-إلى) لنطاقات، مرتبة تصاعديًا */
+function ordIntervals(ranges: Array<{ surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }>): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const r of ranges) {
+    const a = ayahOrd(r.surahStart, r.ayahStart);
+    const b = ayahOrd(r.surahEnd, r.ayahEnd);
+    if (a == null || b == null) continue;
+    out.push(a <= b ? [a, b] : [b, a]);
+  }
+  return out;
+}
+/** كم آية من النطاق تقع خارج نطاقات الخطة */
+function ayahsOutside(range: [number, number], plan: Array<[number, number]>): number {
+  let outside = 0;
+  for (let x = range[0]; x <= range[1]; x++) if (!plan.some(([a, b]) => x >= a && x <= b)) outside++;
+  return outside;
+}
+const fmtSeg = (g: DayRangeSegment) => `${g.surahStart} ${g.ayahStart} ← ${g.surahEnd} ${g.ayahEnd}`;
+
+// تذكّر اختيار المشرفة للاسم المتشابه (لكل حلقة) — في هذا المتصفح فقط
+const NAME_MEMORY_KEY = "wa-entry-name-choices";
+function readNameMemory(circleId: number): Record<string, number> {
+  try { return (JSON.parse(localStorage.getItem(NAME_MEMORY_KEY) ?? "{}")[circleId] ?? {}) as Record<string, number>; } catch { return {}; }
+}
+function rememberName(circleId: number, cardName: string, studentId: number) {
+  try {
+    const all = JSON.parse(localStorage.getItem(NAME_MEMORY_KEY) ?? "{}");
+    all[circleId] = { ...(all[circleId] ?? {}), [cardName.trim()]: studentId };
+    localStorage.setItem(NAME_MEMORY_KEY, JSON.stringify(all));
+  } catch { /* التخزين غير متاح: لا بأس */ }
+}
+
 // ─── محرّر نطاق ───────────────────────────────────────────────────
 
 function RangeEditor({ value, onChange }: { value: RangeState; onChange: (v: RangeState) => void }) {
@@ -136,13 +182,24 @@ export default function WhatsappEntryPage() {
   const [cards, setCards] = useState<CardState[] | null>(null);
   const [absentIds, setAbsentIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<{ ok: number; failed: Array<{ name: string; error: string }>; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ ok: number; failed: Array<{ name: string; error: string }>; skipped: number; saved: string[]; absent: string[]; noCard: string[] } | null>(null);
+  const [plans, setPlans] = useState<ReviewPlan[]>([]);
 
   const { data: circles } = useListCircles(undefined, { query: { queryKey: ["circles"] } });
   // الخادم يرجع للمشرفة (والمعلمة ومُدخلة البيانات) حلقاتها فقط؛ لو حلقة واحدة تُختار تلقائيًا.
   useEffect(() => {
     if (!circleId && circles && circles.length === 1) setCircleId((circles[0] as any).id);
   }, [circles, circleId]);
+
+  // خطط مراجعة طالبات الحلقة: لإظهار نصيب اليوم والتنبيه على المراجعة البعيدة خارج الخطة
+  useEffect(() => {
+    if (!circleId) { setPlans([]); return; }
+    const token = localStorage.getItem("sana_auth_token");
+    fetch(`${BASE}/api/circles/${circleId}/review-plans`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setPlans(Array.isArray(d) ? d : []))
+      .catch(() => setPlans([]));
+  }, [circleId]);
   const { data: missingData } = useGetMissingDataEntry(
     { date },
     { query: { queryKey: ["missingData", date], staleTime: 0 } },
@@ -166,6 +223,27 @@ export default function WhatsappEntryPage() {
   const studentRefs: StudentRef[] = useMemo(() => students.map((s) => ({ id: s.id, name: s.name })), [students]);
   const byId = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
+  // نصيب اليوم ونطاق الخطة لكل طالبة (خطط المراجعة فقط)
+  const planInfo = useMemo(() => {
+    const map = new Map<number, { daySegs: DayRangeSegment[]; dayPages: number | null; planIntervals: Array<[number, number]> }>();
+    for (const plan of plans) {
+      if (plan.planType !== "girls_review" || !plan.studentId) continue;
+      const ranges = getPlanRanges(plan);
+      const planIntervals = ordIntervals(ranges);
+      const dates = getDayDates(plan.startDate, 21, "girls");
+      const idx = dates.indexOf(date);
+      const dayEntry = idx >= 0 ? plan.days.find((d) => d.dayNumber === idx + 1) : undefined;
+      const allDays = (plan as any).coverage?.dayRanges ?? (ranges.length ? computeDayRanges(ranges, plan.days) : null);
+      const dayIdx = dayEntry ? plan.days.indexOf(dayEntry) : -1;
+      map.set(plan.studentId, {
+        daySegs: dayIdx >= 0 && allDays ? (allDays[dayIdx] ?? []) : [],
+        dayPages: dayEntry?.pages ?? null,
+        planIntervals,
+      });
+    }
+    return map;
+  }, [plans, date]);
+
   // ─── التحليل ───
   const analyze = () => {
     setResult(null);
@@ -178,7 +256,9 @@ export default function WhatsappEntryPage() {
       const m = matchStudent(p.name, studentRefs, p.sender);
       let studentId: number | null = null;
       let matchNote: string | null = null;
+      const remembered = circleId ? readNameMemory(circleId)[p.name.trim()] : undefined;
       if (m.kind === "matched") studentId = m.student.id;
+      else if (remembered && studentRefs.some((r) => r.id === remembered)) studentId = remembered; // اختيارك السابق لنفس الاسم
       else if (m.kind === "ambiguous") matchNote = "الاسم ينطبق على أكثر من طالبة — اختاري الصحيحة";
       else matchNote = "لم أجد هذا الاسم بين طالبات الحلقة — اختاري الطالبة أو تجاهلي البطاقة";
       return {
@@ -216,6 +296,7 @@ export default function WhatsappEntryPage() {
   const assignStudent = (key: string, id: number | null) => {
     setCards((prev) => prev && prev.map((c) => {
       if (c.key !== key) return c;
+      if (id !== null && circleId && c.parsed.name) rememberName(circleId, c.parsed.name, id);
       return { ...c, studentId: id, include: id !== null, matchNote: id === null ? c.matchNote : null };
     }));
   };
@@ -270,6 +351,8 @@ export default function WhatsappEntryPage() {
     setSaving(true);
     let ok = 0;
     const failed: Array<{ name: string; error: string }> = [];
+    const saved: string[] = [];
+    const absent: string[] = [];
 
     for (const c of readyCards) {
       const st = byId.get(c.studentId as number);
@@ -282,6 +365,7 @@ export default function WhatsappEntryPage() {
           await createRecord.mutateAsync({ data: payload });
         }
         ok++;
+        saved.push(name);
       } catch (e: any) {
         failed.push({ name, error: errText(e) });
       }
@@ -295,13 +379,15 @@ export default function WhatsappEntryPage() {
           data: { studentId: id, circleId, date, isAbsent: true, memorizePages: 0, reviewNearPages: 0, reviewFarPages: 0, reviewPages: 0, recitationPages: 0 } as any,
         });
         ok++;
+        absent.push(st.name);
       } catch (e: any) {
         failed.push({ name: st.name, error: errText(e) });
       }
     }
 
     setSaving(false);
-    setResult({ ok, failed, skipped: blocked.length });
+    const noCard = noCardStudents.filter((s) => !absentIds.has(s.id) && !s.onLeave).map((s) => s.name);
+    setResult({ ok, failed, skipped: blocked.length, saved, absent, noCard });
     queryClient.invalidateQueries({ queryKey: ["missingData"] });
     queryClient.invalidateQueries({ queryKey: ["records"] });
     toast({
@@ -424,6 +510,23 @@ export default function WhatsappEntryPage() {
                           <p className="text-rose-600 text-xs">النطاق غير مكتمل أو فيه آية خارج السورة</p>
                         )}
                         {r.raw && <p className="text-xs text-muted-foreground">المكتوب: {r.raw}</p>}
+                        {k === "far" && c.studentId !== null && (() => {
+                          const info = planInfo.get(c.studentId);
+                          if (!info) return null;
+                          const out = r.enabled && rangeValid(r)
+                            ? ayahsOutside(ordIntervals([{ surahStart: r.surahStart, ayahStart: Number(r.ayahStart), surahEnd: r.surahEnd, ayahEnd: Number(r.ayahEnd) }])[0] ?? [0, -1], info.planIntervals)
+                            : 0;
+                          return (
+                            <>
+                              {info.daySegs.length > 0 && (
+                                <p className="text-xs text-violet-700">نصيب الخطة لهذا اليوم: {info.daySegs.map(fmtSeg).join(" + ")}{info.dayPages != null ? ` (${info.dayPages} صفحة)` : ""}</p>
+                              )}
+                              {out > 0 && info.planIntervals.length > 0 && (
+                                <p className="text-xs text-rose-600">⚠ {out} آية من هذا النطاق خارج خطة مراجعتها — لن تُحسب في الخطة. تأكدي من النطاق.</p>
+                              )}
+                            </>
+                          );
+                        })()}
                         {r.notes.map((n, i) => <p key={i} className="text-xs text-amber-600">⚠ {n}</p>)}
                         {r.needsCheck && !r.confirmed && rangeValid(r) && (
                           <Button type="button" size="sm" variant="outline" className="h-7"
@@ -481,6 +584,9 @@ export default function WhatsappEntryPage() {
         <Card className={result.failed.length ? "border-rose-300" : "border-green-300"}>
           <CardContent className="pt-4 text-sm space-y-1">
             <p className="font-semibold">تم حفظ {result.ok} سجل{result.skipped > 0 ? `، وبقي ${result.skipped} للمراجعة` : ""}.</p>
+            {result.saved.length > 0 && <p className="text-xs"><span className="font-semibold text-green-700">حُفظت ({result.saved.length}):</span> {result.saved.join("، ")}</p>}
+            {result.absent.length > 0 && <p className="text-xs"><span className="font-semibold text-muted-foreground">غائبة ({result.absent.length}):</span> {result.absent.join("، ")}</p>}
+            {result.noCard.length > 0 && <p className="text-xs"><span className="font-semibold text-amber-700">لم ترسل ولم تُسجَّل ({result.noCard.length}):</span> {result.noCard.join("، ")}</p>}
             {result.failed.map((f, i) => <p key={i} className="text-rose-600 text-xs">تعذّر حفظ {f.name}: {f.error}</p>)}
           </CardContent>
         </Card>
