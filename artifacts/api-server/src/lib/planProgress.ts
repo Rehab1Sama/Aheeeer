@@ -153,7 +153,8 @@ export function seedRangesFromOldPlan(
 
 // ─── التقدّم بالصفحات (احتياطي حين لا هدف موضعيًا) ────────────────
 
-export const PAGES_TOLERANCE = 0.25;
+// وجه كامل: الإدخال يحسب أنصاف الصفحات الكاملة فقط فيتراكم نقص التقريب يوميًا.
+export const PAGES_TOLERANCE = 1;
 
 /** آخر يوم تكفي صفحات الطالبة المنجزة (تراكميًا) لتغطية نصيبه التراكمي. */
 export function pagesDaysReached(
