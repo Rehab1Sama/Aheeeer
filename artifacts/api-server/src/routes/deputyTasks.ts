@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, deputyTasksTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/authenticate";
@@ -85,7 +86,7 @@ router.get("/deputy/status", authenticate, requireRole("leader"), async (req, re
     t.taskType === "qa" && !t.response &&
     Math.floor((Date.now() - new Date(t.createdAt).getTime()) / 86400000) >= 3
   );
-  const { passwordHash: _, ...safeDeputy } = deputy;
+  const safeDeputy = toSafeUser(deputy);
   res.json({
     hasDeputy: true,
     deputy: safeDeputy,

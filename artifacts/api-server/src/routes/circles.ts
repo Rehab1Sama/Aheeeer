@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { toSafeUser } from "../lib/safeUser";
 import { db, circlesTable, usersTable, studentsTable, tracksTable, dataEntryCircleAssignmentsTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -182,14 +183,14 @@ router.get("/circles/:id", authenticate, async (req, res): Promise<void> => {
   if (circle.teacherId) {
     const [t] = await db.select().from(usersTable).where(eq(usersTable.id, circle.teacherId));
     if (t) {
-      const { passwordHash: _ph, ...safe } = t;
+      const safe = toSafeUser(t);
       teacher = safe;
     }
   }
   if (circle.supervisorId) {
     const [s] = await db.select().from(usersTable).where(eq(usersTable.id, circle.supervisorId));
     if (s) {
-      const { passwordHash: _ph, ...safe } = s;
+      const safe = toSafeUser(s);
       supervisor = safe;
     }
   }

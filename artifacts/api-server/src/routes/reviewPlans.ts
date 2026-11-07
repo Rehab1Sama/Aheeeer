@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
+import { canAccessStudent, canAccessCircle } from "../lib/access";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
 import { getWajhIndex, getPlanQuotaRanges, computeDayRanges } from "../lib/quranRanges";
 import {
@@ -606,6 +607,8 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
 
   const studentId = parseInt(req.params.id as string);
   const circleId = req.query.circleId ? parseInt(req.query.circleId as string) : undefined;
+  // الطالبة لخطتها فقط، والمعلمة والمشرفة لحلقاتهما، ومسؤولة المسار لمسارها.
+  if (!await canAccessStudent(req, studentId, circleId)) { res.status(403).json({ error: "غير مسموح" }); return; }
 
   const where = circleId
     ? and(eq(reviewPlansTable.studentId, studentId), eq(reviewPlansTable.circleId, circleId), eq(reviewPlansTable.status, "active"))
@@ -815,6 +818,10 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
       circleId = searchCircleId ?? rawCircleId;
     } else {
       circleId = parseInt(rawCircleId);
+      // المعلمة والمشرفة لا تنشئ خطة إلا لطالبة في حلقتها، ومسؤولة المسار في مسارها.
+      if (circleId && !await canAccessStudent(req, studentId, circleId)) {
+        res.status(403).json({ error: "الطالبة خارج نطاقك" }); return;
+      }
     }
 
     if (!circleId) { res.status(400).json({ error: "circleId مطلوب" }); return; }
@@ -1109,6 +1116,9 @@ router.delete("/students/:id/review-plan/:planId", authenticate, async (req, res
   const [planToDelete] = await db.select().from(reviewPlansTable)
     .where(and(eq(reviewPlansTable.id, planId), eq(reviewPlansTable.studentId, studentId)))
     .limit(1);
+  if (planToDelete && !await canAccessStudent(req, studentId, planToDelete.circleId)) {
+    res.status(403).json({ error: "غير مسموح" }); return;
+  }
 
   const adminRoles = ["leader", "deputy", "track_supervisor"];
   const isAdminRole = adminRoles.includes(req.userRole!);
@@ -1165,6 +1175,9 @@ router.patch("/students/:id/review-plan/:planId/cancellation-approval", authenti
     res.status(404).json({ error: "لا يوجد طلب إلغاء معلق لهذه الخطة" });
     return;
   }
+  if (!await canAccessStudent(req, studentId, plan.circleId)) {
+    res.status(403).json({ error: "الطالبة خارج نطاقك" }); return;
+  }
 
   if (approved) {
     const [cancelledPlan] = await db.update(reviewPlansTable)
@@ -1217,6 +1230,7 @@ router.get("/circles/:circleId/review-plans", authenticate, async (req, res): Pr
   if (!allowed.includes(req.userRole!)) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const circleId = parseInt(req.params.circleId as string);
+  if (!await canAccessCircle(req, circleId)) { res.status(403).json({ error: "الحلقة خارج نطاقك" }); return; }
 
   const plans = await db.select({
     plan: reviewPlansTable,

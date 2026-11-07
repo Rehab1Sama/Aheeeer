@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, studentsTable, circlesTable, studentTransfersTable, studentNotesTable, studentMemorizationsTable, messagesTable, recordsTable, usersTable, studentArchiveEventsTable, studentLeaveHistoryTable, studentEnrollmentsTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
 import { eq, and, gte, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
+import { canAccessStudent, canAccessCircle, accessibleCircleIds } from "../lib/access";
 import { CreateStudentBody, UpdateStudentBody } from "@workspace/api-zod";
 import { getMakkahDay, getMakkahDaysAgo } from "../lib/date";
 
@@ -12,6 +13,19 @@ function parseId(raw: string | string[]): number {
 }
 
 const STAFF_ROLES = ["leader", "deputy", "track_supervisor", "teacher", "supervisor"];
+
+// الطالبة ترى زميلاتها بالاسم فقط: لا جوال ولا بيانات شخصية لغيرها (كانت تصلها في رد الخادم).
+const STUDENT_PRIVATE_FIELDS = ["phone", "country", "ageRange", "educationLevel", "extraData", "memorizeFrom", "withdrawalPeriod", "withdrawalReason", "withdrawalNotes"];
+function hidePrivateForStudent<T extends { id: number }>(req: Express.Request, rows: T[]): T[] {
+  if (req.userRole !== "student") return rows;
+  return rows.map((row) => {
+    if (req.userStudentId != null && row.id === req.userStudentId) return row;
+    const copy: Record<string, unknown> = { ...row };
+    for (const f of STUDENT_PRIVATE_FIELDS) delete copy[f];
+    return copy as T;
+  });
+}
+const SCOPED_ROLES = ["teacher", "supervisor", "data_entry"];
 const sortArabicNames = <T extends { fullName: string }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }));
 
@@ -80,6 +94,7 @@ async function ensureLegacyMemorization(student: typeof studentsTable.$inferSele
 }
 
 async function canAccessStudentMemorization(req: Express.Request, studentId: number): Promise<boolean> {
+  if (SCOPED_ROLES.includes(req.userRole!)) return canAccessStudent(req, studentId);
   if (req.userRole !== "track_supervisor") return true;
   if (!req.userTrack) return false;
   const [allowed] = await db
@@ -144,6 +159,11 @@ router.get("/students", authenticate, async (req, res): Promise<void> => {
       res.json([]);
       return;
     }
+    // المعلمة والمشرفة ومُدخلة البيانات: طالبات حلقاتهن فقط
+    if (SCOPED_ROLES.includes(req.userRole!) && !await canAccessCircle(req, circleId)) {
+      res.json([]);
+      return;
+    }
     // isArchived=true → show enrollment-archived in this circle; otherwise show active
     const wantEnrollmentArchived = isArchivedRaw === "true";
     const enrollments = await db
@@ -179,7 +199,7 @@ router.get("/students", authenticate, async (req, res): Promise<void> => {
 
     let result = sortArabicNames(enrollments);
     if (q) result = result.filter(s => s.fullName.toLowerCase().includes(q));
-    res.json(result);
+    res.json(hidePrivateForStudent(req, result));
     return;
   }
 
@@ -194,13 +214,25 @@ router.get("/students", authenticate, async (req, res): Promise<void> => {
 
   if (req.userRole === "student") {
     students = students.filter(s => s.circleId === req.userCircleId);
+  } else if (SCOPED_ROLES.includes(req.userRole!)) {
+    // المعلمة والمشرفة ومُدخلة البيانات: طالبات حلقاتهن فقط (بالحلقة الأساسية أو بالتسجيل)
+    const scope = await accessibleCircleIds(req);
+    if (scope !== "all") {
+      const scopeSet = new Set(scope);
+      const enrolled = scope.length
+        ? await db.select({ studentId: studentEnrollmentsTable.studentId }).from(studentEnrollmentsTable)
+            .where(inArray(studentEnrollmentsTable.circleId, scope))
+        : [];
+      const enrolledIds = new Set(enrolled.map(e => e.studentId));
+      students = students.filter(s => (s.circleId != null && scopeSet.has(s.circleId)) || enrolledIds.has(s.id));
+    }
   }
 
   if (q) {
     students = students.filter(s => s.fullName.toLowerCase().includes(q));
   }
 
-  res.json(sortArabicNames(students));
+  res.json(hidePrivateForStudent(req, sortArabicNames(students)));
 });
 
 // ── Search unassigned students (registration circle or no circle) ─────────────
@@ -410,6 +442,8 @@ router.post("/students", authenticate, async (req, res): Promise<void> => {
 // ── Get single student ─────────────────────────────────────────────────────────
 router.get("/students/:id", authenticate, async (req, res): Promise<void> => {
   const id = parseId(req.params.id);
+  // كان أي حساب يقرأ صف أي طالبة كاملًا (جوالها وبياناتها) بتغيير الرقم.
+  if (!await canAccessStudent(req, id)) { res.status(403).json({ error: "غير مسموح" }); return; }
   const [student] = await db.select().from(studentsTable).where(eq(studentsTable.id, id));
   if (!student) { res.status(404).json({ error: "Student not found" }); return; }
   res.json(student);
@@ -1141,6 +1175,7 @@ router.get("/students/:id/notes", authenticate, async (req, res): Promise<void> 
     return;
   }
   const id = parseId(req.params.id);
+  if (!await canAccessStudent(req, id)) { res.status(403).json({ error: "الطالبة خارج نطاقك" }); return; }
   const notes = await db.select().from(studentNotesTable)
     .where(eq(studentNotesTable.studentId, id))
     .orderBy(desc(studentNotesTable.createdAt));
@@ -1169,6 +1204,7 @@ router.post("/students/:id/notes", authenticate, async (req, res): Promise<void>
     return;
   }
   const id = parseId(req.params.id);
+  if (!await canAccessStudent(req, id)) { res.status(403).json({ error: "الطالبة خارج نطاقك" }); return; }
   const { content } = req.body as { content: string };
   if (!content?.trim()) { res.status(400).json({ error: "Content required" }); return; }
 

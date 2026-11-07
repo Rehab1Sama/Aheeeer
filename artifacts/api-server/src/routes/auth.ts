@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { hashPassword, verifyPassword, generateToken, needsRehash } from "../lib/auth";
@@ -62,7 +63,7 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     }
     const token = generateToken(user.id, user.role);
     rehashIfNeeded(user.id, user.passwordHash, password);
-    const { passwordHash: _ph, ...safeUser } = user;
+    const safeUser = toSafeUser(user);
     await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
     res.json({ user: safeUser, token });
     return;
@@ -83,7 +84,7 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     const user = approvedVerified[0];
     const token = generateToken(user.id, user.role);
     rehashIfNeeded(user.id, user.passwordHash, password);
-    const { passwordHash: _ph, ...safeUser } = user;
+    const safeUser = toSafeUser(user);
     await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
     res.json({ user: safeUser, token });
     return;
@@ -135,7 +136,7 @@ router.post("/auth/login/select", loginRateLimit, async (req, res): Promise<void
   }
   const token = generateToken(user.id, user.role);
   rehashIfNeeded(user.id, user.passwordHash, password);
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
   res.json({ user: safeUser, token });
 });
@@ -189,7 +190,7 @@ router.post("/auth/switch-account", authenticate, async (req, res): Promise<void
   if (targetUser.isArchived) { res.status(403).json({ error: "الحساب موقوف" }); return; }
 
   const token = generateToken(targetUser.id, targetUser.role);
-  const { passwordHash: _ph, ...safeUser } = targetUser;
+  const safeUser = toSafeUser(targetUser);
   res.json({ user: safeUser, token });
 });
 
@@ -251,7 +252,7 @@ router.post("/auth/staff-register", staffRegisterRateLimit, async (req, res): Pr
     registrationStatus: "approved",
     extraData: extraData ? JSON.stringify(extraData) : null,
   }).returning();
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
 
   // ربط المعلمة/المشرفة بالحلقة تلقائياً عند التسجيل
   if (parsedCircleId) {
@@ -359,7 +360,7 @@ router.get("/auth/me", authenticate, async (req, res): Promise<void> => {
     res.status(401).json({ error: "Not found" });
     return;
   }
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
 
   // استخدام studentId المحسوب مسبقًا في middleware (authenticate) لتجنب التكرار
   const studentId: number | null = user.role === "student" ? (req.userStudentId ?? null) : null;

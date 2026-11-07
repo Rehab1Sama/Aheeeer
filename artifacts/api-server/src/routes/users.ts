@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, recordsTable, studentGoalsTable, studentNotesTable, studentTransfersTable, examRecordsTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { hashPassword } from "../lib/auth";
@@ -87,7 +88,7 @@ router.get("/users", authenticate, async (req, res): Promise<void> => {
   const allCircles = await db.select({ id: circlesTable.id, name: circlesTable.name }).from(circlesTable);
   const circleMap = new Map(allCircles.map(c => [c.id, c.name]));
   const withMeta = (users: any[]) =>
-    users.map(({ passwordHash: _ph, ...u }) => ({
+    users.map((raw) => toSafeUser(raw)).map((u: any) => ({
       ...u,
       circleName: u.circleId ? (circleMap.get(u.circleId) ?? null) : null,
     }));
@@ -147,6 +148,10 @@ router.get("/users", authenticate, async (req, res): Promise<void> => {
 });
 
 router.get("/users/by-email", authenticate, async (req, res): Promise<void> => {
+  // كان أي حساب (حتى الطالبة) يعرف اسم صاحبة أي بريد. الشاشات التي تستخدمه للقائدة والنائبة ومسؤولة المسار.
+  if (!["leader", "deputy", "track_supervisor"].includes(req.userRole ?? "")) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   const email = ((req.query.email as string) ?? "").toLowerCase().trim();
   if (!email) { res.status(400).json({ error: "Email required" }); return; }
   const [user] = await db.select({
@@ -256,7 +261,7 @@ router.post("/users", authenticate, async (req, res): Promise<void> => {
     }
   }
 
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.status(201).json(safeUser);
 });
 
@@ -272,7 +277,7 @@ router.get("/users/:id", authenticate, async (req, res): Promise<void> => {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.json(safeUser);
 });
 
@@ -474,7 +479,7 @@ router.patch("/users/:id", authenticate, async (req, res): Promise<void> => {
     }
   }
 
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.json(safeUser);
 });
 
@@ -575,6 +580,13 @@ router.patch("/users/:id/set-role", authenticate, async (req, res): Promise<void
   }
   if (req.userRole === "track_supervisor" && !["teacher", "supervisor"].includes(role)) {
     res.status(403).json({ error: "Forbidden" }); return;
+  }
+  // دور القائدة أو النائبة لا يغيّره إلا القائدة (كانت النائبة تستطيع تحويل القائدة إلى طالبة).
+  if (req.userRole !== "leader") {
+    const [privTarget] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, id));
+    if (privTarget && ["leader", "deputy"].includes(privTarget.role)) {
+      res.status(403).json({ error: "لا يمكن تغيير دور هذا الحساب" }); return;
+    }
   }
   if (req.userRole === "track_supervisor") {
     const [target] = await db.select().from(usersTable).where(eq(usersTable.id, id));
@@ -686,7 +698,7 @@ router.patch("/users/:id/set-role", authenticate, async (req, res): Promise<void
     }
   }
 
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.json(safeUser);
 });
 
@@ -701,6 +713,13 @@ router.patch("/users/:id/reset-password", authenticate, async (req, res): Promis
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+  // حساب القائدة أو النائبة لا يغيّر كلمة مروره إلا القائدة (كانت النائبة تستطيع تغيير كلمة مرور القائدة).
+  if (req.userRole !== "leader") {
+    const [privTarget] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, id));
+    if (privTarget && ["leader", "deputy"].includes(privTarget.role)) {
+      res.status(403).json({ error: "لا يمكن تغيير كلمة مرور هذا الحساب" }); return;
+    }
   }
   // track_supervisor can only reset passwords for students
   if (req.userRole === "track_supervisor") {
@@ -732,7 +751,7 @@ router.patch("/users/:id/disable", authenticate, async (req, res): Promise<void>
     : { isArchived: true };
   const [user] = await db.update(usersTable).set(disableData).where(eq(usersTable.id, id)).returning();
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.json(safeUser);
 });
 
@@ -747,7 +766,7 @@ router.patch("/users/:id/enable", authenticate, async (req, res): Promise<void> 
   }
   const [user] = await db.update(usersTable).set({ isArchived: false }).where(eq(usersTable.id, id)).returning();
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
-  const { passwordHash: _ph, ...safeUser } = user;
+  const safeUser = toSafeUser(user);
   res.json(safeUser);
 });
 

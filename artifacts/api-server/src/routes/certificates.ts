@@ -13,7 +13,7 @@ import {
   reviewPlanDaysTable,
   studentEnrollmentsTable,
 } from "@workspace/db";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import {
   CreateCertificateTermBody,
   UpdateCertificateTermBody,
@@ -122,13 +122,12 @@ async function buildResults(
   term: typeof certificateTermsTable.$inferSelect,
   selectedTrackId?: number,
 ) {
-  const [students, circles, tracks, rawRecords, plans, planDays, savedScores, candidates, enrollments] = await Promise.all([
+  const [students, circles, tracks, rawRecords, plans, savedScores, candidates, enrollments] = await Promise.all([
     db.select().from(studentsTable),
     db.select().from(circlesTable),
     db.select().from(tracksTable),
     db.select().from(recordsTable).where(and(gte(recordsTable.date, term.startDate), lte(recordsTable.date, term.endDate))),
     db.select().from(reviewPlansTable).where(and(gte(reviewPlansTable.startDate, term.startDate), lte(reviewPlansTable.startDate, term.endDate))),
-    db.select().from(reviewPlanDaysTable),
     db.select().from(certificateScoresTable).where(eq(certificateScoresTable.termId, term.id)),
     db.select().from(certificateImportCandidatesTable).where(eq(certificateImportCandidatesTable.termId, term.id)),
     db.select().from(studentEnrollmentsTable).where(eq(studentEnrollmentsTable.isArchived, false)),
@@ -142,6 +141,10 @@ async function buildResults(
       .map((candidate) => [candidate.matchedStudentId!, candidate]),
   );
   const scheduledDays = isoDaysBetween(term.startDate, term.endDate);
+  // أيام خطط الفصل فقط (كان يسحب جدول أيام الخطط كله ~٧٣ ألف صف في كل فتح للشهادات).
+  const planDays = plans.length > 0
+    ? await db.select().from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, plans.map((p) => p.id)))
+    : [];
   const dayRowsByPlanId = new Map<number, typeof planDays>();
   for (const day of planDays) {
     const rows = dayRowsByPlanId.get(day.planId) ?? [];
@@ -207,7 +210,15 @@ async function buildResults(
       ? rule.shortcomingsMax
       : Number((rule.shortcomingsMax * Math.max(0, 1 - (shortcomingDays / eligibleDays.length))).toFixed(2));
 
-    const studentPlans = plans.filter((plan) => plan.studentId === student.id && plan.planType === "girls_review");
+    // خطة واحدة لكل دورة (لكل تاريخ بداية): الأحدث إنشاءً. الخطط المستبدلة في نفس الدورة كانت تُجمع
+    // فوق الخطة الحالية فيتضاعف المطلوب وتنخفض درجة الطالبة ظلمًا. الدورات السابقة تبقى محسوبة.
+    const latestPerCycle = new Map<string, (typeof plans)[number]>();
+    for (const plan of plans) {
+      if (plan.studentId !== student.id || plan.planType !== "girls_review") continue;
+      const prev = latestPerCycle.get(plan.startDate);
+      if (!prev || plan.createdAt > prev.createdAt) latestPerCycle.set(plan.startDate, plan);
+    }
+    const studentPlans = [...latestPerCycle.values()];
     const reviewUnitsPlanned = studentPlans.reduce((sum, plan) => sum + (dayRowsByPlanId.get(plan.id) ?? [])
       .reduce((pageSum, day) => pageSum + (day.pages ?? 0), 0), 0);
     const reviewUnitsCompleted = [...recordsByDate.values()]

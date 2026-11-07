@@ -105,6 +105,13 @@ router.get("/records", authenticate, async (req, res): Promise<void> => {
     const permitted = circles.filter(c => sameText(c.track, req.userTrack)).map(c => c.id);
     if (permitted.length === 0) { res.json([]); return; }
     conds.push(inArray(recordsTable.circleId, permitted));
+  } else if (req.userRole === "data_entry") {
+    // مُدخلة البيانات: سجلات حلقاتها المسندة فقط (كانت ترى سجلات كل الحلقات)
+    const assigned = await db.select({ circleId: dataEntryCircleAssignmentsTable.circleId })
+      .from(dataEntryCircleAssignmentsTable)
+      .where(eq(dataEntryCircleAssignmentsTable.dataEntryUserId, req.userId!));
+    if (assigned.length === 0) { res.json([]); return; }
+    conds.push(inArray(recordsTable.circleId, assigned.map(a => a.circleId)));
   }
   const circleIdNum = circleId ? parseInt(circleId, 10) : NaN;
   const studentIdNum = studentId ? parseInt(studentId, 10) : NaN;
@@ -165,8 +172,25 @@ router.post("/records/bulk", authenticate, async (req, res): Promise<void> => {
 
   let created = 0;
   let skipped = 0;
+  // الحقول المسموح أن يرسلها المتصفح فقط — كان كل ما يُرسل يُنسخ للسجل (ومنه «من أدخل» والتاريخ).
+  const BULK_FIELDS = [
+    "memorizeSurahStart", "memorizeAyahStart", "memorizeSurahEnd", "memorizeAyahEnd", "memorizePages",
+    "reviewNearSurahStart", "reviewNearAyahStart", "reviewNearSurahEnd", "reviewNearAyahEnd", "reviewNearPages",
+    "reviewFarSurahStart", "reviewFarAyahStart", "reviewFarSurahEnd", "reviewFarAyahEnd", "reviewFarPages",
+    "reviewFar2SurahStart", "reviewFar2AyahStart", "reviewFar2SurahEnd", "reviewFar2AyahEnd", "reviewFar2Pages",
+    "reviewSurahStart", "reviewAyahStart", "reviewSurahEnd", "reviewAyahEnd", "reviewPages",
+    "recitationSurahStart", "recitationAyahStart", "recitationSurahEnd", "recitationAyahEnd", "recitationPages",
+    "repetitions", "listenedToReciter",
+  ];
+  const PAGE_FIELDS = new Set(["memorizePages", "reviewNearPages", "reviewFarPages", "reviewFar2Pages", "reviewPages", "recitationPages"]);
   for (const rec of records) {
-    const { studentId, circleId, isAbsent = false, ...rest } = rec;
+    const { studentId, circleId, isAbsent = false } = rec ?? {};
+    const rest: Record<string, unknown> = {};
+    for (const f of BULK_FIELDS) {
+      if (rec?.[f] === undefined) continue;
+      if (PAGE_FIELDS.has(f) && !(typeof rec[f] === "number" && rec[f] >= 0)) continue; // لا صفحات سالبة أو نصية
+      rest[f] = rec[f];
+    }
     if (!studentId || !circleId) { skipped++; continue; }
     if (!await allowedDataEntryRole(req, Number(circleId))) { res.status(403).json({ error: "دورك لا يسمح بإدخال بيانات هذه الحلقة" }); return; }
     const [enrollment] = await db.select({ id: studentEnrollmentsTable.id }).from(studentEnrollmentsTable).where(and(
@@ -176,19 +200,22 @@ router.post("/records/bulk", authenticate, async (req, res): Promise<void> => {
     ));
     if (!enrollment) { skipped++; continue; }
     if (alreadyEntered.has(`${studentId}-${circleId}`)) { skipped++; continue; }
-    await db.insert(recordsTable).values({
-      studentId,
-      circleId,
-      date,
-      enteredById: req.userId!,
-      isAbsent,
+    // onConflictDoNothing: لو أُدخل سجل لنفس الطالبة واليوم في نفس اللحظة، يُتخطّى بدل أن يوقف الحفظ في منتصفه
+    const inserted = await db.insert(recordsTable).values({
       memorizePages: 0,
       reviewNearPages: 0,
       reviewFarPages: 0,
       reviewPages: 0,
       recitationPages: 0,
       ...rest,
-    });
+      studentId,
+      circleId,
+      date,
+      enteredById: req.userId!,
+      isAbsent: Boolean(isAbsent),
+    }).onConflictDoNothing().returning({ id: recordsTable.id });
+    if (inserted.length === 0) { skipped++; continue; }
+    alreadyEntered.add(`${studentId}-${circleId}`);
     created++;
   }
 
@@ -254,8 +281,10 @@ router.post("/records/mothers-weekly", authenticate, async (req, res): Promise<v
     const presentDates = dates.slice(absenceCount);
     const lastPresentDate = presentDates[presentDates.length - 1] ?? null;
 
-    // إعادة إدخال الأسبوع تستبدل سجلات نفس الطالبة/الحلقة لنفس الأيام الأربعة (إدخال قابل للتعديل)
-    await db.delete(recordsTable).where(and(
+    // إعادة إدخال الأسبوع تستبدل سجلات نفس الطالبة/الحلقة لنفس الأيام الأربعة (إدخال قابل للتعديل).
+    // الحذف والكتابة في معاملة واحدة: لو فشل شيء لا يضيع أسبوع الطالبة.
+    await db.transaction(async (tx) => {
+    await tx.delete(recordsTable).where(and(
       eq(recordsTable.studentId, studentId),
       eq(recordsTable.circleId, Number(circleId)),
       inArray(recordsTable.date, dates),
@@ -263,11 +292,11 @@ router.post("/records/mothers-weekly", authenticate, async (req, res): Promise<v
 
     for (const date of dates) {
       if (absentDates.includes(date)) {
-        await db.insert(recordsTable).values({
+        await tx.insert(recordsTable).values({
           studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: true,
         });
       } else if (date === lastPresentDate) {
-        await db.insert(recordsTable).values({
+        await tx.insert(recordsTable).values({
           studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: false,
           memorizeSurahStart: s.memorizeSurahStart ?? null,
           memorizeAyahStart: s.memorizeAyahStart ?? null,
@@ -282,11 +311,12 @@ router.post("/records/mothers-weekly", authenticate, async (req, res): Promise<v
         });
       } else {
         // يوم حضور بدون نصاب (النصاب موضوع كله على آخر يوم حضور)
-        await db.insert(recordsTable).values({
+        await tx.insert(recordsTable).values({
           studentId, circleId: Number(circleId), enteredById: req.userId!, date, isAbsent: false,
         });
       }
     }
+    });
     created++;
 
     checkAndCreateLowMemorizationAlert(studentId, req.userId!).catch(() => {});

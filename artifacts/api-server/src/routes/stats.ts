@@ -466,7 +466,8 @@ router.get("/stats/today-banner", async (_req, res): Promise<void> => {
   const today = getMakkahDay();
   const records = await db.select().from(recordsTable).where(eq(recordsTable.date, today));
   const circles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
-  const students = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  // الشريط عام (بلا تسجيل دخول): نسحب رقم الطالبة وحلقتها فقط لا صفها كاملًا (الجوال والبيانات).
+  const students = await db.select({ id: studentsTable.id, circleId: studentsTable.circleId }).from(studentsTable).where(eq(studentsTable.isArchived, false));
 
   const circleMap: Record<number, { total: number; present: number; absences: number }> = {};
   for (const r of records) {
