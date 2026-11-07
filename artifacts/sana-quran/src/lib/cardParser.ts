@@ -378,7 +378,8 @@ export function parseCards(text: string, surahs: SurahInfo[]): ParsedCard[] {
     const warnings: string[] = [];
     const name = f.name.replace(/[✅❌✔✖✨]/g, "").replace(/\s+/g, " ").trim();
     if (!name) warnings.push("لم أجد اسم الطالبة في البطاقة");
-    if (rc.sender && name) {
+    // اسم جوال مكتوب بالإنجليزية أو رقم جوال لا يُقارن بالاسم العربي (كان يُظهر تحذيرًا خاطئًا)
+    if (rc.sender && name && /[\u0621-\u064A]/.test(rc.sender)) {
       const a = norm(rc.sender).split(" ")[0];
       const b = norm(name).split(" ")[0];
       if (a && b && a !== b) warnings.push(`أُرسلت من جوال "${rc.sender}" لكن الاسم في البطاقة "${name}"`);
