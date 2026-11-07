@@ -361,31 +361,45 @@ export function evaluateCoverage(
   if (!anyRecord) return empty;
 
   const covered = coveredWajhSet(entered);
-  const pending = new Set<number>();
-  for (let d = 1; d < lastDay; d++) if (!dayRecords[cycleDates[d - 1]!]) pending.add(d);
-  const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, covered, pending);
-  const coveredDays = coveredDayNumbers(ordered, planDays, covered);
-  const reversed = direction === "desc" && prefix > 0;
-  const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(ordered), [...planDays].sort((a, b) => a.dayNumber - b.dayNumber)) : undefined;
+  const sortedDays = [...planDays].sort((x, y) => x.dayNumber - y.dayNumber);
+  // نصيب يوم «مُنجز» إذا غُطّيت أوجهه (بسماح وجه واحد للأنصبة التي تزيد على وجهين).
+  const sliceDone = (ws: readonly number[]) => {
+    if (ws.length === 0) return false;
+    const missing = ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
+    return missing <= (ws.length > 2 ? WAJH_TOLERANCE : 0);
+  };
+  const score = (ordered: number[]) => {
+    const slices = daySlices(ordered, sortedDays);
+    let doneSoFar = 0; // أيام مُنجزة حتى اليوم الحالي (لاختيار الاتجاه)
+    let farthest = 0;  // آخر يوم مُنجز في الخطة كلها
+    for (const d of sortedDays) {
+      if (!sliceDone(slices.get(d.dayNumber) ?? [])) continue;
+      farthest = d.dayNumber;
+      if (d.dayNumber <= lastDay) doneSoFar++;
+    }
+    return { ordered, slices, doneSoFar, farthest };
+  };
+  const fwd = score([...planWajhs]);
+  const rev = score(surahReversedWajhs(planWajhs));
+  // الاتجاه يُستنتج مما أُدخل: الترتيب الذي تتطابق معه أيام أكثر حتى اليوم (التساوي ← الترتيب العادي).
+  const chosen = rev.doneSoFar > fwd.doneSoFar ? rev : fwd;
+  const reversed = chosen === rev;
 
-  // «لم تُدخل المشرفة»: يوم مضى بلا سجل ولم يُغطَّ نصيبه فعلًا بعد (السبت لا يُعرض أبدًا).
-  const slices = daySlices(ordered, planDays);
-  const missingSupervisorDates: string[] = [];
-  for (const d of pending) {
-    const ds = cycleDates[d - 1]!;
-    const ws = slices.get(d) ?? [];
-    if (!isSaturdayDate(ds) && ws.length > 0 && !ws.every((w) => covered.has(w))) missingSupervisorDates.push(ds);
-  }
-  // أيام التأخير = أيام بعد آخر يوم وصلته، لها سجل (حضور أو غياب) ونصيبها لم يُغطَّ (بسماح وجه).
-  // أيام بلا سجل لا تُعدّ على الطالبة، ويوم غياب واحد = تأخير يوم واحد (لا يتضاعف بالتراكم).
+  // قاعدة الإدارة: تغطية نصيب يوم لاحق تعني أن ما قبله مُنجز — فلا تأخير ولا «لم تُدخل المشرفة» قبله.
+  const daysReached = chosen.farthest;
+  const coveredDays = sortedDays.filter((d) => d.dayNumber <= daysReached).map((d) => d.dayNumber);
+  const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(chosen.ordered), sortedDays) : undefined;
+
+  // بعد آخر يوم مُنجز: يوم له سجل (حضور أو غياب) ونصيبه غير مغطّى = يوم تأخير؛ يوم بلا سجل = لم تُدخل المشرفة
+  // (عدا السبت، وعدا اليوم الحالي الذي لم يكتمل بعد).
   let unresolvedDelayDays = 0;
+  const missingSupervisorDates: string[] = [];
   for (let d = daysReached + 1; d <= lastDay; d++) {
-    if (!dayRecords[cycleDates[d - 1]!]) continue;
-    const ws = slices.get(d) ?? [];
-    const missingW = ws.filter((w) => !covered.has(w)).length;
-    if (missingW > WAJH_TOLERANCE) unresolvedDelayDays++;
+    const ds = cycleDates[d - 1]!;
+    if (dayRecords[ds]) unresolvedDelayDays++;
+    else if (d < lastDay && !isSaturdayDate(ds)) missingSupervisorDates.push(ds);
   }
-  const isAhead = prefix > plannedWajhsToday + 1;
+  const isAhead = daysReached > currentDay;
   const status: CoverageStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
   return { status, unresolvedDelayDays, missingSupervisorDates, daysReached, reversed, coveredDays, dayRanges };
 }
