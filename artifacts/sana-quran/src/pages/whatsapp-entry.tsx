@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useGetMissingDataEntry,
   useCreateRecord,
@@ -139,6 +139,10 @@ export default function WhatsappEntryPage() {
   const [result, setResult] = useState<{ ok: number; failed: Array<{ name: string; error: string }>; skipped: number } | null>(null);
 
   const { data: circles } = useListCircles(undefined, { query: { queryKey: ["circles"] } });
+  // الخادم يرجع للمشرفة (والمعلمة ومُدخلة البيانات) حلقاتها فقط؛ لو حلقة واحدة تُختار تلقائيًا.
+  useEffect(() => {
+    if (!circleId && circles && circles.length === 1) setCircleId((circles[0] as any).id);
+  }, [circles, circleId]);
   const { data: missingData } = useGetMissingDataEntry(
     { date },
     { query: { queryKey: ["missingData", date], staleTime: 0 } },
