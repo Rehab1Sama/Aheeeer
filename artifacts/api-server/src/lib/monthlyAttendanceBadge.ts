@@ -8,6 +8,7 @@
 // (badge_award_counts) عشان تظهر "تكررت X مرة" بصفحة نظرة الحلقة لاحقًا.
 // ============================================================================
 
+import { badgeMessageExpiry } from "./badgeMessages";
 import { db, messagesTable } from "@workspace/db";
 import { overviewPerfectAttendanceInRange, type OverviewEntry } from "./badgeOverview";
 import { recordBadgeAward } from "./badgeAwardCounts";
@@ -31,7 +32,7 @@ export async function sendPerfectAttendanceBadges(
     targetType: "student",
     targetId: e.key, // key = String(studentId) — نفس القيمة المُرجَعة من overviewPerfectAttendanceInRange
     content: `${e.badge.emoji} مبروك ${e.label}! حصلتِ على وسام "${e.badge.name}" — ${e.badge.subtitle} (من ${dateFrom} إلى ${dateTo})`,
-    expiresAt: null,
+    expiresAt: badgeMessageExpiry(),
   }));
   await db.insert(messagesTable).values(messageRows);
 

@@ -1398,7 +1398,9 @@ router.get("/students/:id/profile", authenticate, async (req, res): Promise<void
   }));
 
   const allMessages = await db.select().from(messagesTable).orderBy(desc(messagesTable.createdAt));
+  const now = new Date();
   const relevantMessages = allMessages.filter(m => {
+    if (m.expiresAt && m.expiresAt < now) return false; // منتهية (رسائل الأوسمة تُعرض ٢٤ ساعة فقط)
     if (m.targetType === "student") return m.targetId === String(student.id);
     if (m.targetType === "circle") return student.circleId && m.targetId === String(student.circleId);
     if (m.targetType === "track") return circle && m.targetId === circle.track;

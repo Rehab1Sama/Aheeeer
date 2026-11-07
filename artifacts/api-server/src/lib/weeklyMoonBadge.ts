@@ -1,3 +1,4 @@
+import { badgeMessageExpiry } from "./badgeMessages";
 import { db, circlesTable, usersTable, messagesTable, globalSettingsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -48,14 +49,14 @@ export async function runWeeklyMoonBadgeAward(): Promise<void> {
           targetType: "circle",
           targetId: String(c.id),
           content: `${badge.emoji} مبروك! حلقة "${c.name}" حصلت على وسام "${badge.name}" — ${badge.subtitle}`,
-          expiresAt: null,
+          expiresAt: badgeMessageExpiry(),
         },
         {
           senderId: leaderAccount.id,
           targetType: "track",
           targetId: c.track,
           content: `${badge.emoji} حلقة "${c.name}" حصلت على وسام "${badge.name}" (${badge.subtitle}) خلال الأسبوع من ${weekStart} إلى ${weekEnd}.`,
-          expiresAt: null,
+          expiresAt: badgeMessageExpiry(),
         },
       ];
     });

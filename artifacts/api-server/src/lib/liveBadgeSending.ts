@@ -13,6 +13,7 @@
 // اللي عند "حضور الفترة الكاملة" بالضبط.
 // ============================================================================
 
+import { badgeMessageExpiry } from "./badgeMessages";
 import { db, messagesTable, tracksTable } from "@workspace/db";
 import {
   overviewReviewPlanCompletion,
@@ -37,7 +38,7 @@ export async function sendReviewPlanCompletionBadges(asOf: string, senderId: num
     targetType: "student",
     targetId: e.key, // key = String(studentId)
     content: `${e.badge.emoji} مبروك ${e.label}! حصلتِ على وسام "${e.badge.name}" — ${e.badge.subtitle}`,
-    expiresAt: null,
+    expiresAt: badgeMessageExpiry(),
   }));
   await db.insert(messagesTable).values(messageRows);
 
@@ -58,7 +59,7 @@ export async function sendTrackNoShortcomingBadges(weekStart: string, senderId: 
     targetType: "track",
     targetId: e.key, // key = اسم المسار
     content: `${e.badge.emoji} مبروك مسار "${e.label}"! حصلتوا على وسام "${e.badge.name}" — ${e.badge.subtitle}`,
-    expiresAt: null,
+    expiresAt: badgeMessageExpiry(),
   }));
   await db.insert(messagesTable).values(messageRows);
 
@@ -84,7 +85,7 @@ export async function sendSupervisorWeeklyCommitmentBadges(weekStart: string, se
       targetType: "track",
       targetId: e.meta as string, // اسم المسار
       content: `${e.badge.emoji} مبروك ${e.label}! حصلتِ على وسام "${e.badge.name}" — ${e.badge.subtitle}`,
-      expiresAt: null,
+      expiresAt: badgeMessageExpiry(),
     }));
   if (messageRows.length > 0) await db.insert(messagesTable).values(messageRows);
 

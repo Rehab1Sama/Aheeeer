@@ -100,6 +100,7 @@ router.get("/messages", authenticate, async (req, res): Promise<void> => {
     messages = await db.select().from(messagesTable).orderBy(desc(messagesTable.createdAt));
   }
 
+  messages = messages.filter(m => !isExpired(m)); // المنتهية تختفي من القائمة أيضًا
   const senderIds = [...new Set(messages.map(m => m.senderId))];
   const senders = senderIds.length
     ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable)
