@@ -13,9 +13,10 @@ import {
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { QURAN_SURAHS } from "../lib/quranMetadata";
-import { getWajhIndex } from "../lib/quranRanges";
+import { getWajhIndex, getPlanQuotaRanges } from "../lib/quranRanges";
 import {
   computeCurrentDay, hasStudentTargets, pagesDaysReached, plannedPagesThrough,
+  orderedPlanWajhs, coveredWajhSet, coverageProgress,
   seedRangesFromOldPlan, isSaturdayDate, stripApprovedMemorization,
 } from "../lib/planProgress";
 
@@ -1609,6 +1610,8 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
     // الصفحات المنجزة في اليوم (للحساب الاحتياطي بالصفحات): المراجعة البعيدة ١+٢ للبنات، التثبيت الجديد للتثبيت
     farPages: number; memorizePages: number;
+    // نطاقات المراجعة البعيدة ١ و٢ كاملة (بداية ونهاية) للمقارنة الدقيقة مع نطاق الخطة
+    farRanges: { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }[];
     isAbsent: boolean;
   };
   const dayRecordsByStudentCircle = new Map<string, Record<string, DayRecord>>();
@@ -1624,6 +1627,10 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
         reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd,
         reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
+        reviewFarSurahStart: recordsTable.reviewFarSurahStart,
+        reviewFarAyahStart: recordsTable.reviewFarAyahStart,
+        reviewFar2SurahStart: recordsTable.reviewFar2SurahStart,
+        reviewFar2AyahStart: recordsTable.reviewFar2AyahStart,
         reviewFarPages: recordsTable.reviewFarPages,
         reviewFar2Pages: recordsTable.reviewFar2Pages,
         memorizePages: recordsTable.memorizePages,
@@ -1644,6 +1651,12 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         reviewFarSurahEnd: r.reviewFarSurahEnd, reviewFarAyahEnd: r.reviewFarAyahEnd,
         reviewFar2SurahEnd: r.reviewFar2SurahEnd, reviewFar2AyahEnd: r.reviewFar2AyahEnd,
         farPages: (r.reviewFarPages ?? 0) + (r.reviewFar2Pages ?? 0), memorizePages: r.memorizePages ?? 0,
+        farRanges: [
+          ...(r.reviewFarSurahStart && r.reviewFarAyahStart != null && r.reviewFarSurahEnd && r.reviewFarAyahEnd != null
+            ? [{ surahStart: r.reviewFarSurahStart, ayahStart: r.reviewFarAyahStart, surahEnd: r.reviewFarSurahEnd, ayahEnd: r.reviewFarAyahEnd }] : []),
+          ...(r.reviewFar2SurahStart && r.reviewFar2AyahStart != null && r.reviewFar2SurahEnd && r.reviewFar2AyahEnd != null
+            ? [{ surahStart: r.reviewFar2SurahStart, ayahStart: r.reviewFar2AyahStart, surahEnd: r.reviewFar2SurahEnd, ayahEnd: r.reviewFar2AyahEnd }] : []),
+        ],
         isAbsent: r.isAbsent,
       };
     }
@@ -1724,10 +1737,10 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     // القياس الموضعي (سورة/آية) للخطط التي حدّدت الطالبة نطاق كل يوم فيها فقط. وما عداها
     // (الخطط المجدَّدة تلقائيًا وغيرها) يُقاس بالصفحات: أهداف مواضعها المحسوبة من اللقطة لا
     // تطابق ما تراجعه الطالبة فعلًا، فكانت تُنتج «متقدمة» و«متأخرة» خاطئتين.
-    // قرار الإدارة: خطة الطالبة وخطة الإدارة تُقاسان بنفس الطريقة (الصفحات) سواء في الإنشاء
-    // أو التجديد؛ فمن بدأت مراجعتها من آخر النطاق (أو عكسته) لا تُعدّ «متقدمة» بل تُحسب بصفحاتها.
+    // قرار الإدارة: خطة الطالبة وخطة الإدارة تُقاسان بالطريقة نفسها: مقارنة نطاق المراجعة
+    // البعيدة المُدخل (سورة/آية) بنطاق الخطة وجهًا وجهًا. بدأت من آخر النطاق ← الخطة عكسية.
     // أيام بلا صفحات (خطط الطالبة القديمة) نُكمّلها بتوزيع إجمالي صفحات الخطة على الأيام.
-    {
+    if (planType === "girls_review") {
       const needsFill = planDays.some((d) => d.pages == null);
       const filled = needsFill && (plan.totalPages ?? 0) > 0
         ? (() => {
@@ -1735,9 +1748,15 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
             return planDays.map((d) => ({ ...d, pages: d.pages ?? dist[d.dayNumber - 1] ?? 0 }));
           })()
         : planDays;
-      return computePagesStatus(plan, filled, cycleDates, currentDay, dayRecords, planType);
+      const planWajhs = orderedPlanWajhs(getPlanQuotaRanges(plan));
+      if (planWajhs.length === 0) {
+        return computePagesStatus(plan, filled, cycleDates, currentDay, dayRecords, planType);
+      }
+      return computeCoverageStatus(plan, filled, planWajhs, cycleDates, currentDay, dayRecords);
     }
-    // eslint-disable-next-line no-unreachable
+    if (!hasStudentTargets(planDays)) {
+      return computePagesStatus(plan, planDays, cycleDates, currentDay, dayRecords, planType);
+    }
     const targetDays = planDays;
 
     const direction = getPlanDirection(targetDays);
@@ -1800,6 +1819,41 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
     const todayTargetIdx = getDayTargetIdx(currentDay, targetDays);
     const isAhead = todayTargetIdx != null && (direction === "asc" ? farthestIdx > todayTargetIdx : farthestIdx < todayTargetIdx);
+    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
+    return { status, unresolvedDelayDays, missingSupervisorDates };
+  }
+
+  // حالة خطة المراجعة بالنطاق الدقيق: كل وجه من الخطة مغطّى بنطاق مُدخل أو لا (انظر coverageProgress).
+  function computeCoverageStatus(
+    plan: typeof activePlans[0],
+    planDays: typeof allDays,
+    planWajhs: number[],
+    cycleDates: string[],
+    currentDay: number,
+    dayRecords: Record<string, DayRecord>,
+  ): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[] } {
+    void plan;
+    const entered: DayRecord["farRanges"] = [];
+    let anyRecord = false;
+    for (let d = 1; d <= currentDay; d++) {
+      const dateStr = cycleDates[d - 1];
+      const rec = dateStr ? dayRecords[dateStr] : undefined;
+      if (!rec || rec.isAbsent) continue;
+      anyRecord = true;
+      entered.push(...rec.farRanges);
+    }
+    if (!anyRecord) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [] };
+
+    const { daysReached, prefix, plannedWajhsToday } = coverageProgress(planWajhs, planDays, currentDay, coveredWajhSet(entered));
+    const missingAll: string[] = [];
+    for (let d = 1; d <= currentDay; d++) {
+      const dateStr = cycleDates[d - 1];
+      if (!dateStr || dayRecords[dateStr]) continue;
+      if (d > daysReached) missingAll.push(dateStr);
+    }
+    const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
+    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
+    const isAhead = prefix > plannedWajhsToday + 1;
     const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
     return { status, unresolvedDelayDays, missingSupervisorDates };
   }

@@ -9,7 +9,7 @@
 //  ٣. "اليوم الحالي" في أيام لا تدخل في الدورة (الجمعة للبنات؛ الخميس/الجمعة/السبت
 //     للتثبيت) كان يُرجِع طول الدورة + ١ بدل اليوم الصحيح.
 
-import { computeDayRanges, getPlanQuotaRanges } from "./quranRanges";
+import { computeDayRanges, getPlanQuotaRanges, getWajhIndex } from "./quranRanges";
 
 // ─── اليوم الحالي ─────────────────────────────────────────────────
 
@@ -155,6 +155,65 @@ export function seedRangesFromOldPlan(
 
 // وجه كامل: الإدخال يحسب أنصاف الصفحات الكاملة فقط فيتراكم نقص التقريب يوميًا.
 export const PAGES_TOLERANCE = 1;
+
+// ─── التقدّم بالنطاق الدقيق (سورة/آية ← وجه) ──────────────────────
+// قرار الإدارة: تُقارَن نطاقات المراجعة البعيدة المُدخلة بنطاقات الخطة نفسها (خطة الطالبة
+// وخطة الإدارة بلا فرق، إنشاءً وتجديدًا). كل وجه (نصف صفحة) في الخطة إمّا مغطّى بما أُدخل أو لا.
+// وإن بدأت الطالبة من آخر النطاق فالخطة تُحسب عكسية (لا «متقدمة»).
+
+export interface WajhRangeLike { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }
+
+/** الأوجه (فهارس) التي يغطيها نطاق، أو null لو السورة مجهولة. */
+export function wajhIntervalOf(r: WajhRangeLike): [number, number] | null {
+  const a = getWajhIndex(r.surahStart, r.ayahStart);
+  const b = getWajhIndex(r.surahEnd, r.ayahEnd);
+  if (a < 0 || b < 0) return null;
+  return a <= b ? [a, b] : [b, a];
+}
+
+/** أوجه الخطة بترتيب نطاقاتها (كما يوزّعها computeDayRanges على الأيام). */
+export function orderedPlanWajhs(ranges: readonly WajhRangeLike[]): number[] {
+  const out: number[] = [];
+  for (const r of ranges) {
+    const iv = wajhIntervalOf(r);
+    if (!iv) continue;
+    for (let i = iv[0]; i <= iv[1]; i++) out.push(i);
+  }
+  return out;
+}
+
+/** مجموعة الأوجه المغطّاة بنطاقات مُدخلة. */
+export function coveredWajhSet(ranges: readonly WajhRangeLike[]): Set<number> {
+  const set = new Set<number>();
+  for (const r of ranges) {
+    const iv = wajhIntervalOf(r);
+    if (!iv) continue;
+    for (let i = iv[0]; i <= iv[1]; i++) set.add(i);
+  }
+  return set;
+}
+
+export function coverageProgress(
+  planWajhs: readonly number[],
+  days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
+  currentDay: number,
+  covered: ReadonlySet<number>,
+): { daysReached: number; prefix: number; plannedWajhsToday: number; direction: "asc" | "desc" } {
+  const prefixOf = (list: readonly number[]) => { let n = 0; while (n < list.length && covered.has(list[n]!)) n++; return n; };
+  const fwd = prefixOf(planWajhs);
+  const rev = prefixOf([...planWajhs].reverse());
+  const direction: "asc" | "desc" = rev > fwd ? "desc" : "asc";
+  const prefix = Math.max(fwd, rev);
+  const sorted = [...days].sort((a, b) => a.dayNumber - b.dayNumber);
+  let cum = 0;
+  let daysReached = 0;
+  for (const d of sorted) {
+    if (d.dayNumber > currentDay) break;
+    cum += d.pages && d.pages > 0 ? Math.round(d.pages * 2) : 0;
+    if (prefix >= Math.min(cum, planWajhs.length)) daysReached = d.dayNumber;
+  }
+  return { daysReached, prefix, plannedWajhsToday: Math.min(cum, planWajhs.length), direction };
+}
 
 /** آخر يوم تكفي صفحات الطالبة المنجزة (تراكميًا) لتغطية نصيبه التراكمي. */
 export function pagesDaysReached(
