@@ -117,7 +117,8 @@ function CirclePlansCard({ circlePlans, trackType }: { circlePlans: ReviewPlan[]
                   <div className="px-4 pb-4">
                     {(() => {
                       const planRanges = getPlanRanges(plan);
-                      const computedRanges = planRanges.length > 0 ? computeDayRanges(planRanges, plan.days ?? []) : null;
+                      // نطاق الأيام وتظليل المنجز من الخادم (النطاق الدقيق والعكس بالسور) — نفس صفحة «خطط المراجعة».
+                      const computedRanges = plan.coverage?.dayRanges ?? (planRanges.length > 0 ? computeDayRanges(planRanges, plan.days ?? []) : null);
                       return (
                     <div className="overflow-x-auto rounded-xl border border-border/40 mt-1">
                       <table className="w-full text-xs min-w-[260px]">
@@ -133,7 +134,7 @@ function CirclePlansCard({ circlePlans, trackType }: { circlePlans: ReviewPlan[]
                           {(plan.days ?? []).map((day: any, dayIndex: number) => {
                             const dateStr = dates[day.dayNumber - 1];
                             const isToday = day.dayNumber === currentDay;
-                            const isPast = day.dayNumber < currentDay;
+                            const isPast = plan.coverage ? plan.coverage.coveredDays.includes(day.dayNumber) : day.dayNumber < currentDay;
                             return (
                               <tr key={day.dayNumber}
                                 className={`border-t border-border/20 ${isToday ? "font-semibold" : ""}`}

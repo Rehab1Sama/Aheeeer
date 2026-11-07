@@ -292,3 +292,72 @@ export function plannedPagesThrough(days: readonly Pick<DayTargetLike, "dayNumbe
   for (const d of days) if (d.dayNumber <= dayNumber) cum += d.pages ?? 0;
   return cum;
 }
+
+
+// ─── تقييم خطة المراجعة بالنطاق (مشترك بين كل الشاشات) ─────────────
+// مصدر واحد للحالة وترتيب الأيام والتظليل: نظرة الخطط العامة، صفحة الطالبة، حلقتي، والتنبيهات.
+
+export type CoverageStatus = "behind" | "ontrack" | "ahead" | null;
+export interface CoverageDayRecord { isAbsent: boolean; farRanges: WajhRangeLike[] }
+export interface CoverageResult {
+  status: CoverageStatus;
+  unresolvedDelayDays: number;
+  missingSupervisorDates: string[];
+  daysReached: number;
+  reversed: boolean;
+  coveredDays: number[];
+  /** نطاق كل يوم بترتيب الخطة الفعلي (يُرسل فقط حين تُحسب الخطة عكسية السور). */
+  dayRanges?: DayQuotaRange[][];
+}
+
+export function evaluateCoverage(
+  planWajhs: readonly number[],
+  planDays: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
+  cycleDates: readonly string[],
+  currentDay: number,
+  dayRecords: Readonly<Record<string, CoverageDayRecord>>,
+): CoverageResult {
+  const empty: CoverageResult = { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [], daysReached: 0, reversed: false, coveredDays: [] };
+  if (currentDay <= 0 || planWajhs.length === 0) return empty;
+  const lastDay = Math.min(currentDay, cycleDates.length);
+  const entered: WajhRangeLike[] = [];
+  let anyRecord = false;
+  for (let d = 1; d <= lastDay; d++) {
+    const rec = dayRecords[cycleDates[d - 1]!];
+    if (!rec || rec.isAbsent) continue;
+    anyRecord = true;
+    entered.push(...rec.farRanges);
+  }
+  if (!anyRecord) return empty;
+
+  const covered = coveredWajhSet(entered);
+  const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, covered);
+  const coveredDays = coveredDayNumbers(ordered, planDays, covered);
+  const reversed = direction === "desc" && prefix > 0;
+  const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(ordered), [...planDays].sort((a, b) => a.dayNumber - b.dayNumber)) : undefined;
+
+  const missingAll: string[] = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = cycleDates[d - 1]!;
+    if (dayRecords[ds]) continue;
+    if (d > daysReached) missingAll.push(ds);
+  }
+  const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
+  const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
+  const isAhead = prefix > plannedWajhsToday + 1;
+  const status: CoverageStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
+  return { status, unresolvedDelayDays, missingSupervisorDates, daysReached, reversed, coveredDays, dayRanges };
+}
+
+/** نطاقات المراجعة البعيدة ١ و٢ من صف سجل. */
+export function farRangesOf(r: {
+  reviewFarSurahStart: string | null; reviewFarAyahStart: number | null; reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
+  reviewFar2SurahStart: string | null; reviewFar2AyahStart: number | null; reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
+}): WajhRangeLike[] {
+  const out: WajhRangeLike[] = [];
+  if (r.reviewFarSurahStart && r.reviewFarAyahStart != null && r.reviewFarSurahEnd && r.reviewFarAyahEnd != null)
+    out.push({ surahStart: r.reviewFarSurahStart, ayahStart: r.reviewFarAyahStart, surahEnd: r.reviewFarSurahEnd, ayahEnd: r.reviewFarAyahEnd });
+  if (r.reviewFar2SurahStart && r.reviewFar2AyahStart != null && r.reviewFar2SurahEnd && r.reviewFar2AyahEnd != null)
+    out.push({ surahStart: r.reviewFar2SurahStart, ayahStart: r.reviewFar2AyahStart, surahEnd: r.reviewFar2SurahEnd, ayahEnd: r.reviewFar2AyahEnd });
+  return out;
+}

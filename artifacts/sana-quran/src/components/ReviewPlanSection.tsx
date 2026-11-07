@@ -125,6 +125,15 @@ export interface ReviewPlan {
     reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
     reviewSurahEnd: string | null; reviewAyahEnd: number | null;
   }>;
+  // حالة الخطة بالنطاق الدقيق محسوبة في الخادم (نفس صفحة «خطط المراجعة» لكل الحسابات)
+  coverage?: {
+    status: "behind" | "ontrack" | "ahead" | null;
+    daysReached: number;
+    reversed: boolean;
+    coveredDays: number[];
+    missingSupervisorDates: string[];
+    dayRanges?: DayRangeSegment[][];
+  } | null;
 }
 
 interface SurahRange {
@@ -422,7 +431,7 @@ function printPlan(plan: ReviewPlan, totalDays: number, planMode: "girls" | "fix
   // Snapshot ranges take precedence, so printing remains faithful to the cycle
   // even after more memorization is entered for the following renewal.
   const _quotaRangesPrint = getPlanRanges(plan);
-  const computedRanges = _quotaRangesPrint.length > 0 ? computeDayRanges(_quotaRangesPrint, plan.days) : null;
+  const computedRanges = plan.coverage?.dayRanges ?? (_quotaRangesPrint.length > 0 ? computeDayRanges(_quotaRangesPrint, plan.days) : null);
 
   const rows = plan.days.map((day, i) => {
     const dateStr = dates[day.dayNumber - 1] ?? "";
@@ -538,6 +547,24 @@ function computeDayStatuses(
   const map = new Map<number, DayStatus>();
   if (currentDayNum <= 0) return map;
 
+  // خطة المراجعة: الحكم من الخادم بالنطاق الدقيق (وجهًا وجهًا، والعكس بالسور حسب ما أُدخل).
+  if (plan.coverage) {
+    const cov = plan.coverage;
+    const covered = new Set(cov.coveredDays);
+    for (let d = 1; d <= plan.days.length; d++) {
+      const ds = dates[d - 1];
+      const rec = ds && plan.dayRecords ? plan.dayRecords[ds] : undefined;
+      const isSat = ds ? new Date(ds + "T12:00:00Z").getUTCDay() === 6 : false;
+      if (covered.has(d) || d <= cov.daysReached) { map.set(d, d > currentDayNum ? "ahead" : "ontrack"); continue; }
+      if (rec?.isAbsent) { map.set(d, "absent"); continue; }
+      if (!rec && isSat) { map.set(d, null); continue; }
+      if (d < currentDayNum) { map.set(d, "behind"); continue; }
+      if (d === currentDayNum) { map.set(d, rec ? "behind" : null); continue; }
+      map.set(d, null);
+    }
+    return map;
+  }
+
   const direction = getPlanDirection(plan);
   // "farther along the plan's own direction" — for asc, bigger is farther;
   // for desc, smaller is farther.
@@ -628,7 +655,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
   // The immutable snapshot keeps this cycle fixed while later memorization is
   // reserved for the next renewal.
   const planRanges = getPlanRanges(plan);
-  const computedRanges = planRanges.length > 0 ? computeDayRanges(planRanges, plan.days) : null;
+  const computedRanges = plan.coverage?.dayRanges ?? (planRanges.length > 0 ? computeDayRanges(planRanges, plan.days) : null);
   // "isFixationPlan" is decided by the plan itself (quantity is only ever set on
   // تثبيت plans, half/full/double), never by the student's current circle track —
   // a طالبة may keep an old خطة مراجعة even after her circle later changes.

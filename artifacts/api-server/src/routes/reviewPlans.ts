@@ -18,6 +18,7 @@ import {
   computeCurrentDay, hasStudentTargets, pagesDaysReached, plannedPagesThrough,
   orderedPlanWajhs, coveredWajhSet, coverageProgress, coveredDayNumbers, wajhsToQuotaRanges,
   seedRangesFromOldPlan, isSaturdayDate, stripApprovedMemorization,
+  evaluateCoverage, farRangesOf, type CoverageResult, type CoverageDayRecord,
 } from "../lib/planProgress";
 
 const router: IRouter = Router();
@@ -134,6 +135,71 @@ function distribute(total: number, parts: number): number[] {
     arr.push(Math.round(val * 2) / 2);
   }
   return arr;
+}
+
+/**
+ * حالة خطط المراجعة (البنات) بالنطاق الدقيق لعدة خطط دفعة واحدة — نفس منطق صفحة «خطط المراجعة»
+ * لتعرضه صفحة الطالبة و«حلقتي» والتنبيهات دون اختلاف بين الحسابات.
+ */
+export async function loadGirlsCoverage(
+  plans: ReadonlyArray<typeof reviewPlansTable.$inferSelect>,
+  daysByPlan?: Map<number, Array<{ dayNumber: number; pages: number | null }>>,
+): Promise<Map<number, CoverageResult>> {
+  const out = new Map<number, CoverageResult>();
+  const girls = plans.filter((p) => p.planType === "girls_review" && p.startDate);
+  if (girls.length === 0) return out;
+
+  let days = daysByPlan;
+  if (!days) {
+    days = new Map();
+    const rows = await db.select({ planId: reviewPlanDaysTable.planId, dayNumber: reviewPlanDaysTable.dayNumber, pages: reviewPlanDaysTable.pages })
+      .from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, girls.map((p) => p.id)));
+    for (const r of rows) {
+      const list = days.get(r.planId) ?? [];
+      list.push({ dayNumber: r.dayNumber, pages: r.pages });
+      days.set(r.planId, list);
+    }
+  }
+
+  const datesByPlan = new Map<number, string[]>();
+  const allDates = new Set<string>();
+  for (const p of girls) {
+    const dates = getPlanCycleDates(p.startDate!, "girls_review");
+    datesByPlan.set(p.id, dates);
+    dates.forEach((d) => allDates.add(d));
+  }
+  const recs = await db.select({
+    studentId: recordsTable.studentId, circleId: recordsTable.circleId, date: recordsTable.date, isAbsent: recordsTable.isAbsent,
+    reviewFarSurahStart: recordsTable.reviewFarSurahStart, reviewFarAyahStart: recordsTable.reviewFarAyahStart,
+    reviewFarSurahEnd: recordsTable.reviewFarSurahEnd, reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
+    reviewFar2SurahStart: recordsTable.reviewFar2SurahStart, reviewFar2AyahStart: recordsTable.reviewFar2AyahStart,
+    reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd, reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
+  }).from(recordsTable).where(and(
+    inArray(recordsTable.studentId, [...new Set(girls.map((p) => p.studentId))]),
+    inArray(recordsTable.date, [...allDates]),
+  )).orderBy(recordsTable.studentId, recordsTable.date, desc(recordsTable.updatedAt));
+  const recMap = new Map<string, Record<string, CoverageDayRecord>>();
+  for (const r of recs) {
+    const key = `${r.studentId}:${r.circleId}`;
+    const m = recMap.get(key) ?? {};
+    if (!m[r.date]) m[r.date] = { isAbsent: r.isAbsent, farRanges: farRangesOf(r) };
+    recMap.set(key, m);
+  }
+
+  const today = getTodayMecca();
+  const totalDays = PLAN_TOTAL_DAYS.girls_review;
+  for (const p of girls) {
+    const dates = datesByPlan.get(p.id)!;
+    const currentDay = computeCurrentDay(dates, today, totalDays);
+    let planDays = [...(days.get(p.id) ?? [])].sort((a, b) => a.dayNumber - b.dayNumber);
+    if (planDays.some((d) => d.pages == null) && (p.totalPages ?? 0) > 0) {
+      const dist = distribute(p.totalPages as number, totalDays);
+      planDays = planDays.map((d) => ({ ...d, pages: d.pages ?? dist[d.dayNumber - 1] ?? 0 }));
+    }
+    const planWajhs = orderedPlanWajhs(getPlanQuotaRanges(p));
+    out.set(p.id, evaluateCoverage(planWajhs, planDays, dates, currentDay, recMap.get(`${p.studentId}:${p.circleId}`) ?? {}));
+  }
+  return out;
 }
 
 type GirlsReviewSourceSnapshot = {
@@ -676,6 +742,10 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     }
   }
 
+  const coverage = plan.planType === "girls_review"
+    ? (await loadGirlsCoverage([plan], new Map([[plan.id, days]]))).get(plan.id) ?? null
+    : null;
+
   res.json({
     ...plan,
     createdAt: plan.createdAt.toISOString(),
@@ -683,6 +753,7 @@ router.get("/students/:id/review-plan", authenticate, async (req, res): Promise<
     days,
     cycleInfo,
     dayRecords,
+    coverage,
   });
 });
 
@@ -1156,10 +1227,12 @@ router.get("/circles/:circleId/review-plans", authenticate, async (req, res): Pr
     .where(and(eq(reviewPlansTable.circleId, circleId), eq(reviewPlansTable.status, "active")))
     .orderBy(studentsTable.fullName);
 
+  const daysByPlan = new Map<number, Array<typeof reviewPlanDaysTable.$inferSelect>>();
   const result = await Promise.all(plans.map(async ({ plan, studentName }) => {
     const days = await db.select().from(reviewPlanDaysTable)
       .where(eq(reviewPlanDaysTable.planId, plan.id))
       .orderBy(reviewPlanDaysTable.dayNumber);
+    daysByPlan.set(plan.id, days);
     return {
       ...plan,
       studentName,
@@ -1168,6 +1241,8 @@ router.get("/circles/:circleId/review-plans", authenticate, async (req, res): Pr
       days,
     };
   }));
+  const coverageByPlan = await loadGirlsCoverage(plans.map((p) => p.plan), daysByPlan);
+  for (const r of result) (r as typeof r & { coverage: CoverageResult | null }).coverage = coverageByPlan.get(r.id) ?? null;
 
   res.json(result);
 });
@@ -1833,33 +1908,8 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
     dayRecords: Record<string, DayRecord>,
   ): { status: PlanStatus; unresolvedDelayDays: number; missingSupervisorDates: string[]; reversed: boolean; coveredDays: number[]; dayRanges?: { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }[][] } {
     void plan;
-    const entered: DayRecord["farRanges"] = [];
-    let anyRecord = false;
-    for (let d = 1; d <= currentDay; d++) {
-      const dateStr = cycleDates[d - 1];
-      const rec = dateStr ? dayRecords[dateStr] : undefined;
-      if (!rec || rec.isAbsent) continue;
-      anyRecord = true;
-      entered.push(...rec.farRanges);
-    }
-    if (!anyRecord) return { status: null, unresolvedDelayDays: 0, missingSupervisorDates: [], reversed: false, coveredDays: [] };
-
-    const coveredSet = coveredWajhSet(entered);
-    const { daysReached, prefix, plannedWajhsToday, direction, ordered } = coverageProgress(planWajhs, planDays, currentDay, coveredSet);
-    const coveredDays = coveredDayNumbers(ordered, planDays, coveredSet);
-    const reversed = direction === "desc" && prefix > 0;
-    const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(ordered), planDays) : undefined;
-    const missingAll: string[] = [];
-    for (let d = 1; d <= currentDay; d++) {
-      const dateStr = cycleDates[d - 1];
-      if (!dateStr || dayRecords[dateStr]) continue;
-      if (d > daysReached) missingAll.push(dateStr);
-    }
-    const missingSupervisorDates = missingAll.filter((ds) => !isSaturdayDate(ds));
-    const unresolvedDelayDays = Math.max(0, (currentDay - daysReached) - missingAll.length);
-    const isAhead = prefix > plannedWajhsToday + 1;
-    const status: PlanStatus = unresolvedDelayDays > 0 ? "behind" : isAhead ? "ahead" : "ontrack";
-    return { status, unresolvedDelayDays, missingSupervisorDates, reversed, coveredDays, dayRanges };
+    const r = evaluateCoverage(planWajhs, planDays, cycleDates, currentDay, dayRecords);
+    return { status: r.status, unresolvedDelayDays: r.unresolvedDelayDays, missingSupervisorDates: r.missingSupervisorDates, reversed: r.reversed, coveredDays: r.coveredDays, dayRanges: r.dayRanges };
   }
 
   // حالة الخطة بالصفحات (احتياطي): النصيب التراكمي المخطط مقابل صفحات المراجعة البعيدة
