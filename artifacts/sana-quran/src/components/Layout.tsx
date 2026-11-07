@@ -456,7 +456,7 @@ const BADGE_ROLES = ["student", "teacher", "supervisor", "track_supervisor"];
 function useUnreadMessageCount(userId: number, role: string, isHome: boolean, isMessagesPage: boolean) {
   const enabled = BADGE_ROLES.includes(role);
   const { data: messages } = useGetMyMessages({
-    query: { queryKey: ["myMessages"], enabled, refetchInterval: 60000 },
+    query: { queryKey: ["myMessages"], enabled, refetchInterval: 5 * 60 * 1000 },
   });
 
   const storageKey = `msgs_seen_${userId}`;

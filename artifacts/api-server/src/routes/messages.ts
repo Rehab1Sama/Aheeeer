@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, messagesTable, circlesTable, studentsTable, usersTable, tracksTable } from "@workspace/db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, or, isNull, gt } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -138,7 +138,14 @@ router.get("/messages/my", authenticate, async (req, res): Promise<void> => {
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!currentUser) { res.status(404).json({ error: "User not found" }); return; }
 
-  const allMessages = await db.select().from(messagesTable).orderBy(desc(messagesTable.createdAt));
+  // الفلترة في القاعدة: هذا الطلب يتكرر لكل مستخدمة متصلة، فلا نسحب جدول الرسائل كله في كل مرة.
+  const targetConds = [and(eq(messagesTable.targetType, "student"), eq(messagesTable.targetId, String(userId)))];
+  if (currentUser.circleId) targetConds.push(and(eq(messagesTable.targetType, "circle"), eq(messagesTable.targetId, String(currentUser.circleId))));
+  if (currentUser.track) targetConds.push(and(eq(messagesTable.targetType, "track"), eq(messagesTable.targetId, currentUser.track)));
+  targetConds.push(and(eq(messagesTable.targetType, "role"), eq(messagesTable.targetId, userRole)));
+  const allMessages = await db.select().from(messagesTable)
+    .where(and(or(isNull(messagesTable.expiresAt), gt(messagesTable.expiresAt, new Date())), or(...targetConds)))
+    .orderBy(desc(messagesTable.createdAt));
 
   const myMessages = allMessages.filter(m => {
     if (isExpired(m)) return false;

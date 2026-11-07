@@ -302,30 +302,20 @@ async function syncStudentUserCircleIds() {
 }
 
 async function repairMissingEnrollments() {
+  // استعلام واحد بدل استعلام لكل طالبة في كل تشغيل للخادم (كان ~١٠٠٠ استعلام مع كل إقلاع).
   try {
-    const studentsWithCircle = await db
-      .select({ id: studentsTable.id, circleId: studentsTable.circleId })
-      .from(studentsTable)
-      .where(and(eq(studentsTable.isArchived, false), isNotNull(studentsTable.circleId)));
-
-    let created = 0;
-    for (const s of studentsWithCircle) {
-      if (!s.circleId) continue;
-      const existing = await db
-        .select({ id: studentEnrollmentsTable.id })
-        .from(studentEnrollmentsTable)
-        .where(and(
-          eq(studentEnrollmentsTable.studentId, s.id),
-          eq(studentEnrollmentsTable.circleId, s.circleId),
-          eq(studentEnrollmentsTable.isArchived, false),
-        ));
-      if (existing.length === 0) {
-        await db.insert(studentEnrollmentsTable)
-          .values({ studentId: s.id, circleId: s.circleId, isArchived: false })
-          .onConflictDoNothing();
-        created++;
-      }
-    }
+    const result = await db.execute(sql.raw(`
+      INSERT INTO student_enrollments (student_id, circle_id, is_archived)
+      SELECT s.id, s.circle_id, false
+      FROM students s
+      WHERE s.is_archived = false AND s.circle_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM student_enrollments e
+          WHERE e.student_id = s.id AND e.circle_id = s.circle_id AND e.is_archived = false
+        )
+      ON CONFLICT DO NOTHING
+    `));
+    const created = (result as any).rowCount ?? 0;
     if (created > 0) logger.info({ created }, "Repaired missing student enrollments");
   } catch (err) {
     logger.error({ err }, "Failed to repair missing enrollments");

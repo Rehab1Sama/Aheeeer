@@ -78,7 +78,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30000,
+      staleTime: 60000,
+      // كان كل رجوع للتبويب/التطبيق يعيد جلب كل الاستعلامات المفتوحة — استهلاك كبير لنقل البيانات.
+      refetchOnWindowFocus: false,
     },
   },
 });

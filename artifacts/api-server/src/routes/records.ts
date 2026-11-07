@@ -94,15 +94,28 @@ router.get("/records", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  let records = await db.select().from(recordsTable);
-
+  // الفلترة داخل قاعدة البيانات لا بعد سحب الجدول كله: كان كل طلب يسحب كل السجلات (~٣٠ ألف صف بكل
+  // أعمدتها) ثم يرمي أغلبها — وهذا كان أكبر مصدر لاستهلاك نقل البيانات (Egress) من القاعدة.
+  const conds: Parameters<typeof and>[0][] = [];
   if (req.userRole === "teacher" || req.userRole === "supervisor") {
-    records = records.filter(r => r.circleId === req.userCircleId);
+    if (req.userCircleId == null) { res.json([]); return; }
+    conds.push(eq(recordsTable.circleId, req.userCircleId));
   } else if (req.userRole === "track_supervisor") {
     const circles = await db.select({ id: circlesTable.id, track: circlesTable.track }).from(circlesTable);
-    const permitted = new Set(circles.filter(c => sameText(c.track, req.userTrack)).map(c => c.id));
-    records = records.filter(r => permitted.has(r.circleId));
+    const permitted = circles.filter(c => sameText(c.track, req.userTrack)).map(c => c.id);
+    if (permitted.length === 0) { res.json([]); return; }
+    conds.push(inArray(recordsTable.circleId, permitted));
   }
+  const circleIdNum = circleId ? parseInt(circleId, 10) : NaN;
+  const studentIdNum = studentId ? parseInt(studentId, 10) : NaN;
+  if (Number.isFinite(circleIdNum)) conds.push(eq(recordsTable.circleId, circleIdNum));
+  if (Number.isFinite(studentIdNum)) conds.push(eq(recordsTable.studentId, studentIdNum));
+  if (date) conds.push(eq(recordsTable.date, date));
+  if (dateFrom) conds.push(gte(recordsTable.date, dateFrom));
+  if (dateTo) conds.push(lte(recordsTable.date, dateTo));
+  let records = conds.length > 0
+    ? await db.select().from(recordsTable).where(and(...conds))
+    : await db.select().from(recordsTable);
 
   // سجلات الفصل المؤرشف تبقى للإدارة والتقارير، ولا تظهر للمعلمة أو المشرفة.
   if (req.userRole === "teacher" || req.userRole === "supervisor") {
