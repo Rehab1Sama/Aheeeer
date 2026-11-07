@@ -196,6 +196,25 @@ export function coveredWajhSet(ranges: readonly WajhRangeLike[]): Set<number> {
   return set;
 }
 
+/** أيام الخطة التي غُطّيت أوجهها كاملة بما أُدخل (بترتيب نطاق الخطة الأصلي، مهما كان ترتيب مراجعة الطالبة). */
+export function coveredDayNumbers(
+  planWajhs: readonly number[],
+  days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],
+  covered: ReadonlySet<number>,
+): number[] {
+  const sorted = [...days].sort((a, b) => a.dayNumber - b.dayNumber);
+  const out: number[] = [];
+  let pos = 0;
+  for (const d of sorted) {
+    const cnt = d.pages && d.pages > 0 ? Math.round(d.pages * 2) : 0;
+    if (cnt === 0 || pos >= planWajhs.length) continue;
+    const slice = planWajhs.slice(pos, pos + cnt);
+    pos += cnt;
+    if (slice.length > 0 && slice.every((w) => covered.has(w))) out.push(d.dayNumber);
+  }
+  return out;
+}
+
 export function coverageProgress(
   planWajhs: readonly number[],
   days: readonly Pick<DayTargetLike, "dayNumber" | "pages">[],

@@ -49,6 +49,7 @@ type PlanSummary = {
   status: "behind" | "ontrack" | "ahead" | null;
   missingSupervisorDates?: string[];
   reversed?: boolean;
+  coveredDays?: number[];
   isAbsentToday?: boolean;
 };
 
@@ -261,19 +262,7 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
   const dates = getDayDates(plan.startDate, totalDays, mode);
   const today = getMeccaToday();
   const currentDay = getCurrentPlanDay(plan.startDate, totalDays, mode);
-  // خطة عكسية (بدأت الطالبة من آخر النطاق): اليوم الأول يأخذ آخر نصيب في النطاق وهكذا نزولًا.
-  const computedRanges = (() => {
-    const ranges = getPlanRanges(plan);
-    if (ranges.length === 0) return null;
-    if (!plan.reversed) return computeDayRanges(ranges, plan.days);
-    const n = plan.days.length;
-    const rev = computeDayRanges(ranges, [...plan.days].reverse());
-    return plan.days.map((_, i) =>
-      [...(rev[n - 1 - i] ?? [])].reverse().map((s: DayRangeSegment) => ({
-        surahStart: s.surahEnd, ayahStart: s.ayahEnd, surahEnd: s.surahStart, ayahEnd: s.ayahStart,
-      })),
-    );
-  })();
+  const computedRanges = getPlanRanges(plan).length > 0 ? computeDayRanges(getPlanRanges(plan), plan.days) : null;
 
   if (!plan.days || plan.days.length === 0) {
     return (
@@ -297,8 +286,10 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
             {plan.days.map((day, dayIndex) => {
               const dateStr = dates[day.dayNumber - 1];
               const isToday = day.dayNumber === currentDay;
-              const isPast = day.dayNumber < currentDay;
-              const isMissingSupervisorDay = !!dateStr && !!plan.missingSupervisorDates?.includes(dateStr) && isPast;
+              // الأيام «المنجزة» تُحدَّد بنطاق المراجعة المُدخل فعلًا (لا بتاريخ اليوم)، فلو بدأت الطالبة
+              // من آخر النطاق تتظلّل الأيام التي غطّتها هي، ولا يُفترض أنها بدأت من أول الخطة.
+              const isPast = plan.coveredDays ? plan.coveredDays.includes(day.dayNumber) : day.dayNumber < currentDay;
+              const isMissingSupervisorDay = !!dateStr && !!plan.missingSupervisorDates?.includes(dateStr) && day.dayNumber < currentDay;
               return (
                 <tr
                   key={day.dayNumber}
