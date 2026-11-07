@@ -161,6 +161,9 @@ export const PAGES_TOLERANCE = 1;
 // وخطة الإدارة بلا فرق، إنشاءً وتجديدًا). كل وجه (نصف صفحة) في الخطة إمّا مغطّى بما أُدخل أو لا.
 // وإن بدأت الطالبة من آخر النطاق فالخطة تُحسب عكسية (لا «متقدمة»).
 
+// السماح بنقص وجه واحد (نصف صفحة) لأن أيام الخطة تنتهي أحيانًا بآيات قليلة داخل وجه جديد.
+export const WAJH_TOLERANCE = 1;
+
 export interface WajhRangeLike { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number }
 
 /** الأوجه (فهارس) التي يغطيها نطاق، أو null لو السورة مجهولة. */
@@ -210,7 +213,7 @@ export function coverageProgress(
   for (const d of sorted) {
     if (d.dayNumber > currentDay) break;
     cum += d.pages && d.pages > 0 ? Math.round(d.pages * 2) : 0;
-    if (prefix >= Math.min(cum, planWajhs.length)) daysReached = d.dayNumber;
+    if (prefix + WAJH_TOLERANCE >= Math.min(cum, planWajhs.length)) daysReached = d.dayNumber;
   }
   return { daysReached, prefix, plannedWajhsToday: Math.min(cum, planWajhs.length), direction };
 }

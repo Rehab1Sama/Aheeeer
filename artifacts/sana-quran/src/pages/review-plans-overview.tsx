@@ -48,6 +48,7 @@ type PlanSummary = {
   days: DayEntry[];
   status: "behind" | "ontrack" | "ahead" | null;
   missingSupervisorDates?: string[];
+  reversed?: boolean;
   isAbsentToday?: boolean;
 };
 
@@ -260,7 +261,19 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
   const dates = getDayDates(plan.startDate, totalDays, mode);
   const today = getMeccaToday();
   const currentDay = getCurrentPlanDay(plan.startDate, totalDays, mode);
-  const computedRanges = getPlanRanges(plan).length > 0 ? computeDayRanges(getPlanRanges(plan), plan.days) : null;
+  // خطة عكسية (بدأت الطالبة من آخر النطاق): اليوم الأول يأخذ آخر نصيب في النطاق وهكذا نزولًا.
+  const computedRanges = (() => {
+    const ranges = getPlanRanges(plan);
+    if (ranges.length === 0) return null;
+    if (!plan.reversed) return computeDayRanges(ranges, plan.days);
+    const n = plan.days.length;
+    const rev = computeDayRanges(ranges, [...plan.days].reverse());
+    return plan.days.map((_, i) =>
+      [...(rev[n - 1 - i] ?? [])].reverse().map((s: DayRangeSegment) => ({
+        surahStart: s.surahEnd, ayahStart: s.ayahEnd, surahEnd: s.surahStart, ayahEnd: s.ayahStart,
+      })),
+    );
+  })();
 
   if (!plan.days || plan.days.length === 0) {
     return (
