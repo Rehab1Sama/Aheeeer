@@ -39,7 +39,7 @@ const MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "ماي�
 const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
 const fmtDate = (d: string) => `${DAY_NAMES[dow(d)]} ${ar(Number(d.slice(8, 10)))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
 const fmtTime = (at: Date) => at.toLocaleTimeString("ar-SA", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" });
-const LINE = "┈┈┈┈┈ ✿ ┈┈┈┈┈";
+const LINE = "━━━━━━━━━━━━━━";
 // نداءات القائدة بأسلوبها — تتناوب على الرسائل
 const NAMES = ["قمرتنا رِحاب", "رِحابنا", "رِحاب السـمـاء", "قائدتنا"];
 let greetIdx = 0;
@@ -115,6 +115,8 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   const tsNameById = new Map(tsNames.map((n) => [n.id, n.name]));
 
   const messages: string[] = [];
+  // رأس كل رسالة: النداء، ثم التاريخ، ثم فاصل
+  const header = (icon: string, what: string) => [greet(icon, what), `<i>${fmtDate(D)}</i>`, LINE];
   const isWorkDay = expected.length > 0;
 
   // ── ٣. المشرفات (يُحسب أولًا لأن الملخص يحتاجه) ──
@@ -149,7 +151,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     const dayTask = (tasksByCircle.get(c.id) ?? [])[0];
     const supId = dayTask?.supervisorId ?? c.supervisorId;
     const who = supId ? userName.get(supId) : (c.teacherId ? userName.get(c.teacherId) : null);
-    supIssues.push({ track: trackNameOf(c), line: `◦ <b>${esc(c.name)}</b>${who ? ` · ${esc(who)}` : ""}\n      ${problems.join("\n      ")}` });
+    supIssues.push({ track: trackNameOf(c), line: `<b>${esc(c.name)}</b>${who ? ` — ${esc(who)}` : ""}\n${problems.join("\n")}` });
   }
   const circlesWithRoster = expected.filter((c) => (roster.get(c.id) ?? []).length > 0).length;
 
@@ -167,44 +169,22 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     if (c && cv.daysReached >= 21) completed.push({ track: trackNameOf(c), circle: c.name, name: studentName.get(p.studentId) ?? `#${p.studentId}`, pages: p.totalPages });
   }
 
-  // ── ٠. العنوان والملخص ──
-  const attendTotal = presentCount + absentCount;
-  greetIdx = 0;
-  const head = [
-    greet("🌙", `ملخص يوم ${fmtDate(D)}`),
-    LINE,
-  ];
-  if (isWorkDay) {
-    head.push(
-      `الحلقات المكتملة: <b>${ar(completeCircles)}</b> من ${ar(circlesWithRoster)}`,
-      `الحضور: <b>${attendTotal ? ar(Math.round((presentCount / attendTotal) * 100)) : "٠"}٪</b>  ·  ${ar(presentCount)} حاضرة  ·  ${ar(absentCount)} غائبة`,
-      ``,
-      `<b>خطط المراجعة</b>`,
-      `      منتظمة: ${ar(ontrack)}`,
-      `      متأخرة: ${ar(behind)}`,
-      `      متقدمة: ${ar(ahead)}`,
-      LINE,
-      `<i>تتبعها ستّ رسائل بالتفاصيل</i>`,
-    );
-  } else {
-    head.push("لا دوام في هذا اليوم، دمتِ بخير");
-  }
-  messages.push(head.join("\n"));
+  greetIdx = 1; // النداء الأول محجوز للملخص (يُبنى في آخر الدالة ويوضع أولًا)
 
   // ── ١. مستحقات الأوسمة ──
-  const badgeLines: string[] = [greet("🎀", "مستحقات الأوسمة"), LINE];
+  const badgeLines: string[] = [...header("🎀", "مستحقات الأوسمة")];
   const todayDow = dow(today);
   const addOverview = async (title: string, fn: () => Promise<OverviewEntry[]>) => {
     try {
       const rows = await fn();
       if (rows.length === 0) return;
-      badgeLines.push(`\n<b>${esc(title)}</b> (${ar(rows.length)})`);
-      for (const e of rows) badgeLines.push(`◦ ${esc(e.label)}${e.meta ? ` — ${esc(e.meta)}` : ""}${e.badge.name ? ` · ${esc(e.badge.name)}` : ""}`);
+      badgeLines.push(`\n<b>${esc(title)}</b> · ${ar(rows.length)}`);
+      badgeLines.push(`<blockquote expandable>${rows.map((e) => `${esc(e.label)}${e.meta ? ` — ${esc(e.meta)}` : ""}${e.badge.name ? ` · ${esc(e.badge.name)}` : ""}`).join("\n")}</blockquote>`);
     } catch (err) {
       logger.error({ err, title }, "daily report: badge overview failed");
     }
   };
-  if (completed.length > 0) badgeLines.push(`وسام إتمام خطة المراجعة: <b>${ar(completed.length)}</b> طالبة\n      <i>(أسماؤهن في الرسالة الأخيرة)</i>`);
+  if (completed.length > 0) badgeLines.push(`<b>وسام إتمام خطة المراجعة</b> · ${ar(completed.length)} طالبة\n<i>أسماؤهن في التقرير الأخير</i>`);
   if (todayDow === 5) {
     const weekStart = getLastCompletedWeekStart();
     await addOverview("أقمر حلقة الأسبوع", () => overviewCircleWeeklyMoon(weekStart));
@@ -216,11 +196,11 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   if (today.slice(8, 10) === "01") {
     await addOverview("الحضور الكامل للشهر الماضي", () => overviewMonthlyPerfect(addDaysStr(today, -1).slice(0, 7)));
   }
-  if (badgeLines.length === 2) badgeLines.push("لا مستحقات جديدة اليوم.");
+  if (badgeLines.length === 3) badgeLines.push("لا مستحقات جديدة اليوم.");
   if (todayDow !== 5) badgeLines.push("\n<i>الأوسمة الأسبوعية تصلكِ يوم الجمعة</i>");
   messages.push(badgeLines.join("\n"));
 
-  if (!isWorkDay) return { date: D, messages };
+  if (!isWorkDay) { messages.unshift(buildSummary()); return { date: D, messages }; }
 
   // ── ٢. المعلمات (تُحسب المعلمة بعينها: غياب واحد في اليوم مهما تعدّد مصدره أو حلقاتها) ──
   const absentDaysByTeacher = new Map<number, Set<string>>();
@@ -253,23 +233,22 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     const nAbs = tid ? absentDaysByTeacher.get(tid)?.size ?? 0 : 0;
     const nLate = tid ? lateDaysByTeacher.get(tid)?.size ?? 0 : 0;
     const history = [nAbs > 1 ? `غياب ${ar(nAbs)}` : "", nLate > 1 ? `تأخر ${ar(nLate)}` : ""].filter(Boolean).join("، ");
-    teacherIssues.push({ track: trackNameOf(c), line: `◦ <b>${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")}</b> · ${esc(c.name)}\n      ${label}${history ? `  ·  ${history} خلال ٣٠ يومًا` : ""}` });
+    teacherIssues.push({ track: trackNameOf(c), line: `<b>${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")}</b> — ${esc(c.name)}\n${label}${history ? ` · ${history} خلال ٣٠ يومًا` : ""}` });
   }
   const noTaskCircles = expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
-  const teacherMsg = [greet("🌷", "تقرير المعلمات"), LINE, ...groupByTrack(teacherIssues, "ما شاء الله، لا غياب ولا تأخير.")];
-  if (noTaskCircles.length > 0) teacherMsg.push(`\n<i>حضور المعلمة غير مسجّل في ${ar(noTaskCircles.length)} حلقة (لم تُعبّأ مهام اليوم)</i>`);
+  const teacherMsg = [...header("🌷", "تقرير المعلمات"), ...groupByTrack(teacherIssues, "ما شاء الله، لا غياب ولا تأخير.")];
+  if (noTaskCircles.length > 0) teacherMsg.push(`\n<i>لم يُسجَّل حضور المعلمة في ${ar(noTaskCircles.length)} حلقة لعدم تعبئة مهام اليوم.</i>`);
   messages.push(teacherMsg.join("\n"));
 
   // ── ٣. المشرفات ──
   messages.push([
-    greet("💐", "تقرير المشرفات"), LINE,
+    ...header("💐", "تقرير المشرفات"),
+    `مكتملة بلا ملاحظات: <b>${ar(completeCircles)}</b> من ${ar(circlesWithRoster)} حلقة`,
     ...groupByTrack(supIssues, "ما شاء الله، كل الحلقات مكتملة."),
-    LINE,
-    `مكتملة بلا ملاحظات: <b>${ar(completeCircles)}</b> من ${ar(circlesWithRoster)}`,
   ].join("\n"));
 
   // ── ٤. مسؤولات المسارات ──
-  const tsLines: string[] = [greet("🌙", "تقرير مسؤولات المسارات"), LINE];
+  const tsLines: string[] = [...header("🌙", "تقرير مسؤولات المسارات")];
   const byTrack = new Map<string, typeof expected>();
   for (const c of expected) { const k = trackNameOf(c); byTrack.set(k, [...(byTrack.get(k) ?? []), c]); }
   let tsProblems = 0;
@@ -298,7 +277,8 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     if (problems.length === 0) continue;
     tsProblems++;
     const who = names.length ? names.join("، ") : accounts.map((a) => a.name).join("، ");
-    tsLines.push(`\n<b>مسار ${esc(trackName.replace(/^مسار\s+/, ""))}</b>${who ? ` · ${esc(who)}` : ""}${filledBy.length ? `\n      عبّأت: ${filledBy.map((n) => esc(n!)).join("، ")}` : ""}\n      ${problems.join("\n      ")}`);
+    tsLines.push(`\n<b>مسار ${esc(trackName.replace(/^مسار\s+/, ""))}</b>${who ? ` — ${esc(who)}` : ""}`);
+    tsLines.push(`<blockquote>${problems.join("\n")}${filledBy.length ? `\n<i>عبّأت المهام: ${filledBy.map((n) => esc(n!)).join("، ")}</i>` : ""}</blockquote>`);
   }
   if (tsProblems === 0) tsLines.push("ما شاء الله، كل المسارات أنجزت مهامها.");
   messages.push(tsLines.join("\n"));
@@ -335,16 +315,44 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
       const low = lowByStudent.get(k);
       if (low) reasons.push(`حفظ منخفض: ${ar(Math.round((low.totalPages ?? 0) * 10) / 10)} صفحة في ${ar(low.periodDays)} يومًا`);
       if (reasons.length === 0) continue;
-      studentIssues.push({ track: trackNameOf(c), line: `◦ <b>${esc(s.fullName)}</b> · ${esc(c.name)}\n      ${reasons.map((x) => `– ${x}`).join("\n      ")}` });
+      studentIssues.push({ track: trackNameOf(c), line: `<b>${esc(s.fullName)}</b> — ${esc(c.name)}\n${reasons.map((x) => `· ${x}`).join("\n")}` });
     }
   }
-  messages.push([greet("🌸", `تقرير الطالبات اللواتي يحتجن متابعة (${ar(studentIssues.length)})`), LINE, ...groupByTrack(studentIssues, "ما شاء الله، لا طالبات متعثرات.")].join("\n"));
+  messages.push([...header("🌸", "تقرير الطالبات اللواتي يحتجن متابعة"), `العدد: <b>${ar(studentIssues.length)}</b> طالبة`, ...groupByTrack(studentIssues, "ما شاء الله، لا طالبات متعثرات.")].join("\n"));
 
   // ── ٦. من أتممن خطة المراجعة ──
-  const doneIssues: CircleIssue[] = completed.map((x) => ({ track: x.track, line: `◦ <b>${esc(x.name)}</b> · ${esc(x.circle)}${x.pages ? `  ·  ${ar(x.pages)} صفحة` : ""}` }));
-  messages.push([greet("✨", `بشرى من أتممن خطة المراجعة (${ar(completed.length)})`), LINE, ...groupByTrack(doneIssues, "لم تُتمّ أي طالبة خطتها بعد."), LINE, "<i>بارك الله فيكِ وفي جهودكِ يا رِحاب</i>"].join("\n"));
+  const doneIssues: CircleIssue[] = completed.map((x) => ({ track: x.track, line: `<b>${esc(x.name)}</b> — ${esc(x.circle)}${x.pages ? ` · ${ar(x.pages)} صفحة` : ""}` }));
+  messages.push([...header("✨", "بشرى من أتممن خطة المراجعة"), `العدد: <b>${ar(completed.length)}</b> طالبة`, ...groupByTrack(doneIssues, "لم تُتمّ أي طالبة خطتها بعد."), "", "<i>بارك الله فيكِ وفي جهودكِ يا رِحاب</i>"].join("\n"));
+
+  messages.unshift(buildSummary({ teachers: teacherIssues.length, supervisors: supIssues.length, tracks: tsProblems, students: studentIssues.length, completed: completed.length }));
 
   return { date: D, messages };
+
+  // ── ٠. الملخص (يُبنى أخيرًا ليحمل أعداد التقارير التالية، ويوضع أول رسالة) ──
+  function buildSummary(counts?: { teachers: number; supervisors: number; tracks: number; students: number; completed: number }): string {
+    greetIdx = 0;
+    const lines = [greet("🌙", "ملخص اليوم"), `<i>${fmtDate(D)}</i>`, LINE];
+    if (!isWorkDay) { lines.push("لا دوام في هذا اليوم، دمتِ بخير."); return lines.join("\n"); }
+    const attendTotal = presentCount + absentCount;
+    const pct = attendTotal ? ar(Math.round((presentCount / attendTotal) * 100)) : "٠";
+    lines.push(
+      `<b>الحلقات المكتملة:</b> ${ar(completeCircles)} من ${ar(circlesWithRoster)}`,
+      `<b>الحضور:</b> ${pct}٪ (${ar(presentCount)} حاضرة، ${ar(absentCount)} غائبة)`,
+      `<b>خطط المراجعة:</b> ${ar(ontrack)} منتظمة، ${ar(behind)} متأخرة، ${ar(ahead)} متقدمة`,
+    );
+    if (counts) {
+      lines.push(
+        "",
+        "<b>في التقارير التالية</b>",
+        `<blockquote>غياب المعلمات وتأخرهن: ${ar(counts.teachers)}`
+          + `\nحلقات عليها ملاحظات: ${ar(counts.supervisors)}`
+          + `\nمسارات عليها ملاحظات: ${ar(counts.tracks)}`
+          + `\nطالبات يحتجن متابعة: ${ar(counts.students)}`
+          + `\nأتممن خطة المراجعة: ${ar(counts.completed)}</blockquote>`,
+      );
+    }
+    return lines.join("\n");
+  }
 }
 
 function groupByTrack(items: Array<{ track: string; line: string }>, emptyText: string): string[] {
@@ -353,22 +361,40 @@ function groupByTrack(items: Array<{ track: string; line: string }>, emptyText: 
   for (const it of items) map.set(it.track, [...(map.get(it.track) ?? []), it.line]);
   const out: string[] = [];
   for (const [t, lines] of [...map.entries()].sort((a, b) => trackOrder(a[0], b[0]))) {
-    out.push(`\n<b>مسار ${esc(t.replace(/^مسار\s+/, ""))}</b> (${ar(lines.length)})`);
-    out.push(...lines);
+    out.push(`\n<b>مسار ${esc(t.replace(/^مسار\s+/, ""))}</b> · ${ar(lines.length)}`);
+    out.push(`<blockquote expandable>${lines.join("\n\n")}</blockquote>`);
   }
   return out;
 }
 
 // ── الإرسال إلى تيليجرام ─────────────────────────────────────────────────
 
-/** يقسم الرسالة الطويلة (حد تيليجرام ٤٠٩٦ حرفًا) على حدود الأسطر. */
+/** يقسم الرسالة الطويلة (حد تيليجرام ٤٠٩٦ حرفًا) دون كسر وسوم <blockquote> المفتوحة. */
 export function splitForTelegram(text: string, limit = 3900): string[] {
   if (text.length <= limit) return [text];
+  // وحدات لا تُقسم: سطر عادي، أو اقتباس كامل (يُقسم اقتباسًا جديدًا إن طال وحده)
+  const units: string[] = [];
+  for (const piece of text.split(/(<blockquote[^>]*>[\s\S]*?<\/blockquote>)/)) {
+    if (!piece) continue;
+    if (piece.startsWith("<blockquote")) {
+      if (piece.length <= limit) { units.push(piece); continue; }
+      const open = piece.match(/^<blockquote[^>]*>/)![0];
+      const inner = piece.slice(open.length, -"</blockquote>".length);
+      let cur = "";
+      for (const line of inner.split("\n")) {
+        if (cur && (cur + "\n" + line).length > limit - 40) { units.push(`${open}${cur}</blockquote>`); cur = line; }
+        else cur = cur ? `${cur}\n${line}` : line;
+      }
+      if (cur) units.push(`${open}${cur}</blockquote>`);
+    } else {
+      units.push(...piece.split("\n").filter((l, i, arr) => !(l === "" && (i === 0 || i === arr.length - 1))));
+    }
+  }
   const parts: string[] = [];
   let cur = "";
-  for (const line of text.split("\n")) {
-    if ((cur + "\n" + line).length > limit && cur) { parts.push(cur); cur = line; }
-    else cur = cur ? cur + "\n" + line : line;
+  for (const u of units) {
+    if (cur && (cur + "\n" + u).length > limit) { parts.push(cur); cur = u; }
+    else cur = cur ? `${cur}\n${u}` : u;
   }
   if (cur) parts.push(cur);
   return parts;
