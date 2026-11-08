@@ -511,7 +511,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-4" dir="rtl">
         <p>{(profileError as any)?.status === 403
-          ? `لا يمكنكِ فتح ملف هذه الطالبة: ${(profileError as any)?.message ?? "ليست ضمن نطاقكِ"}`
+          ? `لا يمكنكِ فتح ملف هذه الطالبة — ${(profileError as any)?.message ?? "ليست ضمن نطاقكِ"}`
           : "لم يتم العثور على الطالبة"}</p>
         <Button variant="outline" onClick={() => window.history.back()}>رجوع</Button>
       </div>

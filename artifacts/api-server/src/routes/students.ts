@@ -1335,7 +1335,13 @@ router.get("/students/:id/profile", authenticate, async (req, res): Promise<void
   const [student] = await db.select().from(studentsTable).where(eq(studentsTable.id, id));
   if (!student) { res.status(404).json({ error: "Student not found" }); return; }
   if (!(await canAccessStudentMemorization(req, id))) {
-    res.status(403).json({ error: "الطالبة خارج نطاق المسار" });
+    // نخبرها في أي مسار/حلقة الطالبة (بلا أي بيانات أخرى) لتعرف لمن تتوجه
+    const where = await db.select({ circle: circlesTable.name, track: circlesTable.track })
+      .from(studentEnrollmentsTable)
+      .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
+      .where(and(eq(studentEnrollmentsTable.studentId, id), eq(studentEnrollmentsTable.isArchived, false)));
+    const place = where.map((w) => `مسار ${w.track ?? "—"} (${w.circle})`).join("، ");
+    res.status(403).json({ error: place ? `الطالبة مسجّلة في ${place}، وليست ضمن مسارك` : "الطالبة خارج نطاق المسار" });
     return;
   }
 
