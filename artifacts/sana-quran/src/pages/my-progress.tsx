@@ -494,7 +494,7 @@ export default function MyProgressPage() {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="mobile-cards w-full text-sm">
                     <thead className="bg-muted/50 border-b border-border">
                       <tr>
                         <th className="text-right py-3 px-4 font-semibold text-muted-foreground">التاريخ</th>

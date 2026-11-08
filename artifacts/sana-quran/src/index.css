@@ -317,3 +317,34 @@
     inset: -1px;
   }
 }
+
+/* ── الجداول العريضة تصير بطاقات في الجوال (table.mobile-cards) ──
+   عناوين الأعمدة تُنسخ لكل خلية (data-label) تلقائيًا من Layout، وأول خلية ذات عنوان = عنوان البطاقة. */
+@media (max-width: 767px) {
+  table.mobile-cards { min-width: 0 !important; width: 100% !important; border-collapse: separate; }
+  table.mobile-cards thead { display: none; }
+  table.mobile-cards tbody, table.mobile-cards tr, table.mobile-cards td { display: block; width: 100%; }
+  table.mobile-cards tr {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 14px;
+    padding: 6px 14px;
+    margin-bottom: 10px;
+  }
+  table.mobile-cards td {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 7px 0 !important; border: 0 !important; text-align: right !important;
+    white-space: normal !important; min-height: 0;
+  }
+  table.mobile-cards td + td { border-top: 1px dashed hsl(var(--border)) !important; }
+  table.mobile-cards td::before {
+    content: attr(data-label);
+    color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 600; flex: none;
+  }
+  table.mobile-cards td:not([data-label])::before, table.mobile-cards td[data-label=""]::before { display: none; }
+  table.mobile-cards td[data-label="#"] { display: none; }
+  table.mobile-cards td[data-title] { order: -1; font-size: 15px; font-weight: 800; justify-content: flex-start; }
+  table.mobile-cards td[data-title]::before { display: none; }
+  table.mobile-cards td[colspan] { justify-content: center; text-align: center !important; }
+  table.mobile-cards tr { display: flex; flex-direction: column; }
+}

@@ -229,7 +229,7 @@ export default function TrackReportPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="mobile-cards w-full text-xs">
                   <thead className="bg-muted/50 border-b border-border">
                     <tr>
                       <th className="text-right py-2.5 px-3 font-semibold text-muted-foreground">#</th>

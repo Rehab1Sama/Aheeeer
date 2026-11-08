@@ -681,7 +681,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="mobile-cards w-full text-sm">
                   <thead className="bg-muted/50 border-b border-border">
                     <tr>
                       <th className="text-right py-2.5 px-3 font-semibold text-muted-foreground">المسار</th>
@@ -716,7 +716,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="mobile-cards w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-right py-2 px-3 font-semibold text-muted-foreground">الحلقة</th>

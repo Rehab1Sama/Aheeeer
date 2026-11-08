@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetCurrentUser } from "@workspace/api-client-react";
@@ -74,7 +75,24 @@ import Layout from "@/components/Layout";
 import NotFound from "@/pages/not-found";
 import { canEnterData, isFeatureEnabled } from "@/lib/schoolConfig";
 
+// فشل تحميل بيانات أي صفحة: تنبيه واضح بالعربية بدل صفحة فارغة صامتة (مرة واحدة لكل رسالة خلال ١٠ ثوانٍ)
+let lastQueryErrorAt = 0;
+let lastQueryError = "";
+const queryCache = new QueryCache({
+  onError: (error, query) => {
+    const status = (error as { status?: number })?.status;
+    if (status === 401 || query.meta?.silent) return;
+    const message = error instanceof Error && error.message ? error.message : "تعذّر تحميل البيانات";
+    const now = Date.now();
+    if (message === lastQueryError && now - lastQueryErrorAt < 10000) return;
+    lastQueryError = message;
+    lastQueryErrorAt = now;
+    toast({ title: "تعذّر تحميل بعض البيانات", description: `${message}. حدّثي الصفحة أو حاولي بعد قليل.`, variant: "destructive" });
+  },
+});
+
 const queryClient = new QueryClient({
+  queryCache,
   defaultOptions: {
     queries: {
       retry: 1,

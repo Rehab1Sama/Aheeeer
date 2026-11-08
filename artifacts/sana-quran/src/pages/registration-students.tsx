@@ -163,7 +163,7 @@ export default function RegistrationStudentsPage() {
             <p className="text-center py-10 text-muted-foreground text-sm">لا نتائج للبحث</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="mobile-cards w-full text-sm">
                 <thead className="bg-muted/50 border-b border-border">
                   <tr>
                     <th className="py-3 px-4 text-right w-10">

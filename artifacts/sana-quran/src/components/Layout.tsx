@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
 import { clearAuth, getToken, setToken } from "@/lib/auth";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { isFeatureEnabled, shouldHideShortcomings } from "@/lib/schoolConfig";
 import {
   Users, ClipboardList, BarChart3,
@@ -159,9 +159,9 @@ function GroupedNav({ items }: { items: NavItem[] }) {
 const BOTTOM_PRIORITY: Record<string, string[]> = {
   leader: ["/", "/data-entry-status", "/review-plans-overview", "/statistics", "/attendance"],
   deputy: ["/", "/data-entry-status", "/review-plans-overview", "/deputy-tasks", "/statistics"],
-  track_supervisor: ["/", "/data-entry", "/whatsapp-entry", "/review-plans-overview", "/track-entry-status"],
+  track_supervisor: ["/", "/data-entry", "/track-entry-status", "/review-plans-overview"],
   teacher: ["/", "/data-entry", "/review-plans-overview", "/my-messages", "/badges"],
-  supervisor: ["/", "/data-entry", "/whatsapp-entry", "/review-plans-overview", "/my-messages"],
+  supervisor: ["/", "/data-entry", "/review-plans-overview", "/my-messages", "/badges"],
   student: ["/", "/review-plans-overview", "/badges", "/my-messages", "/attendance"],
   data_entry: ["/", "/calendar"],
   volunteer: ["/", "/calendar"],
@@ -206,6 +206,73 @@ function BottomNav({ role, items, onMore }: { role: string; items: NavItem[]; on
         </button>
       </div>
     </nav>
+  );
+}
+
+/** ينسخ عناوين أعمدة الجداول (table.mobile-cards) إلى خلاياها، لتظهر كبطاقات في الجوال. */
+function labelMobileTables(root: ParentNode = document) {
+  root.querySelectorAll<HTMLTableElement>("table.mobile-cards").forEach((table) => {
+    const heads = Array.from(table.querySelectorAll("thead tr:last-child th")).map((th) => (th.textContent ?? "").trim());
+    table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((tr) => {
+      let col = 0;
+      let titled = false;
+      Array.from(tr.cells).forEach((td) => {
+        const label = td.colSpan > 1 ? "" : heads[col] ?? "";
+        if (td.getAttribute("data-label") !== label) td.setAttribute("data-label", label);
+        const isTitle = !titled && label !== "" && label !== "#";
+        if (isTitle) { titled = true; td.setAttribute("data-title", ""); } else td.removeAttribute("data-title");
+        col += td.colSpan || 1;
+      });
+    });
+  });
+}
+
+function useMobileTableLabels() {
+  useEffect(() => {
+    let frame = 0;
+    const run = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => labelMobileTables()); };
+    run();
+    const observer = new MutationObserver((muts) => {
+      // تجاهل تغييراتنا نحن على الخصائص
+      if (muts.every((m) => m.type === "attributes")) return;
+      run();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
+}
+
+// ── «المطلوب اليوم» أعلى الصفحة الرئيسية ──
+const TODAY_ROLES = ["leader", "deputy", "track_supervisor", "teacher", "supervisor"];
+function TodayBar({ role }: { role: string }) {
+  const { data } = useQuery({
+    queryKey: ["todaySummary"],
+    enabled: TODAY_ROLES.includes(role),
+    staleTime: 30 * 1000,
+    queryFn: async () => {
+      const r = await fetch("/api/today-summary", { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!r.ok) return { items: [] as Array<{ tone: "ok" | "warn"; text: string; href?: string }> };
+      return r.json() as Promise<{ items: Array<{ tone: "ok" | "warn"; text: string; href?: string }> }>;
+    },
+  });
+  const items = data?.items ?? [];
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-4 rounded-2xl border border-primary/15 bg-card shadow-sm overflow-hidden" role="status">
+      <p className="px-4 pt-3 pb-1 text-xs font-bold text-primary">المطلوب اليوم</p>
+      <ul className="divide-y divide-border">
+        {items.map((it, i) => {
+          const body = (
+            <span className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold">
+              <span className={`w-2 h-2 rounded-full flex-none ${it.tone === "ok" ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="flex-1">{it.text}</span>
+              {it.href && <span className="text-muted-foreground text-xs">←</span>}
+            </span>
+          );
+          return <li key={i}>{it.href ? <Link href={it.href} className="block hover:bg-muted/40">{body}</Link> : body}</li>;
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -600,6 +667,7 @@ export default function Layout({ user, children }: LayoutProps) {
   const queryClient = useQueryClient();
   const logout = useLogout();
   const [location, setLocation] = useLocation();
+  useMobileTableLabels();
   // في الجوال: إغلاق القائمة بعد الانتقال لصفحة
   useEffect(() => { setSidebarOpen(false); }, [location]);
   const allAccounts = useMyAccounts(user.id);
@@ -784,6 +852,7 @@ export default function Layout({ user, children }: LayoutProps) {
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {isHome && <TodayBar role={user.role} />}
             {children}
           </div>
           <footer className="text-center py-3 px-4 pb-24 md:pb-3 text-xs text-muted-foreground border-t border-border bg-background/50">

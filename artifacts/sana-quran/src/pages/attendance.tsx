@@ -125,7 +125,7 @@ export default function AttendancePage() {
             <p className="text-muted-foreground text-sm text-center py-4">لا يوجد غياب متكرر</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="mobile-cards w-full text-sm">
                 <thead className="bg-amber-50/50 border-b border-amber-100">
                   <tr>
                     <th className="text-right py-2.5 px-3 font-semibold text-muted-foreground">الطالبة</th>

@@ -148,27 +148,36 @@ function truncate(text: string, maxLength = 300): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
+// رسالة الخطأ التي تراها المستخدمة: رسالة الخادم العربية كما هي، وإلا عبارة واضحة حسب الحالة
+// (كانت تُعرض «HTTP 400 Bad Request: …» للمستخدمات). الحالة الرقمية تبقى في error.status.
+const STATUS_MESSAGES: Record<number, string> = {
+  400: "البيانات المدخلة غير صحيحة، راجعيها وحاولي مرة أخرى",
+  401: "انتهت الجلسة، سجّلي الدخول من جديد",
+  403: "ليست لديكِ صلاحية لهذا الإجراء",
+  404: "المطلوب غير موجود، ربما حُذف أو نُقل",
+  409: "تعذّر الحفظ بسبب تعارض مع بيانات موجودة",
+  413: "الملف أو البيانات أكبر من المسموح",
+  429: "طلبات كثيرة في وقت قصير، انتظري قليلًا ثم حاولي",
+};
 
+function buildErrorMessage(response: Response, data: unknown): string {
   if (typeof data === "string") {
     const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
+    // نص عربي قصير من الخادم يُعرض كما هو؛ صفحات HTML أو نصوص تقنية لا تُعرض
+    if (text && text.length <= 300 && /[\u0600-\u06FF]/.test(text) && !text.startsWith("<")) return text;
+  } else {
+    const title = getStringField(data, "title");
+    const detail = getStringField(data, "detail");
+    const message =
+      getStringField(data, "message") ??
+      getStringField(data, "error_description") ??
+      getStringField(data, "error");
+    const best = detail ?? message ?? title;
+    if (best && /[\u0600-\u06FF]/.test(best)) return truncate(best);
   }
-
-  const title = getStringField(data, "title");
-  const detail = getStringField(data, "detail");
-  const message =
-    getStringField(data, "message") ??
-    getStringField(data, "error_description") ??
-    getStringField(data, "error");
-
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
-
-  return prefix;
+  if (STATUS_MESSAGES[response.status]) return STATUS_MESSAGES[response.status];
+  if (response.status >= 500) return "حدث خلل في الخادم، حاولي بعد قليل";
+  return "تعذّر إتمام الطلب، حاولي مرة أخرى";
 }
 
 export class ApiError<T = unknown> extends Error {
@@ -360,7 +369,14 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, method, headers });
+  } catch (cause) {
+    // انقطاع الإنترنت أو نوم الخادم: رسالة واضحة بدل «Failed to fetch»
+    if ((cause as { name?: string })?.name === "AbortError") throw cause;
+    throw new Error("تعذّر الاتصال بالموقع، تحققي من الإنترنت وحاولي مرة أخرى");
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
