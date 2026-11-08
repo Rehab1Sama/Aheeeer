@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import reportsRouter from "./reports";
 import verificationRouter from "./verification";
 import authRouter from "./auth";
 import usersRouter from "./users";
@@ -94,5 +95,6 @@ router.use(liveBadgesOverviewRouter);
 router.use(circleOverviewRouter);
 router.use(trackSupervisorSessionsRouter);
 router.use(distinguishedStudentsRouter);
+router.use(reportsRouter);
 
 export default router;

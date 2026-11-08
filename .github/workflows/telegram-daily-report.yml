@@ -1,0 +1,43 @@
+# تقرير القائدة اليومي على تيليجرام — يوقظ الخادم في Render ثم يطلب إرسال التقرير.
+# يحتاج سرًّا في المستودع باسم REPORT_KEY (Settings → Secrets and variables → Actions)
+# بنفس قيمة REPORT_KEY في إعدادات Render.
+name: Telegram daily report
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # ٣:٣٠ UTC = ٦:٣٠ صباحًا بتوقيت مكة، عن يوم الأمس
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "تاريخ التقرير YYYY-MM-DD (فارغ = أمس)"
+        required: false
+      force:
+        description: "إعادة الإرسال حتى لو أُرسل سابقًا (1)"
+        required: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wake server and send report
+        env:
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+          SITE: https://sana-alay-abq5.onrender.com
+          DATE: ${{ github.event.inputs.date }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          if [ -z "$REPORT_KEY" ]; then echo "REPORT_KEY secret is missing"; exit 1; fi
+          # الخادم المجاني ينام: نوقظه أولًا
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 60 "$SITE/api/healthz" >/dev/null 2>&1; then break; fi
+            echo "waiting for server ($i)"; sleep 20
+          done
+          URL="$SITE/api/reports/telegram/run?key=$REPORT_KEY"
+          [ -n "$DATE" ] && URL="$URL&date=$DATE"
+          [ "$FORCE" = "1" ] && URL="$URL&force=1"
+          for i in 1 2 3; do
+            if curl -fsS --max-time 240 "$URL"; then echo; exit 0; fi
+            echo "retry $i"; sleep 30
+          done
+          exit 1
