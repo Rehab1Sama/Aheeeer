@@ -21,7 +21,7 @@ import { ClipboardPaste, CheckCircle2, AlertTriangle, Pencil, UserX, Loader2 } f
 
 // ─── أنواع الحالة ────────────────────────────────────────────────
 
-type FieldKey = "memorize" | "near" | "far";
+type FieldKey = "memorize" | "near" | "far" | "review";
 
 interface RangeState {
   enabled: boolean; // هل يوجد محتوى لهذا الحقل
@@ -43,6 +43,8 @@ interface CardState {
   include: boolean;
   replace: boolean;
   listened: boolean | null;
+  /** غائبة/غائب رغم وجود نصاب في الرسالة: يُسجَّل غيابًا ولا يُحسب النصاب */
+  absent: boolean;
   fields: Record<FieldKey, RangeState>;
   editing: FieldKey | null;
   dupNote: string | null;
@@ -52,12 +54,14 @@ const FIELD_LABEL: Record<FieldKey, string> = {
   memorize: "الحفظ",
   near: "المراجعة القريبة",
   far: "المراجعة البعيدة",
+  review: "المراجعة",
 };
 
 const FIELD_INPUT: Record<FieldKey, string> = {
   memorize: "memorize",
   near: "review_near",
   far: "review_far",
+  review: "review", // الأطفال والمسارات البسيطة: مراجعة واحدة
 };
 
 function toRangeState(f: ParsedField): RangeState {
@@ -209,7 +213,7 @@ export default function WhatsappEntryPage() {
 
   const circle = (circles ?? []).find((c: any) => c.id === circleId) as any;
   const inputFields = getInputFields(circle?.dataEntryType);
-  const activeFields = (["memorize", "near", "far"] as FieldKey[]).filter((k) => inputFields.includes(FIELD_INPUT[k]));
+  const activeFields = (["memorize", "near", "far", "review"] as FieldKey[]).filter((k) => inputFields.includes(FIELD_INPUT[k]));
   const useListen = inputFields.includes("listen");
 
   // طالبات الحلقة المختارة (من نفس مصدر شاشة إدخال البيانات)
@@ -269,7 +273,11 @@ export default function WhatsappEntryPage() {
         include: studentId !== null,
         replace: false,
         listened: p.listened,
-        fields: { memorize: toRangeState(p.memorize), near: toRangeState(p.near), far: toRangeState(p.far) },
+        absent: p.absent === true,
+        fields: {
+          memorize: toRangeState(p.memorize), near: toRangeState(p.near), far: toRangeState(p.far),
+          review: toRangeState(p.review ?? { status: "empty", range: null, notes: [], raw: "" }),
+        },
         editing: null,
         dupNote: null,
       };
@@ -306,6 +314,7 @@ export default function WhatsappEntryPage() {
     if (!c.include || c.studentId === null) return false;
     const st = byId.get(c.studentId);
     if (st?.hasRecord && !c.replace) return false;
+    if (c.absent) return true; // الغياب لا يحتاج مراجعة النطاقات
     return activeFields.every((k) => fieldReady(c.fields[k]));
   };
 
@@ -317,6 +326,9 @@ export default function WhatsappEntryPage() {
 
   // ─── الحفظ ───
   const buildPayload = (c: CardState) => {
+    if (c.absent) {
+      return { studentId: c.studentId, circleId, date, isAbsent: true, memorizePages: 0, reviewNearPages: 0, reviewFarPages: 0, reviewPages: 0, recitationPages: 0 };
+    }
     const payload: any = {
       studentId: c.studentId,
       circleId,
@@ -328,7 +340,7 @@ export default function WhatsappEntryPage() {
       reviewPages: 0,
       recitationPages: 0,
     };
-    const put = (k: FieldKey, prefix: "memorize" | "reviewNear" | "reviewFar") => {
+    const put = (k: FieldKey, prefix: "memorize" | "reviewNear" | "reviewFar" | "review") => {
       const r = c.fields[k];
       if (!activeFields.includes(k) || !r.enabled || !r.surahStart || !r.surahEnd) return;
       payload[`${prefix}SurahStart`] = r.surahStart;
@@ -340,6 +352,7 @@ export default function WhatsappEntryPage() {
     put("memorize", "memorize");
     put("near", "reviewNear");
     put("far", "reviewFar");
+    put("review", "review");
     if (useListen) payload.listenedToReciter = c.listened;
     return payload;
   };
@@ -360,12 +373,12 @@ export default function WhatsappEntryPage() {
       try {
         const payload = buildPayload(c);
         if (st?.hasRecord && st.recordId) {
-          await updateRecord.mutateAsync({ id: st.recordId, data: payload });
+          await updateRecord.mutateAsync({ id: st.recordId, data: payload as any });
         } else {
-          await createRecord.mutateAsync({ data: payload });
+          await createRecord.mutateAsync({ data: payload as any });
         }
         ok++;
-        saved.push(name);
+        if (c.absent) absent.push(name); else saved.push(name);
       } catch (e: any) {
         failed.push({ name, error: errText(e) });
       }
@@ -487,7 +500,19 @@ export default function WhatsappEntryPage() {
                     </label>
                   )}
 
-                  {activeFields.map((k) => {
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">الحضور</span>
+                    {([false, true] as const).map((v) => (
+                      <button key={String(v)} type="button" disabled={!c.include}
+                        onClick={() => patchCard(c.key, { absent: v })}
+                        className={`px-3 py-1 rounded-md border text-xs font-bold ${c.absent === v ? (v ? "bg-rose-500 text-white border-rose-500" : "bg-green-500 text-white border-green-500") : "border-input"}`}>
+                        {v ? "غائب" : "حاضر"}
+                      </button>
+                    ))}
+                    {c.absent && <span className="text-xs text-muted-foreground">يُسجَّل غيابًا ولا يُحسب النصاب المكتوب</span>}
+                  </div>
+
+                  {!c.absent && activeFields.map((k) => {
                     const r = c.fields[k];
                     const pages = pagesOf(r);
                     return (
@@ -541,7 +566,7 @@ export default function WhatsappEntryPage() {
                     );
                   })}
 
-                  {useListen && (
+                  {useListen && !c.absent && (
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">السماع</span>
                       {([true, false] as const).map((v) => (

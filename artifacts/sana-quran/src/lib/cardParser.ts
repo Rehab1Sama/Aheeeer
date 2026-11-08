@@ -29,6 +29,10 @@ export interface ParsedCard {
   memorize: ParsedField;
   near: ParsedField;
   far: ParsedField;
+  /** مراجعة واحدة (رسائل الأطفال) */
+  review?: ParsedField;
+  /** مكتوب في الرسالة أنها/أنه غائب */
+  absent?: boolean;
   listened: boolean | null;
   /** تاريخ إرسال الرسالة كما في واتساب (يوم/شهر) إن وُجد */
   sentDay: number | null;
