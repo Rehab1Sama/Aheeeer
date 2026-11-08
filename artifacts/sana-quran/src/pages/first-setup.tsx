@@ -146,7 +146,7 @@ export default function FirstSetupPage() {
                   }`}>
                     {done ? <CheckCircle className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                   </div>
-                  <span className={`text-[10px] font-semibold hidden sm:block ${active ? "text-primary" : "text-muted-foreground"}`}>
+                  <span className={`text-[11px] font-semibold hidden sm:block ${active ? "text-primary" : "text-muted-foreground"}`}>
                     {s.label}
                   </span>
                   {i < STEPS.length - 1 && (
@@ -204,12 +204,12 @@ export default function FirstSetupPage() {
                       <div key={t.id} className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2.5">
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm">{t.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground">
                             {ENTRY_TYPES.find(e => e.key === t.dataEntryType)?.label}
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <label className="text-[10px] text-muted-foreground">حلقات:</label>
+                          <label className="text-[11px] text-muted-foreground">حلقات:</label>
                           <input
                             type="number" min={0} max={50} value={t.circleCount}
                             onChange={e => setTracks(prev => prev.map(tr => tr.id === t.id ? { ...tr, circleCount: parseInt(e.target.value) || 0 } : tr))}
@@ -261,7 +261,7 @@ export default function FirstSetupPage() {
                     }`}>
                     <Globe className={`w-6 h-6 ${regOpen ? "text-emerald-600" : "text-muted-foreground"}`} />
                     <span className={`text-sm font-bold ${regOpen ? "text-emerald-700" : ""}`}>مفتوح</span>
-                    <span className="text-[10px] text-muted-foreground text-center">الطالبات يمكنهن التسجيل الآن</span>
+                    <span className="text-[11px] text-muted-foreground text-center">الطالبات يمكنهن التسجيل الآن</span>
                   </button>
                   <button onClick={() => setRegOpen(false)}
                     className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
@@ -269,7 +269,7 @@ export default function FirstSetupPage() {
                     }`}>
                     <Lock className={`w-6 h-6 ${!regOpen ? "text-primary" : "text-muted-foreground"}`} />
                     <span className={`text-sm font-bold ${!regOpen ? "text-primary" : ""}`}>مغلق</span>
-                    <span className="text-[10px] text-muted-foreground text-center">أفتحيه لاحقاً من الإعدادات</span>
+                    <span className="text-[11px] text-muted-foreground text-center">أفتحيه لاحقاً من الإعدادات</span>
                   </button>
                 </div>
                 {regOpen && (
@@ -280,7 +280,7 @@ export default function FirstSetupPage() {
                     </Label>
                     <input type="date" value={regDeadline} onChange={e => setRegDeadline(e.target.value)}
                       className="w-full border border-input rounded-xl px-3 py-2 text-sm bg-background h-10" />
-                    <p className="text-[10px] text-muted-foreground">سيُغلق التسجيل تلقائياً بعد هذا التاريخ</p>
+                    <p className="text-[11px] text-muted-foreground">سيُغلق التسجيل تلقائياً بعد هذا التاريخ</p>
                   </div>
                 )}
               </div>

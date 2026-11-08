@@ -183,11 +183,11 @@ export default function DeputyBoardPage() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Clock className="w-3 h-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">{new Date(task.createdAt).toLocaleDateString("ar-SA")}</span>
-              <Badge className={`text-[10px] py-0 h-4 border ${TASK_TYPE_COLORS[task.taskType] ?? TASK_TYPE_COLORS.general}`}>
+              <Badge className={`text-[11px] py-0 h-4 border ${TASK_TYPE_COLORS[task.taskType] ?? TASK_TYPE_COLORS.general}`}>
                 {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
               </Badge>
               {task.taskType === "qa" && (
-                <Badge className="text-[10px] py-0 h-4 bg-teal-50 text-teal-600 border-teal-200">
+                <Badge className="text-[11px] py-0 h-4 bg-teal-50 text-teal-600 border-teal-200">
                   {ANSWER_TYPE_LABELS[task.answerType] ?? task.answerType}
                 </Badge>
               )}
@@ -452,7 +452,7 @@ export default function DeputyBoardPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-medium text-sm">{visit.circleName}</p>
-                        {visit.circleTrack && <p className="text-[11px] text-muted-foreground">{visit.circleTrack}</p>}
+                        {visit.circleTrack && <p className="text-[12px] text-muted-foreground">{visit.circleTrack}</p>}
                         {visit.notes && <p className="text-xs text-muted-foreground mt-1 italic">{visit.notes}</p>}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">{formatDateAr(visit.visitDate)}</span>

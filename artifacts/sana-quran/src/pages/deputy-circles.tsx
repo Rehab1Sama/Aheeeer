@@ -255,7 +255,7 @@ export default function DeputyCirclesPage() {
             </div>
           )}
           {visited && (
-            <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] shrink-0">زيارة</Badge>
+            <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[11px] shrink-0">زيارة</Badge>
           )}
           <button
             onClick={() => setExpandedNotes(prev => {

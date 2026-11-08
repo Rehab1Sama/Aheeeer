@@ -278,7 +278,7 @@ function TeacherPerformanceCard({ periodFrom, periodTo }: { periodFrom?: string;
           </table>
         </div>
         <div className="px-3 py-2 bg-muted/30 border-t border-border/50">
-          <p className="text-[10px] text-muted-foreground">نقاط الأداء = حضور الطالبات (40%) + معدل الحفظ (40%) − التقصير (20%) − غياب المعلمة</p>
+          <p className="text-[11px] text-muted-foreground">نقاط الأداء = حضور الطالبات (40%) + معدل الحفظ (40%) − التقصير (20%) − غياب المعلمة</p>
         </div>
       </CardContent>
     </Card>
@@ -345,9 +345,9 @@ function WeeklyComparisonCard({ data }: { data: WeeklyComparison }) {
                 </div>
                 <p className={`text-xl font-bold ${m.color}`}>{m.unit ? formatPages(m.curr) : m.curr}</p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-[10px] text-muted-foreground">قبله: {m.unit ? formatPages(m.prev) : m.prev}</span>
+                  <span className="text-[11px] text-muted-foreground">قبله: {m.unit ? formatPages(m.prev) : m.prev}</span>
                   {ch !== null && ch !== 0 && (
-                    <span className={`text-[10px] font-bold ${ch > 0 ? (m.positive === "up" ? "text-emerald-600" : "text-rose-500") : (m.positive === "up" ? "text-rose-500" : "text-emerald-600")}`}>
+                    <span className={`text-[11px] font-bold ${ch > 0 ? (m.positive === "up" ? "text-emerald-600" : "text-rose-500") : (m.positive === "up" ? "text-rose-500" : "text-emerald-600")}`}>
                       {ch > 0 ? "+" : ""}{ch}%
                     </span>
                   )}
@@ -793,7 +793,7 @@ function StudentStats({ userId }: { userId: number }) {
               className="h-full rounded-full transition-all duration-500"
               style={{
                 width: `${progressPct}%`,
-                background: "linear-gradient(90deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)",
+                background: "linear-gradient(90deg, #1A2260 0%, #2B3784 100%)",
               }}
             />
           </div>

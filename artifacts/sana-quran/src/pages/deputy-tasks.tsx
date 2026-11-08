@@ -300,7 +300,7 @@ export default function DeputyTasksPage() {
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Clock className="w-3 h-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">{new Date(task.createdAt).toLocaleDateString("ar-SA")}</span>
-              <Badge className={`text-[10px] py-0 h-4 border flex items-center gap-0.5 ${TASK_TYPE_COLORS[task.taskType] ?? TASK_TYPE_COLORS.general}`}>
+              <Badge className={`text-[11px] py-0 h-4 border flex items-center gap-0.5 ${TASK_TYPE_COLORS[task.taskType] ?? TASK_TYPE_COLORS.general}`}>
                 <TypeIcon className="w-2.5 h-2.5" />
                 {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
               </Badge>

@@ -199,7 +199,7 @@ export default function RegistrationStudentsPage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold">{student.fullName}</span>
                             {isSelected && hasTarget && (
-                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5">جاهزة للنقل ✓</Badge>
+                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5">جاهزة للنقل ✓</Badge>
                             )}
                           </div>
                         </td>

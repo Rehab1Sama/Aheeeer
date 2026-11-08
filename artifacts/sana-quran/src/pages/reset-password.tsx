@@ -52,8 +52,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ background: "linear-gradient(135deg, hsl(180, 20%, 96%) 0%, hsl(177, 40%, 93%) 100%)" }}
+      className="min-h-screen flex flex-col items-center justify-center p-4 sana-main-background"
       dir="rtl"
     >
       <div className="w-full max-w-sm">
@@ -79,7 +78,7 @@ export default function ResetPasswordPage() {
                 <Link href="/login">
                   <Button
                     className="w-full font-bold"
-                    style={{ background: "linear-gradient(135deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)" }}
+                    style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}
                   >
                     تسجيل الدخول
                   </Button>
@@ -152,7 +151,7 @@ export default function ResetPasswordPage() {
                   type="submit"
                   className="w-full h-11 font-bold gap-2"
                   disabled={state === "loading"}
-                  style={{ background: "linear-gradient(135deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)" }}
+                  style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}
                 >
                   {state === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
                   {state === "loading" ? "جاري الحفظ..." : "حفظ كلمة المرور الجديدة"}

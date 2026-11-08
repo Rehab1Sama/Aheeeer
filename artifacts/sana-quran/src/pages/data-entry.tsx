@@ -589,12 +589,12 @@ function SurahSection({
           <BookOpen className="w-4 h-4" />
           {title}
           {autoSuggested && !locked && (
-            <span className="text-[10px] font-normal bg-white/60 text-muted-foreground px-1.5 py-0.5 rounded-full border border-border/40">
+            <span className="text-[11px] font-normal bg-white/60 text-muted-foreground px-1.5 py-0.5 rounded-full border border-border/40">
               مقترح ✦
             </span>
           )}
           {locked && (
-            <span className="text-[10px] font-semibold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="text-[11px] font-semibold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1">
               <XCircle className="w-3 h-3" /> لم تراجع
             </span>
           )}
@@ -1828,19 +1828,19 @@ export default function DataEntryPage() {
                           <p className="font-semibold text-sm">{student.studentName}</p>
                           {hasRecord && (
                             recordForEdit?.isAbsent ? (
-                              <Badge className="bg-rose-100 text-rose-700 border-0 text-[10px] px-1.5 py-0">غائبة</Badge>
+                              <Badge className="bg-rose-100 text-rose-700 border-0 text-[11px] px-1.5 py-0">غائبة</Badge>
                             ) : isShortcomingRecord ? (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5 py-0">
+                              <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] px-1.5 py-0">
                                 ⚠ {formatPages(recordForEdit?.reviewPages ?? 0)} وجه · تقصير
                               </Badge>
                             ) : (
-                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">
+                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">
                                 ✓ {formatPages(recordForEdit?.reviewPages ?? 0)} وجه
                               </Badge>
                             )
                           )}
                           {isOnLeave && !hasRecord && (
-                            <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px] px-1.5 py-0">إجازة</Badge>
+                            <Badge className="bg-slate-100 text-slate-500 border-0 text-[11px] px-1.5 py-0">إجازة</Badge>
                           )}
                         </div>
                         {!hasRecord && !isOnLeave && (
@@ -1949,12 +1949,12 @@ export default function DataEntryPage() {
                         <div className="flex items-center justify-between">
                           <p className="font-semibold text-sm">{student.studentName}</p>
                           {student.hasRecord && (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">✓ أُدخل هذا الأسبوع</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">✓ أُدخل هذا الأسبوع</Badge>
                           )}
                         </div>
 
                         <div>
-                          <Label className="text-[11px] text-muted-foreground">عدد أيام الغياب هذا الأسبوع</Label>
+                          <Label className="text-[12px] text-muted-foreground">عدد أيام الغياب هذا الأسبوع</Label>
                           <select
                             className="mt-1 w-full border border-input rounded-lg px-2.5 py-2 text-sm bg-background text-right"
                             value={row.absenceCount}
@@ -1969,7 +1969,7 @@ export default function DataEntryPage() {
                         {!fullAbsence && (
                           <>
                             <div>
-                              <Label className="text-[11px] text-muted-foreground">نصاب الحفظ (من/إلى)</Label>
+                              <Label className="text-[12px] text-muted-foreground">نصاب الحفظ (من/إلى)</Label>
                               <div className="grid grid-cols-2 gap-2 mt-1">
                                 <div className="flex gap-1.5">
                                   <select
@@ -2011,7 +2011,7 @@ export default function DataEntryPage() {
                             </div>
 
                             <div>
-                              <Label className="text-[11px] text-muted-foreground">نصاب المراجعة (من/إلى)</Label>
+                              <Label className="text-[12px] text-muted-foreground">نصاب المراجعة (من/إلى)</Label>
                               <div className="grid grid-cols-2 gap-2 mt-1">
                                 <div className="flex gap-1.5">
                                   <select
@@ -2175,17 +2175,17 @@ export default function DataEntryPage() {
                     const planned = dayEntry?.pages ?? 0;
                     if (todayDay > 0 && todayDay <= totalDays && planned > 0) {
                       if (recordForEdit?.isAbsent) {
-                        planBadge = <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px] px-1.5 py-0">غائبة</Badge>;
+                        planBadge = <Badge className="bg-gray-100 text-gray-500 border-0 text-[11px] px-1.5 py-0">غائبة</Badge>;
                       } else if (recordForEdit && !recordForEdit.isAbsent) {
                         const entered = studentPlan.planType === "fixation"
                           ? (recordForEdit.reviewPages ?? recordForEdit.reviewFarPages ?? 0)
                           : (recordForEdit.reviewFarPages ?? 0);
                         if (entered >= planned * 1.05) {
-                          planBadge = <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px] px-1.5 py-0">↑ تجاوزت</Badge>;
+                          planBadge = <Badge className="bg-blue-100 text-blue-700 border-0 text-[11px] px-1.5 py-0">↑ تجاوزت</Badge>;
                         } else if (entered >= planned * 0.95) {
-                          planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">✓ نصاب الخطة</Badge>;
+                          planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">✓ نصاب الخطة</Badge>;
                         } else if (entered > 0) {
-                          planBadge = <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5 py-0">⚠ أقل من الخطة</Badge>;
+                          planBadge = <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] px-1.5 py-0">⚠ أقل من الخطة</Badge>;
                         }
                       }
                     }
@@ -2206,12 +2206,12 @@ export default function DataEntryPage() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-semibold text-sm">{student.studentName}</p>
                           {hasRecord && (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">
                               ✓ تم الإدخال
                             </Badge>
                           )}
                           {isOnLeave && (
-                            <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px] px-1.5 py-0">
+                            <Badge className="bg-slate-100 text-slate-500 border-0 text-[11px] px-1.5 py-0">
                               إجازة
                             </Badge>
                           )}
@@ -2832,7 +2832,7 @@ export default function DataEntryPage() {
             {/* Archived results */}
             {globalArchiveResults.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold text-muted-foreground px-1">مؤرشفات</p>
+                <p className="text-[12px] font-semibold text-muted-foreground px-1">مؤرشفات</p>
                 {globalArchiveResults.map((s: any) => (
                   <Card key={`arch-${s.studentId}-${s.circleId ?? "none"}`} className="border-0 shadow-sm border-r-2 border-r-rose-300">
                     <CardContent className="py-3 px-4">
@@ -2873,7 +2873,7 @@ export default function DataEntryPage() {
             {/* Unassigned / registration results */}
             {globalUnassignedResults.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold text-muted-foreground px-1">في التسجيل أو بدون حلقة</p>
+                <p className="text-[12px] font-semibold text-muted-foreground px-1">في التسجيل أو بدون حلقة</p>
                 {globalUnassignedResults.map((s: any) => (
                   <Card key={`unassigned-${s.studentId}`} className="border-0 shadow-sm border-r-2 border-r-amber-300">
                     <CardContent className="py-3 px-4">

@@ -153,11 +153,11 @@ export default function UnlinkedStaffPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-semibold text-sm">{user.name}</p>
-                              <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 ${roleBadgeClass(user.role)}`}>
+                              <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${roleBadgeClass(user.role)}`}>
                                 {roleLabel(user.role)}
                               </span>
                               {user.track && (
-                                <span className="text-[10px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 border border-slate-200">
+                                <span className="text-[11px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 border border-slate-200">
                                   {user.track}
                                 </span>
                               )}

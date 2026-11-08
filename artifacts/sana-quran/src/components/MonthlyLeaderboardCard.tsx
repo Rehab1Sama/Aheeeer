@@ -75,7 +75,7 @@ function LeaderboardWindowSettings({ current, onSaved }: { current: LeaderboardD
           <Settings2 className="w-3.5 h-3.5" /> تحكم بوقت ظهور لوحة الصدارة
         </button>
         {current?.windowFrom && current?.windowTo && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[12px] text-muted-foreground">
             الفترة المحددة حاليًا: {formatDateShort(current.windowFrom)} - {formatDateShort(current.windowTo)}
             {!current.visible && " (خارج الفترة الآن، اللوحة مخفية)"}
           </p>

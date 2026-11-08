@@ -335,7 +335,7 @@ export default function MyProgressPage() {
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${progressPct}%`,
-                    background: "linear-gradient(90deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)",
+                    background: "linear-gradient(90deg, #1A2260 0%, #2B3784 100%)",
                   }}
                 />
               </div>

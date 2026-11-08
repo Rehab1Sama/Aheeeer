@@ -238,20 +238,20 @@ function PlanBadge({ plan, trackType }: { plan: PlanSummary; trackType: string }
   const { currentDay, totalDays, isCompleted, notStarted } = getPlanProgress(plan, trackType);
   if (isCompleted) {
     return (
-      <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 flex items-center gap-1 whitespace-nowrap">
+      <span className="text-[11px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 flex items-center gap-1 whitespace-nowrap">
         <CheckCircle2 className="w-3 h-3" /> اكتملت
       </span>
     );
   }
   if (notStarted) {
     return (
-      <span className="text-[10px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 whitespace-nowrap">
+      <span className="text-[11px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 whitespace-nowrap">
         لم تبدأ بعد
       </span>
     );
   }
   return (
-    <span className="text-[10px] bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 whitespace-nowrap">
+    <span className="text-[11px] bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 whitespace-nowrap">
       يوم {currentDay} / {totalDays}
     </span>
   );
@@ -307,10 +307,10 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
                   }
                 >
                   <td className="py-1 px-2 text-center text-muted-foreground font-mono">{day.dayNumber}</td>
-                  <td className="py-1 px-2 text-muted-foreground text-[10px]">
+                  <td className="py-1 px-2 text-muted-foreground text-[11px]">
                     {dateStr ? formatArDate(dateStr) : "—"}
                   </td>
-                  <td className="py-1 px-2 text-[10px]">
+                  <td className="py-1 px-2 text-[11px]">
                     {day.surahStart
                       ? formatDayRange(day)
                       : computedRanges?.[dayIndex]?.map((segment: DayRangeSegment) =>
@@ -324,7 +324,7 @@ function FullPlanTable({ plan, trackType }: { plan: PlanSummary; trackType: stri
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
         <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#fde8e8" }} />
         <span>لم تُدخل المشرفة الأنصبة</span>
       </div>
@@ -346,7 +346,7 @@ function StudentPlanRow({ student, trackType }: { student: StudentRow; trackType
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-foreground truncate">{student.studentName}</p>
             {student.isNewcomer && (
-              <span className="text-[9px] bg-blue-100 text-blue-600 rounded-full px-1.5 py-0.5 whitespace-nowrap shrink-0">جديدة</span>
+              <span className="text-[11px] bg-blue-100 text-blue-600 rounded-full px-1.5 py-0.5 whitespace-nowrap shrink-0">جديدة</span>
             )}
           </div>
           {student.hasPlan && student.plan && quotaLabel && (
@@ -361,7 +361,7 @@ function StudentPlanRow({ student, trackType }: { student: StudentRow; trackType
             <>
               {student.plan.isAbsentToday && (
                 <span
-                  className="text-[10px] rounded-full px-2 py-0.5 font-semibold whitespace-nowrap"
+                  className="text-[11px] rounded-full px-2 py-0.5 font-semibold whitespace-nowrap"
                   style={{ background: ABSENT_TODAY_COLOR, color: ABSENT_TODAY_TEXT_COLOR }}
                 >
                   {ABSENT_TODAY_LABEL}
@@ -369,7 +369,7 @@ function StudentPlanRow({ student, trackType }: { student: StudentRow; trackType
               )}
               {student.plan.status && (
                 <span
-                  className="text-[10px] rounded-full px-2 py-0.5 font-semibold whitespace-nowrap"
+                  className="text-[11px] rounded-full px-2 py-0.5 font-semibold whitespace-nowrap"
                   style={{ background: STATUS_COLORS[student.plan.status], color: STATUS_TEXT_COLORS[student.plan.status] }}
                 >
                   {STATUS_LABELS[student.plan.status]}
@@ -387,7 +387,7 @@ function StudentPlanRow({ student, trackType }: { student: StudentRow; trackType
               )}
             </>
           ) : (
-            <span className="text-[10px] bg-rose-100 text-rose-600 rounded-full px-2 py-0.5 flex items-center gap-1 whitespace-nowrap">
+            <span className="text-[11px] bg-rose-100 text-rose-600 rounded-full px-2 py-0.5 flex items-center gap-1 whitespace-nowrap">
               <XCircle className="w-3 h-3" /> بدون خطة
             </span>
           )}
@@ -415,15 +415,15 @@ function CircleCard({ circle }: { circle: CircleOverview }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <CardTitle className="text-sm font-bold truncate">{circle.circleName}</CardTitle>
-            <Badge variant="outline" className="text-[10px] shrink-0 border-muted-foreground/30 text-muted-foreground">
+            <Badge variant="outline" className="text-[11px] shrink-0 border-muted-foreground/30 text-muted-foreground">
               {circle.trackName}
             </Badge>
           </div>
           <div className="flex items-center gap-2 shrink-0 mr-2">
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-emerald-600 font-semibold">{withPlan.length}</span>
-              <span className="text-[10px] text-muted-foreground">/</span>
-              <span className="text-[10px] text-muted-foreground">{total}</span>
+              <span className="text-[11px] text-emerald-600 font-semibold">{withPlan.length}</span>
+              <span className="text-[11px] text-muted-foreground">/</span>
+              <span className="text-[11px] text-muted-foreground">{total}</span>
             </div>
             <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
@@ -434,7 +434,7 @@ function CircleCard({ circle }: { circle: CircleOverview }) {
                 }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground w-7 text-left">{percentage}%</span>
+            <span className="text-[11px] text-muted-foreground w-7 text-left">{percentage}%</span>
             {expanded
               ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
               : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
@@ -681,7 +681,7 @@ function CycleBanner({
                   style={{ width: `${Math.min(100, (cycleInfo.currentDay / 21) * 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+              <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
                 <span>{formatArDate(cycleInfo.cycleStartDate)}</span>
                 <span>{formatArDate(cycleInfo.cycleEndDate)}</span>
               </div>
@@ -1289,7 +1289,7 @@ export default function ReviewPlansOverviewPage({ userRole }: Props) {
             {delayAlerts.map(a => (
               <span
                 key={`${a.studentId}-${a.circleId}`}
-                className="text-[11px] bg-white border border-rose-200 text-rose-700 rounded-full px-2.5 py-1 whitespace-nowrap"
+                className="text-[12px] bg-white border border-rose-200 text-rose-700 rounded-full px-2.5 py-1 whitespace-nowrap"
               >
                 {a.studentName} · {a.circleName} · {a.unresolvedDelayDays} أيام
               </span>

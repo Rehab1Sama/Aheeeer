@@ -235,7 +235,7 @@ export default function ReportsPage() {
                             متوسط الحفظ
                           </p>
                           <p className="text-lg font-bold text-purple-800">{track.avgMemorizePages}</p>
-                          <p className="text-purple-400 text-[10px]">وجه / يوم</p>
+                          <p className="text-purple-400 text-[11px]">وجه / يوم</p>
                         </div>
                         <div className="bg-amber-50 rounded-xl p-2.5">
                           <p className="text-amber-500 font-semibold mb-0.5 flex items-center gap-1">
@@ -243,7 +243,7 @@ export default function ReportsPage() {
                             متوسط المراجعة
                           </p>
                           <p className="text-lg font-bold text-amber-800">{track.avgTotalReviewPages}</p>
-                          <p className="text-amber-400 text-[10px]">وجه / يوم</p>
+                          <p className="text-amber-400 text-[11px]">وجه / يوم</p>
                         </div>
                       </div>
 

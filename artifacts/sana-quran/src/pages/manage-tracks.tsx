@@ -298,11 +298,11 @@ export default function ManageTracksPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">نوع إدخال البيانات *</Label>
-              <p className="text-[11px] text-muted-foreground">يحدد الحقول التي ستظهر لمدخلة البيانات</p>
+              <p className="text-[12px] text-muted-foreground">يحدد الحقول التي ستظهر لمدخلة البيانات</p>
               <div className="space-y-3">
                 {/* Primary categories */}
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">الفئة الرئيسية</p>
+                  <p className="text-[12px] font-semibold text-muted-foreground mb-1.5">الفئة الرئيسية</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(["girls", "children", "mothers", "recitation", "fixation"] as const).map(type => {
                       const info = DATA_ENTRY_LABELS[type];
@@ -332,7 +332,7 @@ export default function ManageTracksPage() {
                 </div>
                 {/* Advanced variants */}
                 <details className="group">
-                  <summary className="text-[11px] font-semibold text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
+                  <summary className="text-[12px] font-semibold text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
                     ▸ خيارات متقدمة للفتيات (قريبة فقط / بعيدة فقط / بلا مراجعة)
                   </summary>
                   <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
@@ -437,7 +437,7 @@ export default function ManageTracksPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-base font-bold text-foreground">{track.name}</span>
-                            <Badge className={`text-[10px] border-0 px-1.5 ${info.color}`}>
+                            <Badge className={`text-[11px] border-0 px-1.5 ${info.color}`}>
                               {info.label}
                             </Badge>
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -585,16 +585,16 @@ export default function ManageTracksPage() {
                                   <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                   <span className="text-sm font-medium">{circle.name}</span>
                                   {(circle as any).studentCount != null && (
-                                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                    <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
                                       <Users className="w-2.5 h-2.5" />
                                       {(circle as any).studentCount}
                                     </span>
                                   )}
                                   {(circle as any).meetingTime && (
-                                    <span className="text-[10px] text-muted-foreground bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{(circle as any).meetingTime}</span>
+                                    <span className="text-[11px] text-muted-foreground bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{(circle as any).meetingTime}</span>
                                   )}
                                   {(circle as any).newStudentCapacity != null && (
-                                    <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                    <span className="text-[11px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                                       <UserPlus className="w-2.5 h-2.5" />
                                       {(circle as any).newStudentCapacity}
                                     </span>
@@ -604,7 +604,7 @@ export default function ManageTracksPage() {
                                       href={(circle as any).whatsappLink}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full hover:bg-green-100 flex items-center gap-0.5"
+                                      className="text-[11px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full hover:bg-green-100 flex items-center gap-0.5"
                                       onClick={e => e.stopPropagation()}
                                     >
                                       <Link2 className="w-2.5 h-2.5" />

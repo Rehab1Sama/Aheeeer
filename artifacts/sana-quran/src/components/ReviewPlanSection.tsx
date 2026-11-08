@@ -671,19 +671,19 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
       <div className="grid grid-cols-2 gap-2">
         {/* Start date */}
         <div className="bg-muted/40 rounded-xl p-2.5">
-          <p className="text-[10px] text-muted-foreground mb-0.5">بداية الخطة</p>
+          <p className="text-[11px] text-muted-foreground mb-0.5">بداية الخطة</p>
           <p className="font-semibold text-xs">{formatArDate(plan.startDate)}</p>
         </div>
 
         {/* End date — cancel button for students lives here */}
         <div className="bg-muted/40 rounded-xl p-2.5 relative">
-          <p className="text-[10px] text-muted-foreground mb-0.5">نهاية الخطة</p>
+          <p className="text-[11px] text-muted-foreground mb-0.5">نهاية الخطة</p>
           <div className="flex items-center justify-between gap-1">
             <p className="font-semibold text-xs">{formatArDate(endDate)}</p>
             {canCancel && onCancel && (
               <button
                 onClick={onCancel}
-                className="flex items-center gap-0.5 text-[10px] text-rose-500 hover:text-rose-700 transition-colors shrink-0"
+                className="flex items-center gap-0.5 text-[11px] text-rose-500 hover:text-rose-700 transition-colors shrink-0"
                 title="إلغاء الخطة"
               >
                 <Trash2 className="w-3 h-3" />
@@ -695,21 +695,21 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
 
         {quotaLabel && (
           <div className="bg-muted/40 rounded-xl p-2.5">
-            <p className="text-[10px] text-muted-foreground mb-0.5">النصاب</p>
+            <p className="text-[11px] text-muted-foreground mb-0.5">النصاب</p>
             <p className="font-semibold text-xs">{quotaLabel}</p>
           </div>
         )}
         {totalLabel && (
           <div className="bg-muted/40 rounded-xl p-2.5">
-            <p className="text-[10px] text-muted-foreground mb-0.5">الكمية</p>
+            <p className="text-[11px] text-muted-foreground mb-0.5">الكمية</p>
             <p className="font-semibold text-xs">{totalLabel}</p>
           </div>
         )}
         {sourceSummary && (
           <div className="bg-violet-50/70 border border-violet-100 rounded-xl p-2.5 col-span-2">
-            <p className="text-[10px] text-violet-700 mb-0.5">مصادر الخطة عند إنشائها</p>
+            <p className="text-[11px] text-violet-700 mb-0.5">مصادر الخطة عند إنشائها</p>
             <p className="font-semibold text-xs text-violet-950">{sourceSummary}</p>
-            <p className="text-[10px] text-violet-700/80 mt-1">الحفظ الجديد يدخل تلقائيًا في الدورة التالية.</p>
+            <p className="text-[11px] text-violet-700/80 mt-1">الحفظ الجديد يدخل تلقائيًا في الدورة التالية.</p>
           </div>
         )}
       </div>
@@ -726,7 +726,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
         </div>
       ) : (
         <div className="rounded-xl p-3" style={{ background: plan.themeColor + "99" }}>
-          <p className="text-[10px] text-muted-foreground mb-1">اليوم الحالي</p>
+          <p className="text-[11px] text-muted-foreground mb-1">اليوم الحالي</p>
           <p className="font-bold text-2xl">{currentDay} <span className="text-base font-normal text-muted-foreground">/ {totalDays}</span></p>
           {todayEntry && (
             <div className="mt-1.5 text-xs space-y-0.5">
@@ -795,8 +795,8 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
                     <tr key={day.dayNumber} className={`border-t border-border/20 ${isToday ? "font-semibold" : ""}`}
                       style={rowStyle}>
                       <td className="py-1.5 px-2 text-center text-muted-foreground font-mono">{day.dayNumber}</td>
-                      <td className="py-1.5 px-2 text-muted-foreground text-[11px]">{dateStr ? formatArDate(dateStr) : "—"}</td>
-                      <td className="py-1.5 px-2 text-[11px]">
+                      <td className="py-1.5 px-2 text-muted-foreground text-[12px]">{dateStr ? formatArDate(dateStr) : "—"}</td>
+                      <td className="py-1.5 px-2 text-[12px]">
                         {day.surahStart
                           ? formatDayRange(day)
                           : (cr && cr.length > 0)
@@ -806,7 +806,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
                       <td className="py-1.5 px-2 text-center">
                         {day.pages ?? "—"}
                         {rec && !rec.isAbsent && doneToday != null && (
-                          <span className="block text-[10px] text-muted-foreground leading-tight">
+                          <span className="block text-[11px] text-muted-foreground leading-tight">
                             {doneToday}✓
                           </span>
                         )}
@@ -822,7 +822,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
               {expanded ? "إخفاء الأيام" : `عرض جميع الأيام (${plan.days.length})`}
             </button>
           )}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
             {([
               { color: "#dcfce7", label: "منتظمة" },
               { color: "#dbeafe", label: "متقدمة" },
@@ -906,9 +906,9 @@ function JuzGrid({ selectedJuz, onChange }: {
             : "اختاري الأجزاء المراد مراجعتها"}
         </p>
         <div className="flex gap-1.5">
-          <button onClick={selectAll} className="text-[10px] text-primary underline">الكل</button>
-          <span className="text-muted-foreground text-[10px]">|</span>
-          <button onClick={clearAll} className="text-[10px] text-muted-foreground underline">مسح</button>
+          <button onClick={selectAll} className="text-[11px] text-primary underline">الكل</button>
+          <span className="text-muted-foreground text-[11px]">|</span>
+          <button onClick={clearAll} className="text-[11px] text-muted-foreground underline">مسح</button>
         </div>
       </div>
       <div className="grid grid-cols-6 gap-1.5">
@@ -972,7 +972,7 @@ function SurahRangesEditor({ ranges, onChange }: {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-[10px] text-muted-foreground">من سورة</Label>
+                <Label className="text-[11px] text-muted-foreground">من سورة</Label>
                 <select
                   className="w-full border rounded-lg p-1.5 text-xs mt-0.5 bg-background"
                   value={range.surahStart}
@@ -982,7 +982,7 @@ function SurahRangesEditor({ ranges, onChange }: {
                 </select>
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground">من آية</Label>
+                <Label className="text-[11px] text-muted-foreground">من آية</Label>
                 <AyahSelect
                   surahName={range.surahStart}
                   value={range.ayahStart}
@@ -991,7 +991,7 @@ function SurahRangesEditor({ ranges, onChange }: {
                 />
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground">إلى سورة</Label>
+                <Label className="text-[11px] text-muted-foreground">إلى سورة</Label>
                 <select
                   className="w-full border rounded-lg p-1.5 text-xs mt-0.5 bg-background"
                   value={range.surahEnd}
@@ -1004,7 +1004,7 @@ function SurahRangesEditor({ ranges, onChange }: {
                 </select>
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground">إلى آية</Label>
+                <Label className="text-[11px] text-muted-foreground">إلى آية</Label>
                 <AyahSelect
                   surahName={range.surahEnd}
                   value={range.ayahEnd}
@@ -1631,7 +1631,7 @@ function StepGirlsDays({ days, updateDay, isAuto, totalPages, totalDays, onRegen
       <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
         {days.map((day, idx) => (
           <div key={day.dayNumber} className="bg-muted/30 rounded-xl p-2">
-            <p className="text-[11px] font-mono text-muted-foreground mb-1.5">يوم {day.dayNumber}</p>
+            <p className="text-[12px] font-mono text-muted-foreground mb-1.5">يوم {day.dayNumber}</p>
             <div className="grid grid-cols-2 gap-1.5">
               <div>
                 <select className="border rounded p-1 text-xs bg-background w-full" value={day.surahStart ?? ""}
@@ -1704,7 +1704,7 @@ function StepFixationWeeks({ days, updateDay, quantity, startDate, isAuto }: {
                   <div key={day.dayNumber} className="bg-muted/30 rounded-xl p-2.5">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-semibold">{dayNames[i]}</span>
-                      {dateStr && <span className="text-[10px] text-muted-foreground">{formatArDate(dateStr)}</span>}
+                      {dateStr && <span className="text-[11px] text-muted-foreground">{formatArDate(dateStr)}</span>}
                     </div>
                     {isAuto ? (
                       <div className="rounded-lg bg-background border border-border/50 p-2 text-xs">

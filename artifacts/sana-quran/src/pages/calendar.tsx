@@ -147,10 +147,10 @@ function EventItem({ event, isLeader, onEdit, onDelete }: EventItemProps) {
             {event.title}
           </span>
           {isToday && (
-            <Badge className="bg-primary/10 text-primary border-0 text-[10px] px-1.5 py-0 font-bold">اليوم ✦</Badge>
+            <Badge className="bg-primary/10 text-primary border-0 text-[11px] px-1.5 py-0 font-bold">اليوم ✦</Badge>
           )}
           {isSoon && !isToday && (
-            <Badge className={`${typeInfo.bg} ${typeInfo.text} border-0 text-[10px] px-1.5 py-0`}>
+            <Badge className={`${typeInfo.bg} ${typeInfo.text} border-0 text-[11px] px-1.5 py-0`}>
               {daysLabel(days)}
             </Badge>
           )}
@@ -163,11 +163,11 @@ function EventItem({ event, isLeader, onEdit, onDelete }: EventItemProps) {
           <p className="text-xs text-muted-foreground/80 mt-1">{event.description}</p>
         )}
         <div className="flex items-center gap-2 mt-1.5">
-          <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${typeInfo.bg} ${typeInfo.text}`}>
+          <span className={`text-[12px] px-2 py-0.5 rounded-full font-medium ${typeInfo.bg} ${typeInfo.text}`}>
             {getTypeInfo(event.eventType).label}
           </span>
           {!isPast && !isToday && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <span className="text-[12px] text-muted-foreground flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {daysLabel(days)}
             </span>
@@ -326,7 +326,7 @@ export default function CalendarPage({ userRole, publicView = false }: CalendarP
         <Card className={`border-2 ${nextTypeInfo?.border} shadow-sm overflow-hidden`}>
           <CardContent className="p-0">
             <div className={`px-4 py-3 ${nextTypeInfo?.bg}`}>
-              <p className="text-[11px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+              <p className="text-[12px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
                 المناسبة القادمة
               </p>
               <div className="flex items-start justify-between gap-3">
@@ -351,7 +351,7 @@ export default function CalendarPage({ userRole, publicView = false }: CalendarP
                   ) : (
                     <>
                       <p className={`text-3xl font-black leading-none ${nextTypeInfo?.text}`}>{nextDays}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">يوم</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">يوم</p>
                     </>
                   )}
                 </div>
@@ -405,7 +405,7 @@ export default function CalendarPage({ userRole, publicView = false }: CalendarP
               >
                 <div>
                   <p className="font-bold text-base text-[#1A2260]">{semester.title}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-[12px] text-muted-foreground mt-1">
                     {index === 0
                       ? "فصل منتهٍ — اضغطي لعرض التفاصيل"
                       : index === 1
@@ -419,7 +419,7 @@ export default function CalendarPage({ userRole, publicView = false }: CalendarP
               </button>
               {(openSemesters[index] ?? index !== 0) && (
                 <CardContent className="p-0 text-xs">
-                  <div className="grid grid-cols-[1.35fr_1fr_1fr] bg-[#FAFAFD] border-b border-[#C8CDE8]/60 px-3 py-2 text-[11px] font-bold text-[#4A5590]">
+                  <div className="grid grid-cols-[1.35fr_1fr_1fr] bg-[#FAFAFD] border-b border-[#C8CDE8]/60 px-3 py-2 text-[12px] font-bold text-[#4A5590]">
                     <span className="text-[#59658F]">المناسبة</span>
                     <span className="text-center text-[#59658F]">التاريخ الهجري</span>
                     <span className="text-center text-[#59658F]">التاريخ الميلادي</span>

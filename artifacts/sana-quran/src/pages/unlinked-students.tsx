@@ -149,7 +149,7 @@ export default function UnlinkedStudentsPage() {
                             {student.fullName}
                           </button>
                           {student.country && (
-                            <span className="text-[10px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 border border-slate-200">
+                            <span className="text-[11px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 border border-slate-200">
                               {student.country}
                             </span>
                           )}
@@ -162,7 +162,7 @@ export default function UnlinkedStudentsPage() {
                             🎯 تفضل: {student.preferredCircleName}
                           </p>
                         )}
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
                           سجّلت: {new Date(student.createdAt).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}
                         </p>
                       </div>

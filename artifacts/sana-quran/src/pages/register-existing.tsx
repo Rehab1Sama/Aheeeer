@@ -240,8 +240,7 @@ export default function RegisterExistingPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ background: "linear-gradient(135deg, hsl(180, 20%, 96%) 0%, hsl(177, 40%, 93%) 100%)" }}
+      className="min-h-screen flex flex-col sana-main-background"
       dir="rtl"
     >
       <div className="flex-1 flex items-center justify-center p-4">
@@ -453,7 +452,7 @@ export default function RegisterExistingPage() {
                   type="submit"
                   className="w-full h-11 font-bold text-base"
                   disabled={loading}
-                  style={{ background: "linear-gradient(135deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)" }}
+                  style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}
                   data-testid="button-submit"
                 >
                   {loading ? "جاري التسجيل..." : "تسجيل والانضمام لحلقتي"}

@@ -85,7 +85,7 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
         {Icon && <Icon className={`w-5 h-5 mx-auto mb-1.5 ${color ?? "text-primary"}`} />}
         <p className={`text-2xl font-bold ${color ?? "text-foreground"}`}>{value}</p>
         <p className="text-xs text-muted-foreground mt-1 font-medium leading-tight">{label}</p>
-        {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
+        {sub && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -278,7 +278,7 @@ export default function TrackReportPage() {
                 </table>
               </div>
               <div className="px-3 py-2 bg-muted/30 border-t border-border/50">
-                <p className="text-[10px] text-muted-foreground">الأداء = حضور (40%) + معدل الحفظ (40%) − التقصير (20%) − غياب المعلمة</p>
+                <p className="text-[11px] text-muted-foreground">الأداء = حضور (40%) + معدل الحفظ (40%) − التقصير (20%) − غياب المعلمة</p>
               </div>
             </CardContent>
           </Card>
@@ -324,11 +324,11 @@ export default function TrackReportPage() {
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm leading-tight truncate">{h.studentName}</p>
-                        <p className="text-[10px] text-muted-foreground">{h.circleName}</p>
+                        <p className="text-[11px] text-muted-foreground">{h.circleName}</p>
                       </div>
                       <div className="text-left shrink-0">
                         <p className="text-xs font-bold text-teal-700">{formatPages(h.memorizePages)} وجه</p>
-                        <p className="text-[10px] text-muted-foreground">{h.sessions} جلسة</p>
+                        <p className="text-[11px] text-muted-foreground">{h.sessions} جلسة</p>
                       </div>
                     </div>
                   ))}

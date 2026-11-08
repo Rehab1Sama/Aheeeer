@@ -96,7 +96,7 @@ export default function SupervisorHoursPage() {
                   </div>
                   <div className="text-left shrink-0">
                     <p className="text-sm font-bold text-primary">{fmtMinutes(row.totalMinutes)}</p>
-                    <p className="text-[11px] text-muted-foreground">آخر نشاط: {fmtTimeAgo(row.lastHeartbeatAt)}</p>
+                    <p className="text-[12px] text-muted-foreground">آخر نشاط: {fmtTimeAgo(row.lastHeartbeatAt)}</p>
                   </div>
                 </div>
               ))}
@@ -129,7 +129,7 @@ export default function SupervisorHoursPage() {
                     </div>
                     <div className="text-left shrink-0">
                       <p className="text-sm font-bold text-primary">{fmtMinutes(row.totalMinutes)}</p>
-                      <p className="text-[11px] text-muted-foreground">{row.activeDays} يوم نشِط</p>
+                      <p className="text-[12px] text-muted-foreground">{row.activeDays} يوم نشِط</p>
                     </div>
                   </div>
                 </div>

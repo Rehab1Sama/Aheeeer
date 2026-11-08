@@ -200,11 +200,11 @@ function DailyLogSection() {
                             {c.enteredCount}/{c.totalStudents}
                           </span>
                           {c.totalStudents === 0 ? (
-                            <Badge className="bg-gray-100 text-gray-400 border-0 text-[10px]">لا طالبات</Badge>
+                            <Badge className="bg-gray-100 text-gray-400 border-0 text-[11px]">لا طالبات</Badge>
                           ) : c.completed ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px]">مكتملة</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px]">مكتملة</Badge>
                           ) : c.missingCount > 0 ? (
-                            <Badge className="bg-rose-100 text-rose-600 border-0 text-[10px]">
+                            <Badge className="bg-rose-100 text-rose-600 border-0 text-[11px]">
                               ناقص {c.missingCount}
                             </Badge>
                           ) : null}

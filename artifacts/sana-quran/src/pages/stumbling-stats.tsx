@@ -224,7 +224,7 @@ export default function StumblingStatsPage() {
                       setDismissedNotifs(prev => new Set([...prev, ...ids]));
                       for (const n of leaveNotifs) await markNotificationRead((n as any).id);
                     }}
-                    className="text-[11px] text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                    className="text-[12px] text-blue-600 hover:text-blue-800 font-medium transition-colors"
                   >
                     تمييز الكل كمقروء
                   </button>
@@ -234,13 +234,13 @@ export default function StumblingStatsPage() {
                     <div key={n.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-foreground truncate">{n.studentName}</p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[12px] text-muted-foreground">
                           {n.circleName} · {n.track}
                         </p>
                         {n.note && (
-                          <p className="text-[11px] text-blue-700 font-medium mt-0.5">{n.note}</p>
+                          <p className="text-[12px] text-blue-700 font-medium mt-0.5">{n.note}</p>
                         )}
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">{timeAgo(n.createdAt)}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{timeAgo(n.createdAt)}</p>
                       </div>
                       <button
                         onClick={() => dismissNotif(n.id)}
@@ -266,7 +266,7 @@ export default function StumblingStatsPage() {
                   </div>
                   <button
                     onClick={dismissAllNotifs}
-                    className="text-[11px] text-teal-600 hover:text-teal-800 font-medium transition-colors"
+                    className="text-[12px] text-teal-600 hover:text-teal-800 font-medium transition-colors"
                   >
                     تمييز الكل كمقروء
                   </button>
@@ -276,14 +276,14 @@ export default function StumblingStatsPage() {
                     <div key={n.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm text-foreground truncate">{n.studentName}</p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[12px] text-muted-foreground">
                           {n.circleName} · {n.track} ·{" "}
                           <span className="text-teal-600 font-medium">
                             {n.type === "plan_renewed" ? `جددت الدورة #${n.cycleCount}` : "أنشأت خطتها"}
                           </span>
                           {" · "}{n.totalPages} وجه
                         </p>
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">{timeAgo(n.createdAt)}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{timeAgo(n.createdAt)}</p>
                       </div>
                       <button
                         onClick={() => dismissNotif(n.id)}
@@ -357,7 +357,7 @@ export default function StumblingStatsPage() {
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {a.circleName} · {a.track} · {a.totalPages} وجه
                           </p>
-                          <p className="text-[11px] text-emerald-700 mt-1 font-medium">
+                          <p className="text-[12px] text-emerald-700 mt-1 font-medium">
                             أتمّت الدورة — تحتاج لتجديد الخطة
                           </p>
                         </div>

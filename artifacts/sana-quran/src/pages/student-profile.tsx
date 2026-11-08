@@ -108,7 +108,7 @@ function AttendanceHeatmap({ heatmapData }: { heatmapData: Array<{ date: string;
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />حضرت وأنجزت</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 inline-block" />حضرت ناقص</span>
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" />غائبة</span>
@@ -715,7 +715,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                   <div className="flex items-start gap-2">
                     <Mail className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-[11px] text-muted-foreground">البريد الإلكتروني</p>
+                      <p className="text-[12px] text-muted-foreground">البريد الإلكتروني</p>
                       <p className="text-sm font-semibold break-all" dir="ltr">{email}</p>
                     </div>
                   </div>
@@ -724,7 +724,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                   <div className="flex items-start gap-2">
                     <MessageCircle className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-[11px] text-muted-foreground">واتساب</p>
+                      <p className="text-[12px] text-muted-foreground">واتساب</p>
                       <a href={waLink} target="_blank" rel="noopener noreferrer"
                         className="text-sm font-semibold text-emerald-600 hover:underline" dir="ltr">
                         {profile.phone}
@@ -738,19 +738,19 @@ export default function StudentProfilePage({ id }: { id: number }) {
               <div className="grid grid-cols-2 gap-2">
                 {(profile as any).ageRange && (
                   <div className="bg-muted/40 rounded-lg px-3 py-2">
-                    <p className="text-[11px] text-muted-foreground">الفئة العمرية</p>
+                    <p className="text-[12px] text-muted-foreground">الفئة العمرية</p>
                     <p className="text-sm font-semibold">{(profile as any).ageRange}</p>
                   </div>
                 )}
                 {preferredCircle && (
                   <div className="bg-muted/40 rounded-lg px-3 py-2">
-                    <p className="text-[11px] text-muted-foreground">الحلقة المفضلة</p>
+                    <p className="text-[12px] text-muted-foreground">الحلقة المفضلة</p>
                     <p className="text-sm font-semibold">{preferredCircle}</p>
                   </div>
                 )}
                 {track && (
                   <div className="col-span-2 bg-muted/40 rounded-lg px-3 py-2">
-                    <p className="text-[11px] text-muted-foreground">المسار المختار</p>
+                    <p className="text-[12px] text-muted-foreground">المسار المختار</p>
                     <p className="text-sm font-semibold">{track}</p>
                   </div>
                 )}
@@ -764,13 +764,13 @@ export default function StudentProfilePage({ id }: { id: number }) {
                   </p>
                   {(profile as any).memorizeFrom && (
                     <div className="bg-white rounded-lg px-3 py-2 border border-emerald-100">
-                      <p className="text-[11px] text-emerald-600 mb-0.5">تحفظ من</p>
+                      <p className="text-[12px] text-emerald-600 mb-0.5">تحفظ من</p>
                       <p className="text-sm font-bold text-emerald-900">{(profile as any).memorizeFrom}</p>
                     </div>
                   )}
                   {quranFields.map(([key, val]) => (
                     <div key={key} className="bg-white rounded-lg px-3 py-2 border border-emerald-100">
-                      <p className="text-[11px] text-emerald-600 mb-0.5">{key}</p>
+                      <p className="text-[12px] text-emerald-600 mb-0.5">{key}</p>
                       <p className="text-sm font-bold text-emerald-900 leading-relaxed">{String(val)}</p>
                     </div>
                   ))}
@@ -780,11 +780,11 @@ export default function StudentProfilePage({ id }: { id: number }) {
               {/* Other answers from registration form */}
               {otherFields.length > 0 && (
                 <div className="pt-2 border-t border-border space-y-1.5">
-                  <p className="text-[11px] font-semibold text-muted-foreground">إجابات الاستمارة</p>
+                  <p className="text-[12px] font-semibold text-muted-foreground">إجابات الاستمارة</p>
                   {otherFields.map(([key, val]) => (
                     <div key={key} className="bg-muted/40 rounded-lg px-3 py-2 flex gap-2 flex-wrap">
-                      <span className="text-[11px] text-muted-foreground font-medium">{key}:</span>
-                      <span className="text-[11px] text-foreground break-all">{String(val)}</span>
+                      <span className="text-[12px] text-muted-foreground font-medium">{key}:</span>
+                      <span className="text-[12px] text-foreground break-all">{String(val)}</span>
                     </div>
                   ))}
                 </div>
@@ -819,11 +819,11 @@ export default function StudentProfilePage({ id }: { id: number }) {
             <CardContent className="pt-0 space-y-2.5">
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
-                  <p className="text-[11px] text-emerald-700">رصيد المحفوظات</p>
+                  <p className="text-[12px] text-emerald-700">رصيد المحفوظات</p>
                   <p className="text-base font-bold text-emerald-800">{profile.memorizationCreditPages} صفحة</p>
                 </div>
                 <div className="rounded-lg bg-teal-50 border border-teal-100 px-3 py-2">
-                  <p className="text-[11px] text-teal-700">إجمالي الحفظ المعتمد</p>
+                  <p className="text-[12px] text-teal-700">إجمالي الحفظ المعتمد</p>
                   <p className="text-base font-bold text-teal-800">{profile.totalMemorizePages} صفحة</p>
                 </div>
               </div>
@@ -846,7 +846,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                     <div className="flex flex-wrap gap-1">
                       {Array.from({ length: 30 }, (_, index) => index + 1).map(juz => (
                         <button key={juz} type="button" onClick={() => toggleMemorizationJuz(juz)}
-                          className={`w-8 h-7 rounded-md text-[11px] font-semibold border transition-colors ${
+                          className={`w-8 h-7 rounded-md text-[12px] font-semibold border transition-colors ${
                             memorizationJuzNumbers.includes(juz)
                               ? "bg-emerald-600 border-emerald-600 text-white"
                               : "bg-white border-emerald-200 text-emerald-800 hover:border-emerald-500"
@@ -856,7 +856,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                       ))}
                     </div>
                     {memorizationJuzNumbers.length > 0 && (
-                      <p className="text-[11px] text-emerald-700 mt-1.5">يُحسب الرصيد تلقائيًا من الأجزاء المختارة.</p>
+                      <p className="text-[12px] text-emerald-700 mt-1.5">يُحسب الرصيد تلقائيًا من الأجزاء المختارة.</p>
                     )}
                   </div>
                   <div>
@@ -886,7 +886,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                       <BookOpen className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{memorization.label}</p>
-                        <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                        <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 text-[12px] text-muted-foreground">
                           <span>{memorization.pages} صفحة معتمدة</span>
                           {memorization.juzNumbers.length > 0 && <span>الأجزاء: {memorization.juzNumbers.join("، ")}</span>}
                         </div>
@@ -942,8 +942,8 @@ export default function StudentProfilePage({ id }: { id: number }) {
                         <p className="text-sm font-semibold truncate">{en.circleName}</p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-xs text-muted-foreground">{en.circleTrack}</span>
-                          {en.isArchived && <Badge className="bg-gray-100 text-gray-600 text-[10px] py-0 px-1.5">مؤرشفة</Badge>}
-                          {onEnrollLeave && <Badge className="bg-amber-100 text-amber-700 text-[10px] py-0 px-1.5">إجازة حتى {en.leaveEnd}</Badge>}
+                          {en.isArchived && <Badge className="bg-gray-100 text-gray-600 text-[11px] py-0 px-1.5">مؤرشفة</Badge>}
+                          {onEnrollLeave && <Badge className="bg-amber-100 text-amber-700 text-[11px] py-0 px-1.5">إجازة حتى {en.leaveEnd}</Badge>}
                         </div>
                       </div>
                       {canEdit && !en.isArchived && (
@@ -951,7 +951,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                           {onEnrollLeave ? (
                             <button
                               onClick={() => handleClearPerCircleLeave(en.circleId)}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[11px] font-semibold"
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[12px] font-semibold"
                             >
                               <XCircle className="w-3 h-3" />
                               إلغاء الإجازة
@@ -959,7 +959,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                           ) : (
                             <button
                               onClick={() => { setPerCircleLeaveOpen(en.circleId); setPerCircleLeaveStart(""); setPerCircleLeaveEnd(""); }}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[11px] font-semibold"
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[12px] font-semibold"
                             >
                               <Plane className="w-3 h-3" />
                               إجازة
@@ -967,7 +967,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                           )}
                           <button
                             onClick={() => handleArchiveFromCircle(en.circleId, en.circleName)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-[11px] font-semibold"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-[12px] font-semibold"
                           >
                             <Archive className="w-3 h-3" />
                             إخراج
@@ -979,11 +979,11 @@ export default function StudentProfilePage({ id }: { id: number }) {
                       <div className="mt-2 pt-2 border-t border-amber-100">
                         <div className="grid grid-cols-2 gap-2 mb-2">
                           <div>
-                            <p className="text-[10px] text-muted-foreground mb-1">البداية</p>
+                            <p className="text-[11px] text-muted-foreground mb-1">البداية</p>
                             <Input type="date" value={perCircleLeaveStart} onChange={e => setPerCircleLeaveStart(e.target.value)} className="h-7 text-xs" />
                           </div>
                           <div>
-                            <p className="text-[10px] text-muted-foreground mb-1">النهاية</p>
+                            <p className="text-[11px] text-muted-foreground mb-1">النهاية</p>
                             <Input type="date" value={perCircleLeaveEnd} onChange={e => setPerCircleLeaveEnd(e.target.value)} className="h-7 text-xs" />
                           </div>
                         </div>
@@ -1184,19 +1184,19 @@ export default function StudentProfilePage({ id }: { id: number }) {
               {profile.totalMemorizePages > 0 && (
                 <div className="bg-teal-50 rounded-xl p-2.5 text-center">
                   <p className="text-lg font-bold text-teal-700">{profile.totalMemorizePages}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">صفحات حفظ</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">صفحات حفظ</p>
                 </div>
               )}
               {profile.totalReviewPages > 0 && (
                 <div className="bg-blue-50 rounded-xl p-2.5 text-center">
                   <p className="text-lg font-bold text-blue-700">{profile.totalReviewPages}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">صفحات مراجعة</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">صفحات مراجعة</p>
                 </div>
               )}
               {profile.totalRecitationPages > 0 && (
                 <div className="bg-amber-50 rounded-xl p-2.5 text-center">
                   <p className="text-lg font-bold text-amber-700">{profile.totalRecitationPages}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">صفحات تلاوة</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">صفحات تلاوة</p>
                 </div>
               )}
             </div>
@@ -1215,11 +1215,11 @@ export default function StudentProfilePage({ id }: { id: number }) {
                         {new Date(r.date).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}
                       </span>
                       {r.isAbsent ? (
-                        <Badge className="text-[10px] bg-rose-100 text-rose-600 border-0 px-1.5">غائبة</Badge>
+                        <Badge className="text-[11px] bg-rose-100 text-rose-600 border-0 px-1.5">غائبة</Badge>
                       ) : (
                         <div className="flex flex-wrap gap-1 justify-end">
                           {(r.memorizePages ?? 0) > 0 && (
-                            <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0 px-1.5">
+                            <Badge className="text-[11px] bg-teal-100 text-teal-700 border-0 px-1.5">
                               حفظ {r.memorizePages}ص
                               {r.memorizeSurahStart && r.memorizeSurahEnd && (
                                 <span className="opacity-70 mr-0.5">· {r.memorizeSurahStart}→{r.memorizeSurahEnd}</span>
@@ -1227,27 +1227,27 @@ export default function StudentProfilePage({ id }: { id: number }) {
                             </Badge>
                           )}
                           {(r.reviewNearPages ?? 0) > 0 && (
-                            <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0 px-1.5">
+                            <Badge className="text-[11px] bg-blue-100 text-blue-700 border-0 px-1.5">
                               مراجعة قريبة {r.reviewNearPages}ص
                             </Badge>
                           )}
                           {(r.reviewFarPages ?? 0) > 0 && (
-                            <Badge className="text-[10px] bg-sky-100 text-sky-700 border-0 px-1.5">
+                            <Badge className="text-[11px] bg-sky-100 text-sky-700 border-0 px-1.5">
                               مراجعة بعيدة {r.reviewFarPages}ص
                             </Badge>
                           )}
                           {(r.reviewPages ?? 0) > 0 && (
-                            <Badge className="text-[10px] bg-teal-100 text-teal-600 border-0 px-1.5">
+                            <Badge className="text-[11px] bg-teal-100 text-teal-600 border-0 px-1.5">
                               مراجعة {r.reviewPages}ص
                             </Badge>
                           )}
                           {(r.recitationPages ?? 0) > 0 && (
-                            <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0 px-1.5">
+                            <Badge className="text-[11px] bg-amber-100 text-amber-700 border-0 px-1.5">
                               تلاوة {r.recitationPages}ص
                             </Badge>
                           )}
                           {!(r.memorizePages ?? 0) && !(r.reviewNearPages ?? 0) && !(r.reviewFarPages ?? 0) && !(r.reviewPages ?? 0) && !(r.recitationPages ?? 0) && (
-                            <span className="text-[10px] text-muted-foreground">حضرت — بلا تسجيل</span>
+                            <span className="text-[11px] text-muted-foreground">حضرت — بلا تسجيل</span>
                           )}
                         </div>
                       )}
@@ -1314,7 +1314,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {reasons.map((reason: string) => (
-                            <span key={reason} className="text-[10px] bg-amber-200 text-amber-800 rounded-full px-2 py-0.5 font-medium">
+                            <span key={reason} className="text-[11px] bg-amber-200 text-amber-800 rounded-full px-2 py-0.5 font-medium">
                               {reason}
                             </span>
                           ))}

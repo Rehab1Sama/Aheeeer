@@ -390,7 +390,7 @@ export default function RegisterPage() {
 
   // ── Wrapper ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(135deg, hsl(180,20%,96%) 0%, hsl(177,40%,93%) 100%)" }} dir="rtl">
+    <div className="min-h-screen flex flex-col sana-main-background" dir="rtl">
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           {/* Header */}
@@ -434,7 +434,7 @@ export default function RegisterPage() {
                   }
                 </p>
                 <Link href="/login">
-                  <button className="w-full py-2.5 rounded-xl font-bold text-white text-sm" style={{ background: "linear-gradient(135deg,hsl(210,51%,21%) 0%,hsl(177,35%,40%) 100%)" }}>
+                  <button className="w-full py-2.5 rounded-xl font-bold text-white text-sm" style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}>
                     تسجيل الدخول
                   </button>
                 </Link>
@@ -490,7 +490,7 @@ export default function RegisterPage() {
                 <div className="space-y-2">
                   <button type="button" onClick={() => setStep(3)}
                     className="w-full py-3 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2"
-                    style={{ background: "linear-gradient(135deg,hsl(210,51%,21%) 0%,hsl(177,35%,40%) 100%)" }}>
+                    style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}>
                     متابعة — التسجيل
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -666,7 +666,7 @@ export default function RegisterPage() {
                   {/* Submit */}
                   <button type="submit" disabled={submitting}
                     className="w-full py-3 rounded-2xl font-bold text-white text-sm mt-2 disabled:opacity-60 transition-opacity"
-                    style={{ background: "linear-gradient(135deg,hsl(210,51%,21%) 0%,hsl(177,35%,40%) 100%)" }}>
+                    style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}>
                     {submitting ? "جاري التسجيل..." : "إرسال التسجيل"}
                   </button>
 

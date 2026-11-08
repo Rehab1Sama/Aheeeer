@@ -202,12 +202,12 @@ export default function ArchivedStudentsPage() {
                         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                           <span className="text-xs text-muted-foreground">{e.circleName}</span>
                           {e.circleTrack && (
-                            <Badge className="text-[10px] bg-teal-100 text-teal-700 border-0 px-1.5 py-0">
+                            <Badge className="text-[11px] bg-teal-100 text-teal-700 border-0 px-1.5 py-0">
                               {e.circleTrack}
                             </Badge>
                           )}
                           {e.archivedAt && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-[11px] text-muted-foreground">
                               • أُرشفت {new Date(e.archivedAt).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}
                             </span>
                           )}

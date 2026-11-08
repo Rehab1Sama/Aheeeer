@@ -12,7 +12,7 @@ import {
   Calendar, ShoppingBag, Award, Shuffle, GraduationCap, AlertTriangle,
   ArrowLeftRight, Loader2, BookOpen, PlaneTakeoff, Bell, CheckCheck,
   TrendingUp, Globe, Moon, Sun, Database, Award as CertificateIcon,
-  UserSearch, Star,
+  UserSearch, Star, ChevronDown, MoreHorizontal,
 } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import logoUrl from "@/assets/logo.jpg";
@@ -81,12 +81,131 @@ function NavLink({ href, label, icon: Icon, badge }: { href: string; label: stri
       <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-white" : "text-white/60 group-hover:text-white/80"}`} />
       <span>{label}</span>
       {badge != null && badge > 0 && (
-        <span className="mr-auto ms-auto bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">
+        <span className="mr-auto ms-auto bg-rose-500 text-white text-[11px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">
           {badge}
         </span>
       )}
       {isActive && !badge && <div className="me-auto w-1.5 h-1.5 rounded-full bg-white/80 me-0 ms-auto"></div>}
     </Link>
+  );
+}
+
+// ── تجميع القائمة الجانبية تحت عناوين (للأدوار ذات القوائم الطويلة) ──
+const NAV_GROUPS: Array<{ title: string; hrefs: string[] }> = [
+  { title: "المتابعة اليومية", hrefs: ["/data-entry", "/whatsapp-entry", "/data-entry-status", "/track-entry-status", "/leader-tasks", "/daily-tasks", "/deputy-board", "/deputy-tasks", "/supervisor-hours"] },
+  { title: "الطالبات والخطط", hrefs: ["/review-plans-overview", "/certificates", "/attendance", "/weekly-absence-groups", "/shortcomings", "/stumbling-stats", "/student-leaves", "/distinguished-students", "/volunteer", "/archived-students", "/unlinked-students"] },
+  { title: "الحلقات والفريق", hrefs: ["/circles", "/deputy-circles", "/manage-tracks", "/accounts", "/circles-staffing", "/teacher-rotation", "/onboard", "/unlinked-staff", "/archived-staff"] },
+  { title: "التسجيل", hrefs: ["/registration", "/pending-registrations", "/registration-students", "/registration-pool-search"] },
+  { title: "التقارير والإحصائيات", hrefs: ["/statistics", "/track-report", "/monthly-report", "/reports"] },
+  { title: "الأوسمة والتواصل", hrefs: ["/badges", "/badge-entitlements", "/messages", "/my-messages", "/calendar", "/store-manage"] },
+  { title: "الإعدادات والبيانات", hrefs: ["/export", "/db-settings", "/white-label"] },
+];
+const GROUPED_ROLES = ["leader", "deputy", "track_supervisor"];
+const isActivePath = (location: string, href: string) => location === href || (href !== "/" && location.startsWith(href));
+
+function readOpenGroups(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem("nav-open-groups") ?? "{}"); } catch { return {}; }
+}
+
+function GroupedNav({ items }: { items: NavItem[] }) {
+  const [location] = useLocation();
+  const [open, setOpen] = useState<Record<string, boolean>>(readOpenGroups);
+  const toggle = (title: string, current: boolean) => {
+    const next = { ...open, [title]: !current };
+    setOpen(next);
+    try { localStorage.setItem("nav-open-groups", JSON.stringify(next)); } catch { /* المتصفح يمنع التخزين */ }
+  };
+  const used = new Set<string>();
+  const sections = NAV_GROUPS.map((g) => {
+    const list = g.hrefs.map((h) => items.find((i) => i.href === h)).filter((i): i is NavItem => !!i);
+    list.forEach((i) => used.add(i.href));
+    return { title: g.title, list };
+  }).filter((g) => g.list.length > 0);
+  const top = items.filter((i) => i.href === "/");
+  top.forEach((i) => used.add(i.href));
+  const rest = items.filter((i) => !used.has(i.href));
+  if (rest.length) sections.push({ title: "أخرى", list: rest });
+  return (
+    <>
+      {top.map((item) => <NavLink key={item.href} {...item} />)}
+      {sections.map((g) => {
+        const hasActive = g.list.some((i) => isActivePath(location, i.href));
+        const badge = g.list.reduce((n, i) => n + (i.badge ?? 0), 0);
+        const isOpen = open[g.title] ?? hasActive;
+        return (
+          <div key={g.title} className="pt-2">
+            <button
+              type="button"
+              onClick={() => toggle(g.title, isOpen)}
+              aria-expanded={isOpen}
+              className="w-full flex items-center justify-between px-4 py-2 rounded-lg text-white/55 hover:text-white/85 text-xs font-bold tracking-wide"
+            >
+              <span className="flex items-center gap-2">
+                {g.title}
+                {!isOpen && badge > 0 && <span className="bg-rose-500 text-white text-[12px] rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{badge}</span>}
+                {!isOpen && hasActive && <span className="w-1.5 h-1.5 rounded-full bg-white/80" />}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+            {isOpen && <div className="space-y-1 mt-0.5">{g.list.map((item) => <NavLink key={item.href} {...item} />)}</div>}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ── الشريط السفلي في الجوال: أهم الصفحات لكل دور + «المزيد» يفتح القائمة ──
+const BOTTOM_PRIORITY: Record<string, string[]> = {
+  leader: ["/", "/data-entry-status", "/review-plans-overview", "/statistics", "/attendance"],
+  deputy: ["/", "/data-entry-status", "/review-plans-overview", "/deputy-tasks", "/statistics"],
+  track_supervisor: ["/", "/data-entry", "/whatsapp-entry", "/review-plans-overview", "/track-entry-status"],
+  teacher: ["/", "/data-entry", "/review-plans-overview", "/my-messages", "/badges"],
+  supervisor: ["/", "/data-entry", "/whatsapp-entry", "/review-plans-overview", "/my-messages"],
+  student: ["/", "/review-plans-overview", "/badges", "/my-messages", "/attendance"],
+  data_entry: ["/", "/calendar"],
+  volunteer: ["/", "/calendar"],
+  exam_supervisor: ["/", "/statistics", "/calendar"],
+};
+const SHORT_LABEL: Record<string, string> = {
+  "/data-entry-status": "المدخلات", "/review-plans-overview": "الخطط", "/statistics": "الإحصائيات",
+  "/attendance": "الغيابات", "/deputy-tasks": "مهامي", "/data-entry": "الإدخال", "/whatsapp-entry": "الواتساب",
+  "/track-entry-status": "حالة الإدخال", "/my-messages": "رسائلي", "/badges": "الأوسمة", "/calendar": "التقويم",
+};
+
+function BottomNav({ role, items, onMore }: { role: string; items: NavItem[]; onMore: () => void }) {
+  const [location] = useLocation();
+  const picks = (BOTTOM_PRIORITY[role] ?? ["/"])
+    .map((h) => items.find((i) => i.href === h))
+    .filter((i): i is NavItem => !!i)
+    .slice(0, 4);
+  if (picks.length === 0) return null;
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border shadow-[0_-4px_16px_rgba(26,34,96,0.08)]"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      aria-label="التنقل السريع"
+    >
+      <div className="flex">
+        {picks.map(({ href, label, icon: Icon, badge }) => {
+          const active = isActivePath(location, href);
+          return (
+            <Link key={href} href={href} className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] text-xs font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
+              <span className="relative">
+                <Icon className="w-5 h-5" />
+                {badge != null && badge > 0 && <span className="absolute -top-1.5 -left-2 bg-rose-500 text-white text-[12px] rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center leading-none">{badge}</span>}
+              </span>
+              <span className="truncate max-w-[72px]">{SHORT_LABEL[href] ?? label}</span>
+              {active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
+            </Link>
+          );
+        })}
+        <button type="button" onClick={onMore} className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] text-xs font-bold text-muted-foreground">
+          <MoreHorizontal className="w-5 h-5" />
+          <span>المزيد</span>
+        </button>
+      </div>
+    </nav>
   );
 }
 
@@ -295,7 +414,7 @@ function LowMemorizationAlertBell({ userId, role }: { userId: number; role: stri
       >
         <Bell className="w-4 h-4 text-white/80" />
         {alerts.length > 0 && (
-          <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5 leading-none">
+          <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[11px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5 leading-none">
             {alerts.length > 99 ? "99+" : alerts.length}
           </span>
         )}
@@ -308,7 +427,7 @@ function LowMemorizationAlertBell({ userId, role }: { userId: number; role: stri
               <AlertTriangle className="w-4 h-4 text-rose-600" />
               <span className="font-bold text-sm text-rose-800">تنبيهات قلة الحفظ</span>
               {alerts.length > 0 && (
-                <span className="bg-rose-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                <span className="bg-rose-500 text-white text-[11px] font-bold rounded-full px-1.5 py-0.5 leading-none">
                   {alerts.length}
                 </span>
               )}
@@ -481,6 +600,8 @@ export default function Layout({ user, children }: LayoutProps) {
   const queryClient = useQueryClient();
   const logout = useLogout();
   const [location, setLocation] = useLocation();
+  // في الجوال: إغلاق القائمة بعد الانتقال لصفحة
+  useEffect(() => { setSidebarOpen(false); }, [location]);
   const allAccounts = useMyAccounts(user.id);
   const currentAccount = allAccounts.find(a => a.isCurrent);
   const otherAccounts = allAccounts.filter(a => !a.isCurrent);
@@ -560,7 +681,7 @@ export default function Layout({ user, children }: LayoutProps) {
               <p className="text-white font-semibold text-sm truncate">{user.name}</p>
               <p className="text-white/60 text-xs mt-0.5">{getRoleLabel(user.role)}</p>
               {currentAccount?.circleName && (
-                <p className="text-white/50 text-[11px] mt-0.5 truncate">{currentAccount.circleName}</p>
+                <p className="text-white/50 text-[12px] mt-0.5 truncate">{currentAccount.circleName}</p>
               )}
               {user.track && (
                 <Badge className="mt-1 bg-white/20 text-white text-xs border-0">
@@ -574,7 +695,7 @@ export default function Layout({ user, children }: LayoutProps) {
               <div className="mt-2.5">
                 <div className="flex items-center gap-1.5 px-1 mb-1.5">
                   <ArrowLeftRight className="w-3 h-3 text-white/40" />
-                  <p className="text-white/40 text-[10px] font-medium">تبديل الحساب</p>
+                  <p className="text-white/40 text-[11px] font-medium">تبديل الحساب</p>
                 </div>
                 <div className="space-y-1">
                   {otherAccounts.map(acc => (
@@ -592,7 +713,7 @@ export default function Layout({ user, children }: LayoutProps) {
                       </div>
                       <div className="text-right flex-1 min-w-0">
                         <p className="text-sm font-medium text-white/90 truncate leading-tight">{acc.name}</p>
-                        <p className="text-white/50 text-[11px] leading-tight">
+                        <p className="text-white/50 text-[12px] leading-tight">
                           {acc.circleName ?? acc.roleLabel}{acc.track ? ` — ${acc.track}` : ""}
                         </p>
                       </div>
@@ -620,9 +741,9 @@ export default function Layout({ user, children }: LayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 overflow-y-auto space-y-1">
-            {navItems.map(item => (
-              <NavLink key={item.href} {...item} />
-            ))}
+            {GROUPED_ROLES.includes(user.role)
+              ? <GroupedNav items={navItems} />
+              : navItems.map(item => <NavLink key={item.href} {...item} />)}
           </nav>
 
           {/* Dark mode toggle + Logout */}
@@ -665,9 +786,10 @@ export default function Layout({ user, children }: LayoutProps) {
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             {children}
           </div>
-          <footer className="text-center py-3 px-4 text-xs text-muted-foreground border-t border-border bg-background/50">
+          <footer className="text-center py-3 px-4 pb-24 md:pb-3 text-xs text-muted-foreground border-t border-border bg-background/50">
             جميع الحقوق محفوظة لمقرأة سَنا الآي &copy; 2026
           </footer>
+          <BottomNav role={user.role} items={navItems} onMore={() => setSidebarOpen(true)} />
         </main>
       </div>
     </div>

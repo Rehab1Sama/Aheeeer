@@ -1163,7 +1163,7 @@ function SupervisorHoursTracker({ trackId }: { trackId: number | null }) {
   if (!showPicker) {
     // شريط صغير يبيّن مين المسجّلة الآن + خيار تغييرها لو صار خطأ (جهاز مستعار مثلًا)
     return currentName ? (
-      <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground -mt-2 mb-1">
+      <div className="flex items-center justify-end gap-1.5 text-[12px] text-muted-foreground -mt-2 mb-1">
         <span>مسجّلة كـ: <span className="font-semibold text-foreground">{currentName}</span></span>
         <button onClick={resetIdentity} className="text-primary hover:underline">تغيير الهوية</button>
       </div>

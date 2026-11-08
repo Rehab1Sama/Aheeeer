@@ -255,7 +255,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-muted-foreground">الطالبات ({students?.length ?? 0})</p>
         {(archivedStudents?.length ?? 0) > 0 && (
-          <button onClick={() => setShowArchived(v => !v)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
+          <button onClick={() => setShowArchived(v => !v)} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
             <Archive className="w-3 h-3" />المؤرشفات ({archivedStudents?.length})
           </button>
         )}
@@ -304,7 +304,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
                     )}
                   </>
                 )}
-                {onLeave && <span className="text-[10px] bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-1.5 py-0.5 shrink-0">إجازة</span>}
+                {onLeave && <span className="text-[11px] bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-1.5 py-0.5 shrink-0">إجازة</span>}
               </div>
               <div className="flex gap-1 flex-shrink-0">
                 <button onClick={() => navigate(`/students/${s.id}`)} className="p-1 rounded bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors" title="ملف الطالبة">
@@ -338,15 +338,15 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
             </div>
             {isTrackSupervisor && isInlineOpen && (
               <div className="mx-1 mt-1 mb-1 p-2.5 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-                <p className="text-[10px] font-semibold text-amber-700">إجازة: {s.fullName}</p>
+                <p className="text-[11px] font-semibold text-amber-700">إجازة: {s.fullName}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><p className="text-[10px] text-muted-foreground mb-0.5">من</p><input type="date" value={ilStart} onChange={e => setIlStart(e.target.value)} className="h-7 text-xs border border-input rounded px-2 w-full bg-white" /></div>
-                  <div><p className="text-[10px] text-muted-foreground mb-0.5">إلى</p><input type="date" value={ilEnd} onChange={e => setIlEnd(e.target.value)} className="h-7 text-xs border border-input rounded px-2 w-full bg-white" /></div>
+                  <div><p className="text-[11px] text-muted-foreground mb-0.5">من</p><input type="date" value={ilStart} onChange={e => setIlStart(e.target.value)} className="h-7 text-xs border border-input rounded px-2 w-full bg-white" /></div>
+                  <div><p className="text-[11px] text-muted-foreground mb-0.5">إلى</p><input type="date" value={ilEnd} onChange={e => setIlEnd(e.target.value)} className="h-7 text-xs border border-input rounded px-2 w-full bg-white" /></div>
                 </div>
                 <input type="text" value={ilReason} onChange={e => setIlReason(e.target.value)} placeholder="السبب (اختياري)" className="h-7 text-xs border border-input rounded px-2 w-full bg-white" />
                 <div className="flex gap-1.5">
-                  <button onClick={() => handleInlineLeave(sAny)} disabled={ilSaving || !ilStart || !ilEnd} className="flex-1 h-6 text-[10px] font-semibold bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50 transition-colors">{ilSaving ? "..." : "حفظ"}</button>
-                  <button onClick={() => setInlineLeaveId(null)} className="flex-1 h-6 text-[10px] border border-border rounded hover:bg-muted transition-colors">إلغاء</button>
+                  <button onClick={() => handleInlineLeave(sAny)} disabled={ilSaving || !ilStart || !ilEnd} className="flex-1 h-6 text-[11px] font-semibold bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50 transition-colors">{ilSaving ? "..." : "حفظ"}</button>
+                  <button onClick={() => setInlineLeaveId(null)} className="flex-1 h-6 text-[11px] border border-border rounded hover:bg-muted transition-colors">إلغاء</button>
                 </div>
               </div>
             )}
@@ -356,7 +356,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
 
       {showArchived && archivedStudents && archivedStudents.length > 0 && (
         <div className="border-t border-dashed border-border/50 pt-2 space-y-1.5">
-          <p className="text-[10px] text-muted-foreground font-medium">المؤرشفات</p>
+          <p className="text-[11px] text-muted-foreground font-medium">المؤرشفات</p>
           {archivedStudents.map(s => (
             <div key={s.id} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-2.5 py-1.5 opacity-70">
               <span className="text-xs text-muted-foreground truncate flex-1">{s.fullName}</span>
@@ -458,8 +458,8 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
             ) : (
               <div className="space-y-3">
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                  <div><p className="text-xs font-semibold text-emerald-700">{foundUser.name}</p><p className="text-[10px] text-emerald-600" dir="ltr">{foundUser.email}</p></div>
-                  <button onClick={() => { setFoundUser(null); setLookupEmail(""); setLookupError(false); }} className="text-[10px] text-muted-foreground hover:text-foreground">تغيير</button>
+                  <div><p className="text-xs font-semibold text-emerald-700">{foundUser.name}</p><p className="text-[11px] text-emerald-600" dir="ltr">{foundUser.email}</p></div>
+                  <button onClick={() => { setFoundUser(null); setLookupEmail(""); setLookupError(false); }} className="text-[11px] text-muted-foreground hover:text-foreground">تغيير</button>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground">الدور الجديد:</p>
@@ -953,7 +953,7 @@ export default function CirclesPage() {
                                   </select>
                                   {/* تحذير فقط إذا تغيّر المسار فعلاً — مع تطبيع القيمتين */}
                                   {(editData.track || "") !== ((circle as any).track || "") && editData.track && (
-                                    <p className="text-[10px] text-amber-600 font-medium">
+                                    <p className="text-[11px] text-amber-600 font-medium">
                                       ⚠ ستنتقل الحلقة مع معلمتها ومشرفتها وطالباتها إلى مسار «{editData.track}»
                                     </p>
                                   )}
@@ -1001,7 +1001,7 @@ export default function CirclesPage() {
                                 placeholder="اتركي فارغًا = بلا حد"
                                 className="h-8 text-xs text-right"
                               />
-                              <p className="text-[10px] text-muted-foreground">الحلقة ستختفي من التسجيل بعد اكتمالها</p>
+                              <p className="text-[11px] text-muted-foreground">الحلقة ستختفي من التسجيل بعد اكتمالها</p>
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
@@ -1053,7 +1053,7 @@ export default function CirclesPage() {
                           </div>
                           <button
                             onClick={() => setExpandedCircle(expandedCircle === circle.id ? null : circle.id)}
-                            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
+                            className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
                           >
                             {expandedCircle === circle.id ? (
                               <><ChevronUp className="w-3 h-3" />إخفاء</>

@@ -493,7 +493,7 @@ export default function WhiteLabelPage() {
               <Label className="text-xs font-semibold">بريد المشرفة الأولى (للنشر) *</Label>
               <Input value={form.adminEmail} onChange={e => setField("adminEmail", e.target.value)}
                 placeholder="admin@maqraa.com" dir="ltr" type="email" />
-              <p className="text-[10px] text-muted-foreground">سيُستخدم لإنشاء حساب المشرفة في النسخة الجديدة</p>
+              <p className="text-[11px] text-muted-foreground">سيُستخدم لإنشاء حساب المشرفة في النسخة الجديدة</p>
             </div>
           </div>
         </Section>
@@ -522,14 +522,14 @@ export default function WhiteLabelPage() {
             ].map(({ k, label, desc }) => (
               <div key={k} className="space-y-1.5">
                 <p className="text-xs font-semibold">{label}</p>
-                <p className="text-[10px] text-muted-foreground">{desc}</p>
+                <p className="text-[11px] text-muted-foreground">{desc}</p>
                 <div className="flex items-center gap-2">
                   <input type="color" value={form[k]}
                     onChange={e => setField(k, e.target.value)}
                     className="w-10 h-10 rounded-xl border border-border cursor-pointer p-0.5" />
                   <div>
                     <div className="w-8 h-4 rounded-lg" style={{ background: form[k] }} />
-                    <span className="text-[10px] font-mono text-muted-foreground">{form[k]}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{form[k]}</span>
                   </div>
                 </div>
               </div>
@@ -559,7 +559,7 @@ export default function WhiteLabelPage() {
                   {enabled ? <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0" /> : <Square className="w-3.5 h-3.5 shrink-0" />}
                   <div className="text-right">
                     <p>{form.roleNames[roleKey] || info.defaultLabel}</p>
-                    <p className="text-[10px] opacity-60 font-normal">{roleKey}</p>
+                    <p className="text-[11px] opacity-60 font-normal">{roleKey}</p>
                   </div>
                 </button>
               );
@@ -578,7 +578,7 @@ export default function WhiteLabelPage() {
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {ALL_ROLES.map(r => (
               <div key={r.key} className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">{r.defaultLabel} ({r.key})</Label>
+                <Label className="text-[11px] text-muted-foreground">{r.defaultLabel} ({r.key})</Label>
                 <Input
                   value={form.roleNames[r.key] ?? ""}
                   onChange={e => setField("roleNames", { ...form.roleNames, [r.key]: e.target.value })}
@@ -615,7 +615,7 @@ export default function WhiteLabelPage() {
                     {enabled ? <CheckSquare className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" /> : <Square className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />}
                     <div>
                       <p className={`font-semibold ${enabled ? "text-primary" : "text-foreground"}`}>{preset.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-4">{fieldLabels.join(" · ")}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-4">{fieldLabels.join(" · ")}</p>
                     </div>
                   </button>
                 );
@@ -629,16 +629,16 @@ export default function WhiteLabelPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-[10px] text-muted-foreground mb-1 block">اسم النوع</Label>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">اسم النوع</Label>
                 <Input value={newTrackName} onChange={e => setNewTrackName(e.target.value)}
                   placeholder="مثال: حلقة الأمهات المتقدمة" dir="rtl" className="h-8 text-xs" />
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground mb-1 block">الفئة المستهدفة</Label>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">الفئة المستهدفة</Label>
                 <div className="flex flex-wrap gap-1">
                   {TRACK_CATEGORIES.map(cat => (
                     <button key={cat} onClick={() => setNewTrackCategory(cat)}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${
                         newTrackCategory === cat ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted/30"
                       }`}>{cat}</button>
                   ))}
@@ -647,13 +647,13 @@ export default function WhiteLabelPage() {
             </div>
 
             <div>
-              <Label className="text-[10px] text-muted-foreground mb-1.5 block">حقول الإدخال — اختاري ما يظهر في نموذج إدخال البيانات</Label>
+              <Label className="text-[11px] text-muted-foreground mb-1.5 block">حقول الإدخال — اختاري ما يظهر في نموذج إدخال البيانات</Label>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 {AVAILABLE_INPUT_FIELDS.map(field => {
                   const on = newTrackFields.includes(field.key);
                   return (
                     <button key={field.key} onClick={() => toggleNewTrackField(field.key)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium transition-colors ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-colors ${
                         on ? "bg-primary/5 border-primary/30 text-primary" : "border-border text-muted-foreground hover:bg-muted/30"
                       }`}>
                       {on ? <CheckSquare className="w-3 h-3 shrink-0" /> : <Square className="w-3 h-3 shrink-0" />}
@@ -663,7 +663,7 @@ export default function WhiteLabelPage() {
                 })}
               </div>
               {newTrackFields.length > 0 && (
-                <p className="text-[10px] text-muted-foreground mt-1.5">
+                <p className="text-[11px] text-muted-foreground mt-1.5">
                   الحقول المختارة: {newTrackFields.map(k => AVAILABLE_INPUT_FIELDS.find(f => f.key === k)?.label).join(" · ")}
                 </p>
               )}
@@ -682,9 +682,9 @@ export default function WhiteLabelPage() {
               <div className="flex flex-wrap gap-1.5">
                 {form.trackTypes.map((t, i) => (
                   <div key={i} className="flex items-center gap-1.5 bg-primary/5 text-primary border border-primary/20 px-2.5 py-1 rounded-full text-xs font-medium">
-                    {t.category && <span className="text-[9px] bg-primary/10 px-1.5 py-0.5 rounded-full">{t.category}</span>}
+                    {t.category && <span className="text-[11px] bg-primary/10 px-1.5 py-0.5 rounded-full">{t.category}</span>}
                     <span>{t.name}</span>
-                    {t.inputFields && <span className="opacity-40 text-[9px]">({t.inputFields.length} حقل)</span>}
+                    {t.inputFields && <span className="opacity-40 text-[11px]">({t.inputFields.length} حقل)</span>}
                     <button onClick={() => setField("trackTypes", form.trackTypes.filter((_, j) => j !== i))}>
                       <X className="w-3 h-3 text-primary/60 hover:text-primary" />
                     </button>
@@ -710,7 +710,7 @@ export default function WhiteLabelPage() {
               dir="ltr"
               className="h-8 text-xs font-mono"
             />
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               تجدين الرابط في: Supabase → Settings → Database → Connection string (URI mode)
             </p>
           </div>
@@ -736,8 +736,8 @@ export default function WhiteLabelPage() {
                     }`}>
                     <span className="text-2xl">{pkg.badge}</span>
                     <span className={`text-sm font-bold ${pkg.textColor}`}>{pkg.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{pkg.tagline}</span>
-                    <span className={`text-[10px] font-semibold mt-0.5 ${pkg.textColor}`}>
+                    <span className="text-[11px] text-muted-foreground">{pkg.tagline}</span>
+                    <span className={`text-[11px] font-semibold mt-0.5 ${pkg.textColor}`}>
                       {pkg.features.length} ميزة
                     </span>
                   </button>
@@ -762,7 +762,7 @@ export default function WhiteLabelPage() {
             </p>
             {FEATURE_GROUPS.map(group => (
               <div key={group.label}>
-                <p className="text-[11px] font-bold text-muted-foreground mb-1.5">{group.label}</p>
+                <p className="text-[12px] font-bold text-muted-foreground mb-1.5">{group.label}</p>
                 <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
                   {group.features.map(({ key, label, icon: Icon }) => {
                     const enabled = form.enabledFeatures.includes(key);
@@ -779,7 +779,7 @@ export default function WhiteLabelPage() {
                         {enabled ? <CheckSquare className="w-3.5 h-3.5 shrink-0" /> : <Square className="w-3.5 h-3.5 shrink-0" />}
                         <Icon className="w-3 h-3 shrink-0" />
                         <span className="truncate">{label}</span>
-                        {isStore && <span className="text-[9px] text-rose-400 mr-auto shrink-0">يدوي فقط</span>}
+                        {isStore && <span className="text-[11px] text-rose-400 mr-auto shrink-0">يدوي فقط</span>}
                       </button>
                     );
                   })}
@@ -817,7 +817,7 @@ export default function WhiteLabelPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="font-bold">{cfg.schoolName}</p>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
                       </div>
                       {cfg.schoolTagline && <p className="text-xs text-muted-foreground">{cfg.schoolTagline}</p>}
                       <div className="flex items-center gap-2 mt-1">
@@ -848,8 +848,8 @@ export default function WhiteLabelPage() {
                             {parsedTrackTypes.map((t, i) => {
                               const fieldLabels = (t.inputFields ?? []).map((k: string) => AVAILABLE_INPUT_FIELDS.find(f => f.key === k)?.label).filter(Boolean);
                               return (
-                                <span key={i} className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded-full text-[10px]">
-                                  {t.category && <span className="text-[9px] opacity-60">{t.category}</span>}
+                                <span key={i} className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded-full text-[11px]">
+                                  {t.category && <span className="text-[11px] opacity-60">{t.category}</span>}
                                   <span>{t.name}</span>
                                   {fieldLabels.length > 0 && <span className="opacity-40">({fieldLabels.join("·")})</span>}
                                 </span>
@@ -863,7 +863,7 @@ export default function WhiteLabelPage() {
                           <p className="font-semibold text-muted-foreground mb-1.5">من تُدخل البيانات:</p>
                           <div className="flex flex-wrap gap-1">
                             {parsedDataEntryRoles.map(r => (
-                              <span key={r} className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded-full text-[10px]">
+                              <span key={r} className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded-full text-[11px]">
                                 {parsedRoleNames[r] || ALL_ROLES.find(ar => ar.key === r)?.defaultLabel || r}
                               </span>
                             ))}
@@ -875,7 +875,7 @@ export default function WhiteLabelPage() {
                           <p className="font-semibold text-muted-foreground mb-1.5">مسميات الأدوار المخصصة:</p>
                           <div className="flex flex-wrap gap-1">
                             {Object.entries(parsedRoleNames).filter(([, v]) => v).map(([k, v]) => (
-                              <span key={k} className="bg-secondary/10 text-secondary-foreground border border-secondary/20 px-2 py-0.5 rounded-full text-[10px]">
+                              <span key={k} className="bg-secondary/10 text-secondary-foreground border border-secondary/20 px-2 py-0.5 rounded-full text-[11px]">
                                 {k} → {v}
                               </span>
                             ))}
@@ -891,15 +891,15 @@ export default function WhiteLabelPage() {
                             if (groupEnabled.length === 0 && groupDisabled.length === 0) return null;
                             return (
                               <div key={group.label}>
-                                <p className="text-[10px] font-bold text-muted-foreground/70 mb-1">{group.label}</p>
+                                <p className="text-[11px] font-bold text-muted-foreground/70 mb-1">{group.label}</p>
                                 <div className="flex flex-wrap gap-1">
                                   {groupEnabled.map(f => (
-                                    <span key={f.key} className="flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px]">
+                                    <span key={f.key} className="flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px]">
                                       <span>✓</span> {f.label}
                                     </span>
                                   ))}
                                   {groupDisabled.map(f => (
-                                    <span key={f.key} className="flex items-center gap-0.5 bg-muted/40 text-muted-foreground/50 border border-border/30 px-2 py-0.5 rounded-full text-[10px] line-through">
+                                    <span key={f.key} className="flex items-center gap-0.5 bg-muted/40 text-muted-foreground/50 border border-border/30 px-2 py-0.5 rounded-full text-[11px] line-through">
                                       {f.label}
                                     </span>
                                   ))}
@@ -912,13 +912,13 @@ export default function WhiteLabelPage() {
                       {cfg.logoUrl && (
                         <div className="flex items-center gap-2">
                           <img src={cfg.logoUrl} alt="" className="w-10 h-10 object-contain rounded-lg border border-border" onError={e => e.currentTarget.style.display = "none"} />
-                          <span className="text-[10px] text-muted-foreground truncate max-w-xs">{cfg.logoUrl}</span>
+                          <span className="text-[11px] text-muted-foreground truncate max-w-xs">{cfg.logoUrl}</span>
                         </div>
                       )}
                       {cfg.deployError && (
                         <div className="bg-red-50 rounded-xl p-2.5 text-red-700">
                           <p className="font-semibold mb-0.5">خطأ في النشر:</p>
-                          <p className="font-mono text-[10px] break-all">{cfg.deployError}</p>
+                          <p className="font-mono text-[11px] break-all">{cfg.deployError}</p>
                         </div>
                       )}
                     </div>
@@ -961,7 +961,7 @@ export default function WhiteLabelPage() {
                     )}
                   </div>
                   {!canDeploy && (
-                    <p className="text-[10px] text-amber-600 text-center">أضيفي RENDER_API_KEY وREPO_URL في Secrets أولاً</p>
+                    <p className="text-[11px] text-amber-600 text-center">أضيفي RENDER_API_KEY وREPO_URL في Secrets أولاً</p>
                   )}
                 </CardContent>
               </Card>

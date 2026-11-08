@@ -37,8 +37,7 @@ export default function ActivatePage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ background: "linear-gradient(135deg, hsl(180, 20%, 96%) 0%, hsl(177, 40%, 93%) 100%)" }}
+      className="min-h-screen flex flex-col items-center justify-center p-4 sana-main-background"
       dir="rtl"
     >
       <div className="w-full max-w-sm">
@@ -73,7 +72,7 @@ export default function ActivatePage() {
                 <Link href="/login">
                   <Button
                     className="w-full font-bold"
-                    style={{ background: "linear-gradient(135deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)" }}
+                    style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}
                   >
                     تسجيل الدخول
                   </Button>

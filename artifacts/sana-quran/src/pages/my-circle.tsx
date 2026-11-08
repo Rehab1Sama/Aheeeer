@@ -83,19 +83,19 @@ function CirclePlansCard({ circlePlans, trackType }: { circlePlans: ReviewPlan[]
             let statusBadge: React.ReactNode;
             if (isCompleted) {
               statusBadge = (
-                <span className="flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">
+                <span className="flex items-center gap-1 text-[11px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">
                   <CheckCircle2 className="w-3 h-3" />اكتملت
                 </span>
               );
             } else if (currentDay === 0) {
               statusBadge = (
-                <span className="text-[10px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 flex items-center gap-1">
+                <span className="text-[11px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 flex items-center gap-1">
                   <CalendarDays className="w-3 h-3" />لم تبدأ
                 </span>
               );
             } else {
               statusBadge = (
-                <span className="text-[10px] bg-violet-100 text-violet-700 rounded-full px-2 py-0.5">
+                <span className="text-[11px] bg-violet-100 text-violet-700 rounded-full px-2 py-0.5">
                   يوم {currentDay} / {totalDays}
                 </span>
               );
@@ -140,8 +140,8 @@ function CirclePlansCard({ circlePlans, trackType }: { circlePlans: ReviewPlan[]
                                 className={`border-t border-border/20 ${isToday ? "font-semibold" : ""}`}
                                 style={isToday ? { background: plan.themeColor + "70" } : isPast ? { opacity: 0.45 } : {}}>
                                 <td className="py-1.5 px-2 text-center text-muted-foreground font-mono">{day.dayNumber}</td>
-                                <td className="py-1.5 px-2 text-muted-foreground text-[11px]">{dateStr ? formatArDate(dateStr) : "—"}</td>
-                                <td className="py-1.5 px-2 text-[11px]">
+                                <td className="py-1.5 px-2 text-muted-foreground text-[12px]">{dateStr ? formatArDate(dateStr) : "—"}</td>
+                                <td className="py-1.5 px-2 text-[12px]">
                                   {day.surahStart
                                     ? `${day.surahStart}${day.ayahStart ? ` (${day.ayahStart}` : ""}${day.surahEnd && day.surahEnd !== day.surahStart ? ` ← ${day.surahEnd}` : ""}${day.ayahEnd ? ` ${day.ayahEnd})` : ""}`
                                     : computedRanges?.[dayIndex]?.map((segment: DayRangeSegment) =>
@@ -471,9 +471,9 @@ export default function MyCirclePage() {
                       const totalDays = studentPlan.planType === "fixation" ? 24 : 21;
                       const todayDay = getCurrentPlanDay(studentPlan.startDate, totalDays, pMode);
                       if (todayDay > 0 && todayDay <= totalDays) {
-                        planBadge = <Badge className="bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">يوم {todayDay}</Badge>;
+                        planBadge = <Badge className="bg-violet-100 text-violet-700 border-0 text-[11px] px-1.5 py-0">يوم {todayDay}</Badge>;
                       } else if (todayDay > totalDays) {
-                        planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] px-1.5 py-0">✓ اكتملت</Badge>;
+                        planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">✓ اكتملت</Badge>;
                       }
                     }
                     return (

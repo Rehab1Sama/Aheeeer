@@ -52,7 +52,7 @@ function CircleRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-sm">{circle.name}</span>
           {circle.track && (
-            <Badge className="text-[10px] px-1.5 bg-muted text-muted-foreground border-0">{circle.track}</Badge>
+            <Badge className="text-[11px] px-1.5 bg-muted text-muted-foreground border-0">{circle.track}</Badge>
           )}
           {circle.meetingTime && (
             <span className="flex items-center gap-1 text-xs text-teal-600">
@@ -62,10 +62,10 @@ function CircleRow({
           )}
         </div>
         {type === "teacher" && circle.missingSupervisor && (
-          <p className="text-[11px] text-amber-600 mt-0.5">⚠ أيضاً بدون مشرفة</p>
+          <p className="text-[12px] text-amber-600 mt-0.5">⚠ أيضاً بدون مشرفة</p>
         )}
         {type === "supervisor" && circle.missingTeacher && (
-          <p className="text-[11px] text-rose-600 mt-0.5">⚠ أيضاً بدون معلمة</p>
+          <p className="text-[12px] text-rose-600 mt-0.5">⚠ أيضاً بدون معلمة</p>
         )}
       </div>
       <div className="shrink-0 flex items-center gap-2">

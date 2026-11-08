@@ -98,7 +98,7 @@ export default function CircleOverviewPage({ circleId }: { circleId: number }) {
                   size={400}
                   compact
                   trailing={(b as any).timesAwarded > 1 && (
-                    <span className="text-[10px] font-normal opacity-70"> (تكررت {(b as any).timesAwarded} مرة)</span>
+                    <span className="text-[11px] font-normal opacity-70"> (تكررت {(b as any).timesAwarded} مرة)</span>
                   )}
                 />
               ))}

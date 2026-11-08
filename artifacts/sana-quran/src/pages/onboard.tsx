@@ -299,7 +299,7 @@ export default function OnboardPage() {
                     type="submit"
                     className="w-full h-11 font-bold text-base gap-2"
                     disabled={createUser.isPending}
-                    style={{ background: "linear-gradient(135deg, hsl(210, 51%, 21%) 0%, hsl(177, 35%, 40%) 100%)" }}
+                    style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}
                     data-testid="button-submit-onboard"
                   >
                     <UserPlus className="w-4 h-4" />

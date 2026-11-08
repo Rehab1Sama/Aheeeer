@@ -132,7 +132,7 @@ export default function RegistrationPoolSearchPage() {
                       <td className="py-3 px-4 font-semibold">{s.fullName}</td>
                       <td className="py-3 px-4 text-muted-foreground text-xs">{s.phone ?? "—"}</td>
                       <td className="py-3 px-4">
-                        <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5">
+                        <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] px-1.5">
                           {s.source === "registration" ? "قائمة التسجيل" : "بلا حلقة"}
                         </Badge>
                       </td>

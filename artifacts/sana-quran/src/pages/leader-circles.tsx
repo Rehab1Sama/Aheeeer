@@ -473,7 +473,7 @@ export default function LeaderCirclesPage() {
                                   {circle.meetingTime && <span className="flex items-center gap-1 text-blue-700"><Clock className="w-3 h-3" />{circle.meetingTime}</span>}
                                   <span className="text-muted-foreground">{circle.track}</span>
                                   {(period as {isFixation?: boolean}).isFixation && (
-                                    <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                    <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">
                                       الطالبات يكتبن خططهن بأنفسهن
                                     </span>
                                   )}

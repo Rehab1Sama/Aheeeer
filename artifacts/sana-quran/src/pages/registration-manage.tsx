@@ -236,7 +236,7 @@ function WizardBuilderSection() {
                     <Input value={(q.options ?? []).join("، ")}
                       onChange={e => updateQuestion(idx, { options: e.target.value.split("،").map(s => s.trim()).filter(Boolean) })}
                       placeholder="الخيارات مفصولة بفاصلة عربية: نعم، لا، أحيانًا" className="text-xs" />
-                    <p className="text-[10px] text-muted-foreground mt-1">افصلي بين الخيارات بفاصلة عربية (،)</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">افصلي بين الخيارات بفاصلة عربية (،)</p>
                   </div>
                 )}
               </div>
@@ -848,7 +848,7 @@ export default function RegistrationManagePage() {
       <Card className="border-0 shadow-sm" data-testid="card-existing-registration">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-bold flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-teal-600" />
+            <GraduationCap className="w-4 h-4 text-primary" />
             استمارة الطالبات الحاليات (الموجودات في المقرأة)
           </CardTitle>
         </CardHeader>
@@ -859,8 +859,8 @@ export default function RegistrationManagePage() {
           <div className="flex items-center justify-between gap-4 flex-wrap bg-muted/30 rounded-xl p-4">
             <div className="flex items-center gap-3">
               {existingOpen ? (
-                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-teal-600" />
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-primary" />
                 </div>
               ) : (
                 <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
@@ -878,7 +878,7 @@ export default function RegistrationManagePage() {
               <Button
                 onClick={() => apiPost("/api/registration/existing-open").then(() => { toast({ title: "تم فتح الاستمارة" }); queryClient.invalidateQueries({ queryKey: ["regStatus"] }); }).catch(() => toast({ title: "خطأ", variant: "destructive" }))}
                 disabled={existingOpen}
-                className="bg-teal-600 hover:bg-teal-700 text-white"
+                className="bg-primary hover:bg-primary/90 text-white"
                 data-testid="button-open-existing-registration"
               >
                 فتح الاستمارة
@@ -894,9 +894,9 @@ export default function RegistrationManagePage() {
             </div>
           </div>
           {existingOpen && (
-            <div className="bg-teal-50 rounded-lg px-4 py-3">
-              <p className="text-sm font-semibold text-teal-800 mb-1">رابط استمارة الطالبات الحاليات</p>
-              <p className="text-xs text-teal-600 font-mono break-all">{window.location.origin}/register-existing</p>
+            <div className="bg-primary/5 rounded-lg px-4 py-3">
+              <p className="text-sm font-semibold text-primary mb-1">رابط استمارة الطالبات الحاليات</p>
+              <p className="text-xs text-primary font-mono break-all">{window.location.origin}/register-existing</p>
             </div>
           )}
         </CardContent>
