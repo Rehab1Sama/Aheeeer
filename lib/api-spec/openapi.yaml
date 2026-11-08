@@ -2935,6 +2935,8 @@ components:
       properties:
         studentId:
           type: integer
+        circleId:
+          type: ["integer", "null"]
         score:
           type: number
         notes:

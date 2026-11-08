@@ -2306,6 +2306,7 @@ export const SaveCertificateGradesParams = zod.object({
 export const SaveCertificateGradesBody = zod.object({
   "grades": zod.array(zod.object({
   "studentId": zod.number(),
+  "circleId": zod.number().nullish(),
   "score": zod.number(),
   "notes": zod.string().nullish()
 })).min(1)

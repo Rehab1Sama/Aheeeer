@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, real, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, real, boolean, unique, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -31,11 +31,13 @@ export const certificateScoresTable = pgTable("certificate_scores", {
   cumulativeNisab: real("cumulative_nisab"),
   importedFirstTermScore: real("imported_first_term_score"),
   status: text("status").notNull().default("missing_exam"),
+  // نسخة النتيجة لحظة النشر: الشهادة المنشورة لا تتغير إن عُدّلت السجلات بعدها
+  snapshot: jsonb("snapshot"),
   enteredById: integer("entered_by_id"),
   updatedById: integer("updated_by_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-}, (t) => [unique("certificate_score_term_student_unique").on(t.termId, t.studentId)]);
+}, (t) => [unique("certificate_score_term_student_circle_unique").on(t.termId, t.studentId, t.circleId)]);
 
 export const certificateImportCandidatesTable = pgTable("certificate_import_candidates", {
   id: serial("id").primaryKey(),

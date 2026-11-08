@@ -400,6 +400,8 @@ export interface CertificateStudentResult {
 
 export interface CertificateGradeInput {
   studentId: number;
+  /** @nullable */
+  circleId?: number | null;
   score: number;
   /** @nullable */
   notes?: string | null;

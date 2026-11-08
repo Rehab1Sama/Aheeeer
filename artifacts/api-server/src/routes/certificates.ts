@@ -12,6 +12,7 @@ import {
   reviewPlansTable,
   reviewPlanDaysTable,
   studentEnrollmentsTable,
+  usersTable,
 } from "@workspace/db";
 import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import {
@@ -21,6 +22,10 @@ import {
   ResolveCertificateImportCandidatesBody,
 } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
+import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
+import { getMakkahDay } from "../lib/date";
+import { isOwnStudent } from "../lib/access";
+import { loadGirlsCoverage, getPlanCycleDates } from "./reviewPlans";
 
 const router: IRouter = Router();
 const MANAGER_ROLES = ["leader", "deputy", "track_supervisor"];
@@ -71,20 +76,14 @@ function isoDaysBetween(start: string, end: string): string[] {
   const cursor = new Date(`${start}T12:00:00Z`);
   const final = new Date(`${end}T12:00:00Z`);
   while (cursor <= final) {
-    // Friday is the normal non-study day. The number of eligible days therefore
-    // follows the term dates rather than a hard-coded monthly number.
-    if (cursor.getUTCDay() !== 5) days.push(cursor.toISOString().slice(0, 10));
+    days.push(cursor.toISOString().slice(0, 10));
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return days;
 }
 
-function isOnApprovedLeave(
-  day: string,
-  student: typeof studentsTable.$inferSelect,
-): boolean {
-  return Boolean(student.leaveStart && student.leaveEnd && day >= student.leaveStart && day <= student.leaveEnd);
-}
+const onLeave = (day: string, ...periods: Array<{ leaveStart: string | null; leaveEnd: string | null } | undefined>) =>
+  periods.some((p) => Boolean(p?.leaveStart && p.leaveEnd && day >= p.leaveStart && day <= p.leaveEnd));
 
 function canManageTrack(
   req: Express.Request,
@@ -118,76 +117,129 @@ router.post("/certificate-historical-import", authenticate, async (req, res): Pr
   res.status(201).json({ termId: term.id, imported: values.length });
 });
 
+export type CertificateResult = Awaited<ReturnType<typeof computeResults>>[number];
+
+/**
+ * نتيجة كل تسجيل (طالبة + حلقة). الطالبة في أكثر من حلقة لها نتيجة لكل حلقة،
+ * وتُحسب كل نتيجة من سجلات تلك الحلقة فقط.
+ * بعد النشر تُعرض النسخة المحفوظة لحظة النشر (snapshot) فلا تتغير الشهادة بتعديل السجلات لاحقًا.
+ */
 async function buildResults(
   term: typeof certificateTermsTable.$inferSelect,
-  selectedTrackId?: number,
+  opts: { trackId?: number; studentIds?: number[] } = {},
+): Promise<CertificateResult[]> {
+  if (term.status === "published") {
+    const saved = await db.select().from(certificateScoresTable).where(and(
+      eq(certificateScoresTable.termId, term.id),
+      ...(opts.studentIds ? [inArray(certificateScoresTable.studentId, opts.studentIds.length ? opts.studentIds : [-1])] : []),
+    ));
+    const snaps = saved.filter((r) => r.snapshot).map((r) => r.snapshot as CertificateResult);
+    if (snaps.length > 0) return opts.trackId ? snaps.filter((r) => r.trackId === opts.trackId) : snaps;
+  }
+  return computeResults(term, opts);
+}
+
+async function computeResults(
+  term: typeof certificateTermsTable.$inferSelect,
+  opts: { trackId?: number; studentIds?: number[] } = {},
 ) {
-  const [students, circles, tracks, rawRecords, plans, savedScores, candidates, enrollments] = await Promise.all([
-    db.select().from(studentsTable),
-    db.select().from(circlesTable),
-    db.select().from(tracksTable),
-    db.select().from(recordsTable).where(and(gte(recordsTable.date, term.startDate), lte(recordsTable.date, term.endDate))),
-    db.select().from(reviewPlansTable).where(and(gte(reviewPlansTable.startDate, term.startDate), lte(reviewPlansTable.startDate, term.endDate))),
+  const [circles, tracks] = await Promise.all([db.select().from(circlesTable), db.select().from(tracksTable)]);
+  const circleById = new Map(circles.map((c) => [c.id, c]));
+  const trackById = new Map(tracks.map((t) => [t.id, t]));
+
+  const enrollments = (await db.select({
+    studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId,
+    leaveStart: studentEnrollmentsTable.leaveStart, leaveEnd: studentEnrollmentsTable.leaveEnd,
+    fullName: studentsTable.fullName, studentLeaveStart: studentsTable.leaveStart, studentLeaveEnd: studentsTable.leaveEnd,
+  }).from(studentEnrollmentsTable)
+    .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
+    .where(and(
+      eq(studentEnrollmentsTable.isArchived, false),
+      eq(studentsTable.isArchived, false),
+      ...(opts.studentIds ? [inArray(studentEnrollmentsTable.studentId, opts.studentIds.length ? opts.studentIds : [-1])] : []),
+    )))
+    .filter((e) => !opts.trackId || circleById.get(e.circleId)?.trackId === opts.trackId);
+  if (enrollments.length === 0) return [];
+
+  const circleIds = [...new Set(enrollments.map((e) => e.circleId))];
+  const studentIds = [...new Set(enrollments.map((e) => e.studentId))];
+  // لا تُحسب أيام لم تأتِ بعد (النتيجة أثناء الفصل = حتى اليوم)
+  const lastDay = term.endDate < getMakkahDay() ? term.endDate : getMakkahDay();
+  const [rawRecords, plans, savedScores, candidates] = await Promise.all([
+    db.select({
+      studentId: recordsTable.studentId, circleId: recordsTable.circleId, date: recordsTable.date, isAbsent: recordsTable.isAbsent,
+      reviewNearPages: recordsTable.reviewNearPages, reviewFarPages: recordsTable.reviewFarPages, reviewFar2Pages: recordsTable.reviewFar2Pages,
+      shortcomingOverride: recordsTable.shortcomingOverride, listenedToReciter: recordsTable.listenedToReciter, updatedAt: recordsTable.updatedAt,
+    }).from(recordsTable).where(and(
+      gte(recordsTable.date, term.startDate), lte(recordsTable.date, lastDay), inArray(recordsTable.circleId, circleIds),
+    )),
+    db.select().from(reviewPlansTable).where(and(
+      gte(reviewPlansTable.startDate, term.startDate), lte(reviewPlansTable.startDate, term.endDate),
+      eq(reviewPlansTable.planType, "girls_review"), inArray(reviewPlansTable.studentId, studentIds),
+    )),
     db.select().from(certificateScoresTable).where(eq(certificateScoresTable.termId, term.id)),
-    db.select().from(certificateImportCandidatesTable).where(eq(certificateImportCandidatesTable.termId, term.id)),
-    db.select().from(studentEnrollmentsTable).where(eq(studentEnrollmentsTable.isArchived, false)),
+    db.select({ matchedStudentId: certificateImportCandidatesTable.matchedStudentId, resolved: certificateImportCandidatesTable.resolved })
+      .from(certificateImportCandidatesTable).where(eq(certificateImportCandidatesTable.termId, term.id)),
   ]);
 
-  const circleById = new Map(circles.map((circle) => [circle.id, circle]));
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
-  const scoreByStudentId = new Map(savedScores.map((score) => [score.studentId, score]));
-  const candidateByStudentId = new Map(
-    candidates.filter((candidate) => !candidate.resolved && candidate.matchedStudentId != null)
-      .map((candidate) => [candidate.matchedStudentId!, candidate]),
-  );
-  const scheduledDays = isoDaysBetween(term.startDate, term.endDate);
-  // أيام خطط الفصل فقط (كان يسحب جدول أيام الخطط كله ~٧٣ ألف صف في كل فتح للشهادات).
-  const planDays = plans.length > 0
-    ? await db.select().from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, plans.map((p) => p.id)))
-    : [];
-  const dayRowsByPlanId = new Map<number, typeof planDays>();
-  for (const day of planDays) {
-    const rows = dayRowsByPlanId.get(day.planId) ?? [];
-    rows.push(day);
-    dayRowsByPlanId.set(day.planId, rows);
+  const key = (studentId: number, circleId: number | null | undefined) => `${studentId}:${circleId ?? ""}`;
+  const scoreByKey = new Map(savedScores.map((s) => [key(s.studentId, s.circleId), s]));
+  const ambiguous = new Set(candidates.filter((c) => !c.resolved && c.matchedStudentId != null).map((c) => c.matchedStudentId!));
+
+  // سجلات كل (طالبة، حلقة) بالتاريخ، والأيام التي انعقدت فيها كل حلقة (فيها إدخال لأي طالبة)
+  const recordsByKey = new Map<string, Map<string, typeof rawRecords[number]>>();
+  const heldDays = new Map<number, Set<string>>();
+  for (const r of rawRecords) {
+    (heldDays.get(r.circleId) ?? heldDays.set(r.circleId, new Set()).get(r.circleId)!).add(r.date);
+    const k = key(r.studentId, r.circleId);
+    const byDate = recordsByKey.get(k) ?? recordsByKey.set(k, new Map()).get(k)!;
+    const prev = byDate.get(r.date);
+    if (!prev || r.updatedAt > prev.updatedAt) byDate.set(r.date, r);
   }
 
-  const enrollmentByStudent = new Map<number, typeof enrollments[number]>();
-  for (const enrollment of enrollments) {
-    // Prefer the student's legacy primary circle when it is still active;
-    // otherwise use the first active enrollment. This keeps multi-circle
-    // students visible without inventing a random empty-circle result.
-    const existing = enrollmentByStudent.get(enrollment.studentId);
-    if (!existing || enrollment.circleId === students.find(s => s.id === enrollment.studentId)?.circleId) {
-      enrollmentByStudent.set(enrollment.studentId, enrollment);
-    }
+  // خطة واحدة لكل دورة (تاريخ بداية) لكل تسجيل: الأحدث إنشاءً
+  const latestPlan = new Map<string, (typeof plans)[number]>();
+  for (const plan of plans) {
+    const k = `${key(plan.studentId, plan.circleId)}|${plan.startDate}`;
+    const prev = latestPlan.get(k);
+    if (!prev || plan.createdAt > prev.createdAt) latestPlan.set(k, plan);
   }
-  const currentStudents = students
-    .filter((student) => !student.isArchived && enrollmentByStudent.has(student.id))
-    .filter((student) => {
-      if (!selectedTrackId) return true;
-      return circleById.get(enrollmentByStudent.get(student.id)!.circleId)?.trackId === selectedTrackId;
-    });
+  const termPlans = [...latestPlan.values()];
+  const coverage = await loadGirlsCoverage(termPlans);
+  const planDayCounts = new Map<number, number>();
+  if (termPlans.length) {
+    const rows = await db.select({ planId: reviewPlanDaysTable.planId, pages: reviewPlanDaysTable.pages })
+      .from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, termPlans.map((p) => p.id)));
+    for (const r of rows) planDayCounts.set(r.planId, (planDayCounts.get(r.planId) ?? 0) + 1);
+  }
+  const plansByKey = new Map<string, typeof termPlans>();
+  for (const p of termPlans) {
+    const k = key(p.studentId, p.circleId);
+    plansByKey.set(k, [...(plansByKey.get(k) ?? []), p]);
+  }
+  const termDays = isoDaysBetween(term.startDate, lastDay);
 
-  return currentStudents.map((student) => {
-    const circle = circleById.get(enrollmentByStudent.get(student.id)?.circleId ?? -1) ?? null;
+  return enrollments.map((enr) => {
+    const circle = circleById.get(enr.circleId) ?? null;
     const track = circle?.trackId ? trackById.get(circle.trackId) ?? null : null;
     const trackType = track?.dataEntryType ?? circle?.trackType ?? "girls";
     const rule = getRule(trackType, track?.name ?? circle?.track);
-    const savedScore = scoreByStudentId.get(student.id);
-    const eligibleDays = scheduledDays.filter((day) => !isOnApprovedLeave(day, student));
+    const k = key(enr.studentId, enr.circleId);
+    const savedScore = scoreByKey.get(k);
+    const byDate = recordsByKey.get(k) ?? new Map<string, typeof rawRecords[number]>();
+    const firstDay = [...byDate.keys()].sort()[0];
+    const held = heldDays.get(enr.circleId) ?? new Set<string>();
 
-    // The existing daily record key is student + circle + date. A student can
-    // temporarily appear in more than one circle, so retain the latest entry per
-    // calendar day while keeping the score attached to one stable student ID.
-    const recordsByDate = new Map<string, typeof rawRecords[number]>();
-    for (const record of rawRecords) {
-      if (record.studentId !== student.id) continue;
-      const previous = recordsByDate.get(record.date);
-      if (!previous || record.updatedAt > previous.updatedAt) recordsByDate.set(record.date, record);
-    }
+    // الأيام المحتسبة: يوم دوام لهذه الحلقة (حسب جدول مسارها) انعقدت فيه فعلًا، بعد التحاق الطالبة
+    // بها (أول سجل لها فيها)، وليست في إجازة معتمدة. يوم لم تُدخل فيه المشرفة لأحد لا يُحسب على الطالبة.
+    const eligibleDays = firstDay ? termDays.filter((day) =>
+      day >= firstDay
+      && isEntryExpectedOn(trackType, circle?.name, day)
+      && held.has(day)
+      && !onLeave(day, enr, { leaveStart: enr.studentLeaveStart, leaveEnd: enr.studentLeaveEnd })) : [];
+
     const presentDays = eligibleDays.filter((day) => {
-      const record = recordsByDate.get(day);
+      const record = byDate.get(day);
       return Boolean(record && !record.isAbsent);
     }).length;
     const attendanceScore = rule.attendanceMax === 0 || eligibleDays.length === 0
@@ -195,14 +247,12 @@ async function buildResults(
       : Number(((presentDays / eligibleDays.length) * rule.attendanceMax).toFixed(2));
 
     const shortcomingDays = rule.shortcomingsMax === 0 ? 0 : eligibleDays.filter((day) => {
-      const record = recordsByDate.get(day);
+      const record = byDate.get(day);
       if (!record || record.isAbsent) return false;
       if (record.shortcomingOverride != null) return record.shortcomingOverride;
       if (trackType === "girls") {
-        // Missing both reviews is intentionally one shortcoming for the day.
-        return (record.reviewNearPages ?? 0) === 0 &&
-          (record.reviewFarPages ?? 0) === 0 &&
-          (record.reviewFar2Pages ?? 0) === 0;
+        // غياب المراجعتين معًا تقصير واحد في اليوم
+        return (record.reviewNearPages ?? 0) === 0 && (record.reviewFarPages ?? 0) === 0 && (record.reviewFar2Pages ?? 0) === 0;
       }
       return record.listenedToReciter === false;
     }).length;
@@ -210,38 +260,29 @@ async function buildResults(
       ? rule.shortcomingsMax
       : Number((rule.shortcomingsMax * Math.max(0, 1 - (shortcomingDays / eligibleDays.length))).toFixed(2));
 
-    // خطة واحدة لكل دورة (لكل تاريخ بداية): الأحدث إنشاءً. الخطط المستبدلة في نفس الدورة كانت تُجمع
-    // فوق الخطة الحالية فيتضاعف المطلوب وتنخفض درجة الطالبة ظلمًا. الدورات السابقة تبقى محسوبة.
-    const latestPerCycle = new Map<string, (typeof plans)[number]>();
-    for (const plan of plans) {
-      if (plan.studentId !== student.id || plan.planType !== "girls_review") continue;
-      const prev = latestPerCycle.get(plan.startDate);
-      if (!prev || plan.createdAt > prev.createdAt) latestPerCycle.set(plan.startDate, plan);
+    // خطة المراجعة: الأيام المنجزة فعلًا بمقارنة النطاقات (نفس حساب صفحة الخطط)، من أيام الخطة التي مضت
+    let reviewDaysDone = 0;
+    let reviewDaysDue = 0;
+    for (const plan of plansByKey.get(k) ?? []) {
+      const total = planDayCounts.get(plan.id) ?? 0;
+      if (total === 0) continue;
+      const cycle = getPlanCycleDates(plan.startDate!, "girls_review");
+      const elapsed = Math.min(total, cycle.filter((d) => d <= lastDay).length);
+      const reached = Math.min(total, coverage.get(plan.id)?.daysReached ?? 0);
+      reviewDaysDue += elapsed;
+      reviewDaysDone += Math.min(reached, elapsed);
     }
-    const studentPlans = [...latestPerCycle.values()];
-    const reviewUnitsPlanned = studentPlans.reduce((sum, plan) => sum + (dayRowsByPlanId.get(plan.id) ?? [])
-      .reduce((pageSum, day) => pageSum + (day.pages ?? 0), 0), 0);
-    const reviewUnitsCompleted = [...recordsByDate.values()]
-      .filter((record) => !record.isAbsent)
-      .reduce((sum, record) => sum + (record.reviewFarPages ?? 0) + (record.reviewFar2Pages ?? 0), 0);
     const reviewPlanScore = rule.reviewPlanMax === 0 ? 0 : Number((
-      reviewUnitsPlanned > 0
-        ? Math.min(1, reviewUnitsCompleted / reviewUnitsPlanned) * rule.reviewPlanMax
-        : 0
+      reviewDaysDue > 0 ? Math.min(1, reviewDaysDone / reviewDaysDue) * rule.reviewPlanMax : 0
     ).toFixed(2));
 
     const testScore = savedScore?.testScore ?? null;
-    const hasAmbiguousImport = candidateByStudentId.has(student.id);
-    const status = hasAmbiguousImport
-      ? "ambiguous_import"
-      : testScore == null
-        ? "missing_exam"
-        : "ready";
+    const status = ambiguous.has(enr.studentId) ? "ambiguous_import" : testScore == null ? "missing_exam" : "ready";
     const totalScore = Number(((testScore ?? 0) + attendanceScore + shortcomingsScore + reviewPlanScore).toFixed(2));
 
     return {
-      studentId: student.id,
-      studentName: student.fullName,
+      studentId: enr.studentId,
+      studentName: enr.fullName,
       circleId: circle?.id ?? null,
       circleName: circle?.name ?? null,
       trackId: track?.id ?? null,
@@ -256,8 +297,9 @@ async function buildResults(
       eligibleAttendanceDays: eligibleDays.length,
       shortcomingDays,
       eligibleShortcomingDays: rule.shortcomingsMax === 0 ? 0 : eligibleDays.length,
-      reviewUnitsCompleted: Number(reviewUnitsCompleted.toFixed(2)),
-      reviewUnitsPlanned: Number(reviewUnitsPlanned.toFixed(2)),
+      // بالأيام: أيام الخطة المنجزة من أيامها التي مضت
+      reviewUnitsCompleted: reviewDaysDone,
+      reviewUnitsPlanned: reviewDaysDue,
       totalScore,
       breakdown: {
         test: testScore ?? 0,
@@ -266,7 +308,7 @@ async function buildResults(
         attendanceMax: rule.attendanceMax,
         shortcomings: shortcomingsScore,
         shortcomingsMax: rule.shortcomingsMax,
-      deduction: Number(Math.max(0, rule.shortcomingsMax - shortcomingsScore).toFixed(2)),
+        deduction: Number(Math.max(0, rule.shortcomingsMax - shortcomingsScore).toFixed(2)),
         reviewPlan: reviewPlanScore,
         reviewPlanMax: rule.reviewPlanMax,
       },
@@ -343,7 +385,7 @@ router.get("/certificate-terms/:termId/students", authenticate, async (req, res)
     res.status(403).json({ error: "اختر مسارك فقط" });
     return;
   }
-  let results = await buildResults(term, trackId);
+  let results = await buildResults(term, { trackId });
   if (req.userRole === "track_supervisor") {
     results = results.filter((result) => canManageTrack(req, result.trackName));
   }
@@ -371,45 +413,43 @@ router.put("/certificate-terms/:termId/grades", authenticate, async (req, res): 
     res.status(400).json({ error: "درجات الاختبار غير صحيحة" });
     return;
   }
-  const students = await db.select().from(studentsTable);
-  const circles = await db.select().from(circlesTable);
-  const tracks = await db.select().from(tracksTable);
-  for (const grade of parsed.data.grades) {
-    const student = students.find((item) => item.id === grade.studentId);
-    const circle = circles.find((item) => item.id === student?.circleId);
-    const track = tracks.find((item) => item.id === circle?.trackId);
+  const grades = parsed.data.grades;
+  const studentIds = [...new Set(grades.map((g) => g.studentId))];
+  const [enrollments, circles, tracks] = await Promise.all([
+    db.select({ studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId })
+      .from(studentEnrollmentsTable)
+      .where(and(eq(studentEnrollmentsTable.isArchived, false), inArray(studentEnrollmentsTable.studentId, studentIds))),
+    db.select().from(circlesTable),
+    db.select().from(tracksTable),
+  ]);
+  // تحقق من كل الدرجات أولًا، ثم احفظها معًا (لا حفظ جزئي إن كانت إحداها خاطئة)
+  const rows: Array<typeof certificateScoresTable.$inferInsert> = [];
+  for (const grade of grades) {
+    const mine = enrollments.filter((e) => e.studentId === grade.studentId);
+    const enr = grade.circleId != null ? mine.find((e) => e.circleId === grade.circleId) : mine.length === 1 ? mine[0] : undefined;
+    const circle = enr ? circles.find((c) => c.id === enr.circleId) : undefined;
+    const track = tracks.find((t) => t.id === circle?.trackId);
     const trackType = track?.dataEntryType ?? circle?.trackType ?? "girls";
     const rule = getRule(trackType, track?.name ?? circle?.track);
-    if (!student || !canManageTrack(req, track?.name ?? circle?.track) || grade.score < 0 || grade.score > rule.testMax) {
+    if (!enr || !circle || !canManageTrack(req, track?.name ?? circle.track) || grade.score < 0 || grade.score > rule.testMax) {
       res.status(400).json({ error: "إحدى درجات الاختبار أو صلاحيات المسار غير صحيحة" });
       return;
     }
-    const [existing] = await db.select().from(certificateScoresTable).where(and(
-      eq(certificateScoresTable.termId, term.id),
-      eq(certificateScoresTable.studentId, student.id),
-    ));
-    const values = {
-      testScore: grade.score,
-      testNotes: grade.notes ?? null,
-      circleId: circle?.id ?? null,
-      trackId: track?.id ?? null,
-      trackType,
-      enteredById: existing?.enteredById ?? req.userId!,
-      updatedById: req.userId!,
-      status: "ready",
-    };
-    if (existing) {
-      await db.update(certificateScoresTable).set(values).where(eq(certificateScoresTable.id, existing.id));
-    } else {
-      await db.insert(certificateScoresTable).values({
-        termId: term.id,
-        studentId: student.id,
-        ...values,
+    rows.push({
+      termId: term.id, studentId: grade.studentId, circleId: circle.id, trackId: track?.id ?? null, trackType,
+      testScore: grade.score, testNotes: grade.notes ?? null, enteredById: req.userId!, updatedById: req.userId!, status: "ready",
+    });
+  }
+  await db.transaction(async (tx) => {
+    for (const row of rows) {
+      await tx.insert(certificateScoresTable).values(row).onConflictDoUpdate({
+        target: [certificateScoresTable.termId, certificateScoresTable.studentId, certificateScoresTable.circleId],
+        set: { testScore: row.testScore, testNotes: row.testNotes, trackId: row.trackId, trackType: row.trackType, updatedById: req.userId!, status: "ready" },
       });
     }
-  }
-  const results = await buildResults(term);
-  res.json(results.filter((result) => parsed.data.grades.some((grade) => grade.studentId === result.studentId)));
+  });
+  const results = await buildResults(term, { studentIds });
+  res.json(results.filter((r) => rows.some((row) => row.studentId === r.studentId && row.circleId === r.circleId)));
 });
 
 router.post("/certificate-terms/:termId/publish", authenticate, async (req, res): Promise<void> => {
@@ -422,20 +462,36 @@ router.post("/certificate-terms/:termId/publish", authenticate, async (req, res)
     res.status(404).json({ error: "الفصل غير موجود" });
     return;
   }
-  const results = await buildResults(term);
-  if (results.some((result) => result.status !== "ready")) {
-    res.status(409).json({ error: "أكملي درجات الاختبار وراجعي المطابقات الملتبسة قبل النشر" });
+  if (term.status === "published") {
+    res.json(publicTerm(term));
     return;
   }
-  const [published] = await db.update(certificateTermsTable)
-    .set({ status: "published", publishedAt: new Date() })
-    .where(eq(certificateTermsTable.id, term.id))
-    .returning();
+  const results = await computeResults(term);
+  const notReady = results.filter((result) => result.status !== "ready");
+  if (notReady.length > 0) {
+    res.status(409).json({ error: `أكملي درجات الاختبار وراجعي المطابقات الملتبسة قبل النشر (${notReady.length} طالبة)` });
+    return;
+  }
+  // تثبيت النتيجة لحظة النشر
+  const published = await db.transaction(async (tx) => {
+    for (const r of results) {
+      await tx.update(certificateScoresTable).set({ snapshot: r }).where(and(
+        eq(certificateScoresTable.termId, term.id),
+        eq(certificateScoresTable.studentId, r.studentId),
+        eq(certificateScoresTable.circleId, r.circleId!),
+      ));
+    }
+    const [row] = await tx.update(certificateTermsTable)
+      .set({ status: "published", publishedAt: new Date() })
+      .where(eq(certificateTermsTable.id, term.id))
+      .returning();
+    return row;
+  });
   res.json(publicTerm(published!));
 });
 
 router.get("/certificate-terms/:termId/my-result", authenticate, async (req, res): Promise<void> => {
-  if (req.userRole !== "student" || !req.userStudentId) {
+  if (req.userRole !== "student") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -444,7 +500,16 @@ router.get("/certificate-terms/:termId/my-result", authenticate, async (req, res
     res.status(404).json({ error: "النتيجة غير منشورة" });
     return;
   }
-  const result = (await buildResults(term)).find((item) => item.studentId === req.userStudentId);
+  // الطالبة: بالربط المحفوظ، وإلا بالاسم ثم السجل في حلقة الحساب (حسابات الطالبات في أكثر من حلقة)
+  const [me] = await db.select({ name: usersTable.name, circleId: usersTable.circleId }).from(usersTable).where(eq(usersTable.id, req.userId!));
+  const accountCircle = req.userCircleId ?? me?.circleId ?? null;
+  let studentIds: number[] = req.userStudentId ? [req.userStudentId] : [];
+  if (studentIds.length === 0 && me?.name) {
+    const candidates = await db.select({ id: studentsTable.id }).from(studentsTable).where(eq(studentsTable.fullName, me.name.trim()));
+    for (const c of candidates) if (await isOwnStudent(req, c.id, accountCircle)) studentIds.push(c.id);
+  }
+  const results = studentIds.length ? await buildResults(term, { studentIds }) : [];
+  const result = results.find((r) => r.circleId === accountCircle) ?? results[0];
   if (!result) {
     res.status(404).json({ error: "لا توجد نتيجة مرتبطة بالحساب" });
     return;
@@ -571,7 +636,8 @@ router.get("/certificate-terms/:termId/export", authenticate, async (req, res): 
     res.status(403).json({ error: "اختر مسارك فقط" });
     return;
   }
-  const results = await buildResults(term, trackId);
+  let results = await buildResults(term, { trackId });
+  if (req.userRole === "track_supervisor") results = results.filter((r) => canManageTrack(req, r.trackName));
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("نتائج الشهادات", { views: [{ rightToLeft: true }] });
   sheet.columns = [
