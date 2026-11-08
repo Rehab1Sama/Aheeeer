@@ -2308,6 +2308,7 @@ export const SaveCertificateGradesBody = zod.object({
   "studentId": zod.number(),
   "circleId": zod.number().nullish(),
   "score": zod.number(),
+  "noExam": zod.boolean().optional(),
   "notes": zod.string().nullish()
 })).min(1)
 })

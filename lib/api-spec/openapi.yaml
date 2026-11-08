@@ -2811,6 +2811,10 @@ components:
           enum: [draft, published]
         publishedAt:
           type: ["string", "null"]
+        publishedTracks:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
       required: [id, name, startDate, endDate, status, createdAt]
@@ -2939,6 +2943,9 @@ components:
           type: ["integer", "null"]
         score:
           type: number
+        noExam:
+          type: boolean
+          description: الطالبة لم تختبر (تُنشر نتيجتها بدرجة اختبار صفر)
         notes:
           type: ["string", "null"]
       required: [studentId, score]

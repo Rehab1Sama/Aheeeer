@@ -403,6 +403,7 @@ export interface CertificateGradeInput {
   /** @nullable */
   circleId?: number | null;
   score: number;
+  noExam?: boolean;
   /** @nullable */
   notes?: string | null;
 }

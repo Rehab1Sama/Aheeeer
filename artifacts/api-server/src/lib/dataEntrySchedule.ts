@@ -6,17 +6,12 @@
 
 const SUN_TO_WED = [0, 1, 2, 3];          // الأحد-الأربعاء (مشكاة/أمهات/أطفال/تثبيت سُنى)
 const SUN_TO_THU = [0, 1, 2, 3, 4];      // الأحد-الخميس (فتيات)
-const TUESDAY_ONLY = [2];                // الثلاثاء فقط (مشكاة ٢ و٥)
-
-// حلقات مشكاة ٢ و٥ تحديدًا تشتغل الثلاثاء فقط، بقية حلقات مشكاة من الأحد للأربعاء
-const SPECIAL_MISHKAH_NAME = /مشكاة\s*[25٢٥](\D|$)/;
 
 /**
  * الأيام المتوقع فيها إدخال بيانات لهذا النوع من الحلقات.
  * 
  * جدول الأيام:
- * - مشكاة ٢ و٥: الثلاثاء فقط [2]
- * - مشكاة (الباقي): الأحد-الأربعاء [0,1,2,3]
+ * - مشكاة (كل الحلقات): الأحد-الأربعاء [0,1,2,3]
  * - أمهات/أطفال: الأحد-الأربعاء [0,1,2,3]
  * - تثبيت (مسار سُنى): الأحد-الأربعاء [0,1,2,3] — لا يوجد إدخال يوم الخميس
  *   (يتوافق مع إيقاع خطة التثبيت في reviewPlans.ts: أحد-أربعاء)
@@ -26,10 +21,8 @@ export function getExpectedEntryDays(
   dataEntryType: string | null | undefined,
   circleName: string | null | undefined,
 ): number[] {
-  if (dataEntryType === "recitation") {
-    return SPECIAL_MISHKAH_NAME.test(circleName ?? "") ? TUESDAY_ONLY : SUN_TO_WED;
-  }
-  if (dataEntryType === "mothers" || dataEntryType === "children" || dataEntryType === "fixation") {
+  void circleName; // كان لمشكاة ٢ و٥ (الثلاثاء فقط)؛ صارتا مثل بقية حلقات مشكاة
+  if (dataEntryType === "recitation" || dataEntryType === "mothers" || dataEntryType === "children" || dataEntryType === "fixation") {
     return SUN_TO_WED;
   }
   // الأنواع العادية: فتيات (girls) وأي نوع آخر

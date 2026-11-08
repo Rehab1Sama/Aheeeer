@@ -11,6 +11,8 @@ export const certificateTermsTable = pgTable("certificate_terms", {
   reviewCycleOneStart: text("review_cycle_one_start"),
   reviewCycleTwoStart: text("review_cycle_two_start"),
   status: text("status").notNull().default("draft"),
+  // المسارات المنشورة (النشر لكل مسار على حدة)
+  publishedTracks: jsonb("published_tracks").$type<string[]>().notNull().default([]),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdById: integer("created_by_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

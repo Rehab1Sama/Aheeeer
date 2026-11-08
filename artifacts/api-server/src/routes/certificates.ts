@@ -67,6 +67,7 @@ function publicTerm(term: typeof certificateTermsTable.$inferSelect) {
     reviewCycleTwoStart: term.reviewCycleTwoStart,
     status: term.status as "draft" | "published",
     publishedAt: asIso(term.publishedAt),
+    publishedTracks: (term.publishedTracks ?? []) as string[],
     createdAt: term.createdAt.toISOString(),
   };
 }
@@ -91,6 +92,12 @@ function canManageTrack(
 ): boolean {
   if (req.userRole === "leader" || req.userRole === "deputy") return true;
   return req.userRole === "track_supervisor" && normalize(req.userTrack) === normalize(trackName);
+}
+
+/** هل نتيجة هذا المسار منشورة؟ (الفصل كله منشور، أو المسار ضمن المنشورة) */
+function isTrackPublished(term: typeof certificateTermsTable.$inferSelect, trackName: string | null | undefined): boolean {
+  if (term.status === "published") return true;
+  return ((term.publishedTracks ?? []) as string[]).some((t) => normalize(t) === normalize(trackName ?? "بلا مسار"));
 }
 
 async function getTerm(termId: number) {
@@ -128,15 +135,18 @@ async function buildResults(
   term: typeof certificateTermsTable.$inferSelect,
   opts: { trackId?: number; studentIds?: number[] } = {},
 ): Promise<CertificateResult[]> {
-  if (term.status === "published") {
-    const saved = await db.select().from(certificateScoresTable).where(and(
-      eq(certificateScoresTable.termId, term.id),
-      ...(opts.studentIds ? [inArray(certificateScoresTable.studentId, opts.studentIds.length ? opts.studentIds : [-1])] : []),
-    ));
-    const snaps = saved.filter((r) => r.snapshot).map((r) => r.snapshot as CertificateResult);
-    if (snaps.length > 0) return opts.trackId ? snaps.filter((r) => r.trackId === opts.trackId) : snaps;
-  }
-  return computeResults(term, opts);
+  // المسارات المنشورة: النسخة المثبّتة لحظة النشر؛ والباقي يُحسب الآن
+  const saved = await db.select({ snapshot: certificateScoresTable.snapshot }).from(certificateScoresTable).where(and(
+    eq(certificateScoresTable.termId, term.id),
+    ...(opts.studentIds ? [inArray(certificateScoresTable.studentId, opts.studentIds.length ? opts.studentIds : [-1])] : []),
+  ));
+  const snaps = saved.map((r) => r.snapshot as CertificateResult | null)
+    .filter((r): r is CertificateResult => !!r && isTrackPublished(term, r.trackName))
+    .filter((r) => !opts.trackId || r.trackId === opts.trackId);
+  const snapKeys = new Set(snaps.map((r) => `${r.studentId}:${r.circleId}`));
+  const live = (await computeResults(term, opts))
+    .filter((r) => !snapKeys.has(`${r.studentId}:${r.circleId}`) && !isTrackPublished(term, r.trackName));
+  return [...snaps, ...live];
 }
 
 async function computeResults(
@@ -277,7 +287,10 @@ async function computeResults(
     ).toFixed(2));
 
     const testScore = savedScore?.testScore ?? null;
-    const status = ambiguous.has(enr.studentId) ? "ambiguous_import" : testScore == null ? "missing_exam" : "ready";
+    // no_exam = حددت مسؤولة المسار أنها لم تختبر: تُنشر نتيجتها بدرجة اختبار صفر
+    const status = ambiguous.has(enr.studentId) ? "ambiguous_import"
+      : savedScore?.status === "no_exam" ? "no_exam"
+      : testScore == null ? "missing_exam" : "ready";
     const totalScore = Number(((testScore ?? 0) + attendanceScore + shortcomingsScore + reviewPlanScore).toFixed(2));
 
     return {
@@ -319,7 +332,9 @@ async function computeResults(
 
 router.get("/certificate-terms", authenticate, async (req, res): Promise<void> => {
   const terms = await db.select().from(certificateTermsTable).orderBy(desc(certificateTermsTable.startDate));
-  const visible = req.userRole === "student" ? terms.filter((term) => term.status === "published") : terms;
+  const visible = req.userRole === "student"
+    ? terms.filter((term) => term.status === "published" || ((term.publishedTracks ?? []) as string[]).length > 0)
+    : terms;
   res.json(visible.map(publicTerm));
 });
 
@@ -378,12 +393,17 @@ router.get("/certificate-terms/:termId/students", authenticate, async (req, res)
     res.status(404).json({ error: "الفصل غير موجود" });
     return;
   }
-  const trackId = req.query.trackId ? Number(req.query.trackId) : undefined;
+  let trackId = req.query.trackId ? Number(req.query.trackId) : undefined;
   const tracks = await db.select().from(tracksTable);
-  const requestedTrack = trackId ? tracks.find((track) => track.id === trackId) : undefined;
-  if (req.userRole === "track_supervisor" && (!requestedTrack || !canManageTrack(req, requestedTrack.name))) {
-    res.status(403).json({ error: "اختر مسارك فقط" });
-    return;
+  if (req.userRole === "track_supervisor") {
+    // مسؤولة المسار ترى مسارها تلقائيًا
+    const own = tracks.find((track) => canManageTrack(req, track.name));
+    if (trackId == null) trackId = own?.id;
+    const requestedTrack = trackId ? tracks.find((track) => track.id === trackId) : undefined;
+    if (!requestedTrack || !canManageTrack(req, requestedTrack.name)) {
+      res.status(403).json({ error: "اختر مسارك فقط" });
+      return;
+    }
   }
   let results = await buildResults(term, { trackId });
   if (req.userRole === "track_supervisor") {
@@ -431,20 +451,26 @@ router.put("/certificate-terms/:termId/grades", authenticate, async (req, res): 
     const track = tracks.find((t) => t.id === circle?.trackId);
     const trackType = track?.dataEntryType ?? circle?.trackType ?? "girls";
     const rule = getRule(trackType, track?.name ?? circle?.track);
-    if (!enr || !circle || !canManageTrack(req, track?.name ?? circle.track) || grade.score < 0 || grade.score > rule.testMax) {
+    const noExam = grade.noExam === true;
+    if (!enr || !circle || !canManageTrack(req, track?.name ?? circle.track) || (!noExam && (grade.score < 0 || grade.score > rule.testMax))) {
       res.status(400).json({ error: "إحدى درجات الاختبار أو صلاحيات المسار غير صحيحة" });
+      return;
+    }
+    if (isTrackPublished(term, track?.name ?? circle.track)) {
+      res.status(409).json({ error: `نتائج ${track?.name ?? circle.track ?? "المسار"} منشورة، لا يمكن تعديلها` });
       return;
     }
     rows.push({
       termId: term.id, studentId: grade.studentId, circleId: circle.id, trackId: track?.id ?? null, trackType,
-      testScore: grade.score, testNotes: grade.notes ?? null, enteredById: req.userId!, updatedById: req.userId!, status: "ready",
+      testScore: noExam ? null : grade.score, testNotes: grade.notes ?? null, enteredById: req.userId!, updatedById: req.userId!,
+      status: noExam ? "no_exam" : "ready",
     });
   }
   await db.transaction(async (tx) => {
     for (const row of rows) {
       await tx.insert(certificateScoresTable).values(row).onConflictDoUpdate({
         target: [certificateScoresTable.termId, certificateScoresTable.studentId, certificateScoresTable.circleId],
-        set: { testScore: row.testScore, testNotes: row.testNotes, trackId: row.trackId, trackType: row.trackType, updatedById: req.userId!, status: "ready" },
+        set: { testScore: row.testScore, testNotes: row.testNotes, trackId: row.trackId, trackType: row.trackType, updatedById: req.userId!, status: row.status },
       });
     }
   });
@@ -452,6 +478,10 @@ router.put("/certificate-terms/:termId/grades", authenticate, async (req, res): 
   res.json(results.filter((r) => rows.some((row) => row.studentId === r.studentId && row.circleId === r.circleId)));
 });
 
+/**
+ * النشر لكل مسار على حدة: ?track=اسم المسار (بدونه = كل المسارات الجاهزة دفعة واحدة).
+ * يُشترط أن تكون كل طالبات المسار جاهزات (درجة اختبار أو «لم تختبر»).
+ */
 router.post("/certificate-terms/:termId/publish", authenticate, async (req, res): Promise<void> => {
   if (!["leader", "deputy"].includes(req.userRole!)) {
     res.status(403).json({ error: "Forbidden" });
@@ -462,18 +492,21 @@ router.post("/certificate-terms/:termId/publish", authenticate, async (req, res)
     res.status(404).json({ error: "الفصل غير موجود" });
     return;
   }
-  if (term.status === "published") {
-    res.json(publicTerm(term));
+  const trackParam = typeof req.query.track === "string" && req.query.track.trim() ? req.query.track.trim() : null;
+  const all = (await computeResults(term)).filter((r) => !isTrackPublished(term, r.trackName));
+  const results = trackParam ? all.filter((r) => normalize(r.trackName) === normalize(trackParam)) : all;
+  if (results.length === 0) {
+    res.status(400).json({ error: trackParam ? "لا توجد نتائج غير منشورة لهذا المسار" : "لا توجد نتائج غير منشورة" });
     return;
   }
-  const results = await computeResults(term);
-  const notReady = results.filter((result) => result.status !== "ready");
+  const notReady = results.filter((r) => r.status !== "ready" && r.status !== "no_exam");
   if (notReady.length > 0) {
-    res.status(409).json({ error: `أكملي درجات الاختبار وراجعي المطابقات الملتبسة قبل النشر (${notReady.length} طالبة)` });
+    res.status(409).json({ error: `أكملي درجات الاختبار (أو اختاري «لم تختبر») وراجعي المطابقات قبل النشر — ${notReady.length} طالبة` });
     return;
   }
-  // تثبيت النتيجة لحظة النشر
+  const tracksNow = [...new Set(results.map((r) => r.trackName ?? "بلا مسار"))];
   const published = await db.transaction(async (tx) => {
+    // تثبيت النتيجة لحظة النشر
     for (const r of results) {
       await tx.update(certificateScoresTable).set({ snapshot: r }).where(and(
         eq(certificateScoresTable.termId, term.id),
@@ -481,8 +514,10 @@ router.post("/certificate-terms/:termId/publish", authenticate, async (req, res)
         eq(certificateScoresTable.circleId, r.circleId!),
       ));
     }
+    const publishedTracks = [...new Set([...((term.publishedTracks ?? []) as string[]), ...tracksNow])];
+    const everything = all.length === results.length;
     const [row] = await tx.update(certificateTermsTable)
-      .set({ status: "published", publishedAt: new Date() })
+      .set({ publishedTracks, ...(everything ? { status: "published", publishedAt: new Date() } : {}) })
       .where(eq(certificateTermsTable.id, term.id))
       .returning();
     return row;
@@ -496,7 +531,7 @@ router.get("/certificate-terms/:termId/my-result", authenticate, async (req, res
     return;
   }
   const term = await getTerm(Number(req.params.termId));
-  if (!term || term.status !== "published") {
+  if (!term) {
     res.status(404).json({ error: "النتيجة غير منشورة" });
     return;
   }
@@ -508,7 +543,8 @@ router.get("/certificate-terms/:termId/my-result", authenticate, async (req, res
     const candidates = await db.select({ id: studentsTable.id }).from(studentsTable).where(eq(studentsTable.fullName, me.name.trim()));
     for (const c of candidates) if (await isOwnStudent(req, c.id, accountCircle)) studentIds.push(c.id);
   }
-  const results = studentIds.length ? await buildResults(term, { studentIds }) : [];
+  const results = (studentIds.length ? await buildResults(term, { studentIds }) : [])
+    .filter((r) => isTrackPublished(term, r.trackName));
   const result = results.find((r) => r.circleId === accountCircle) ?? results[0];
   if (!result) {
     res.status(404).json({ error: "لا توجد نتيجة مرتبطة بالحساب" });
@@ -632,7 +668,7 @@ router.get("/certificate-terms/:termId/export", authenticate, async (req, res): 
   }
   const tracks = await db.select().from(tracksTable);
   const track = trackId ? tracks.find((item) => item.id === trackId) : undefined;
-  if (req.userRole === "track_supervisor" && (!track || !canManageTrack(req, track.name))) {
+  if (req.userRole === "track_supervisor" && track && !canManageTrack(req, track.name)) {
     res.status(403).json({ error: "اختر مسارك فقط" });
     return;
   }

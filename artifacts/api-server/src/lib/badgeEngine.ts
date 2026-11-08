@@ -108,7 +108,7 @@ export async function getCircleAbsenceCounts(weekStart: string, weekEnd: string,
   }
 
   // الأيام الخمسة (أحد-خميس) ضمن نطاق هذا الأسبوع — نفلترها لكل حلقة حسب
-  // أيامها المتوقعة فعليًا (بعض الأنواع أحد-أربعاء بس، أو ثلاثاء بس لمشكاة ٢/٥)
+  // أيامها المتوقعة فعليًا (بعض الأنواع أحد-أربعاء بس)
   const weekDates = [0, 1, 2, 3, 4].map(i => addDaysStr(weekStart, i));
 
   const hasAnyRecord = new Set<number>();
@@ -467,7 +467,7 @@ export async function computeSupervisorWeeklyCommitment(
   const finishMinutesList: number[] = [];
 
   for (const date of workDays) {
-    // فقط الحلقات المتوقع دوامها هالليلة (تستثني مثلًا مشكاة ٢/٥ بغير الثلاثاء)
+    // فقط الحلقات المتوقع دوامها هالليلة
     const expectedCircleIds = trackCircles
       .filter(c => isEntryExpectedOn(track?.dataEntryType ?? c.trackType ?? null, c.name, date))
       .map(c => c.id);
