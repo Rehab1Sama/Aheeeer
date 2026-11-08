@@ -464,3 +464,120 @@ export function matchStudent(cardName: string, students: StudentRef[], senderNam
   if (found.length > 1) return { kind: "ambiguous", candidates: found };
   return { kind: "none" };
 }
+
+// ─── رسائل معلمات الأطفال ─────────────────────────────────────────
+// شكل حر: كل طفل إما مرقّم مع سطري «الحفظ :» و«المراجعة :»، أو سطر واحد «الاسم: مراجعة …».
+// قد تذكر عدة سور («التكاثر والقارعة»، «الهمزة، العصر، التكاثر»، «التكاثر، القارعة، العاديات ١-٥»)،
+// وقد يُكسر السطر قبل أرقام الآيات. كلمة «غائب/غائبة» بجانب الطفل تجعله غائبًا.
+
+const CHILD_LEAD_WORDS = /^(?:(?:مراجعه|مراجعة|حفظ|تجميع|سوره|سورة|تسميع)\s+)+/;
+
+/** نطاق من عدة سور (كل سورة كاملة أو بآيات) → نطاق واحد متصل في ترتيب المصحف. */
+export function parseChildRange(raw: string, surahs: SurahInfo[], index?: SurahIndex): ParsedField {
+  const si = index ?? buildSurahIndex(surahs);
+  const trimmed = raw.replace(INVISIBLE, "").replace(/[.。]+\s*$/, "").trim();
+  const body = norm(trimmed).replace(CHILD_LEAD_WORDS, "").trim();
+  if (!body) return emptyField(trimmed);
+  const direct = parseRange(body, surahs, si);
+  if (direct.status !== "check") return { ...direct, raw: trimmed };
+
+  // سور متعددة، لكل سورة آياتها (إن ذُكرت)
+  const items = tokenize(body, si).filter((x) => x.t !== "skip" && x.t !== "to");
+  const unknown = items.filter((x) => x.t === "unknown").map((x) => (x as { w: string }).w).filter((w) => w !== "و");
+  const segs: Array<{ idx: number; a: number; b: number }> = [];
+  const notes: string[] = [];
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k]!;
+    if (it.t !== "s") continue;
+    const nums: number[] = [];
+    while (items[k + 1]?.t === "n") nums.push((items[++k] as { v: number }).v);
+    const max = si.list[it.idx]!.ayahs;
+    if (nums.length === 0) segs.push({ idx: it.idx, a: 1, b: max });
+    else if (nums.length === 2) segs.push({ idx: it.idx, a: Math.min(nums[0]!, nums[1]!), b: Math.max(nums[0]!, nums[1]!) });
+    else { notes.push(`${si.list[it.idx]!.name}: رقم آية غير مكتمل`); segs.push({ idx: it.idx, a: nums[0] ?? 1, b: nums[0] ?? max }); }
+  }
+  if (segs.length === 0) return direct;
+  // ترتيب المصحف وفحص الاتصال
+  const sorted = [...segs].sort((x, y) => x.idx - y.idx || x.a - y.a);
+  for (let k = 1; k < sorted.length; k++) {
+    const p = sorted[k - 1]!, c = sorted[k]!;
+    const pEndsSurah = p.b >= si.list[p.idx]!.ayahs;
+    const contiguous = (c.idx === p.idx && c.a <= p.b + 1) || (c.idx === p.idx + 1 && pEndsSurah && c.a === 1);
+    if (!contiguous) { notes.push("السور غير متصلة — اعتبرتها من أول موضع إلى آخر موضع، تأكدي"); break; }
+  }
+  const first = sorted[0]!, last = sorted[sorted.length - 1]!;
+  const range: ParsedRange = { surahStart: si.list[first.idx]!.name, ayahStart: first.a, surahEnd: si.list[last.idx]!.name, ayahEnd: last.b };
+  const bound = validateRange(range, si);
+  const all = [...notes, ...bound, ...(unknown.length ? [`كلمات لم أفهمها: ${unknown.join("، ")}`] : [])];
+  return { raw: trimmed, range, status: all.length ? "check" : "ok", notes: all };
+}
+
+const CHILD_SKIP_LINE = /(حلقه|المعلمه|المشرفه|نصاب|يوم\s+(الاحد|الاثنين|الثلاثا|الاربعا|الخميس)|^[\s─━ـ\-=_~•·.]*$)/;
+const CHILD_MEM_LABEL = /^(?:ال)?حفظ\s*:\s*/;
+const CHILD_REV_LABEL = /^(?:ال)?مراجع\S*\s*:\s*/;
+const ABSENT_RE = /(غائب|غايب|غياب|لم\s*(يحضر|تحضر)|متغيب)/;
+
+/** تحليل رسالة معلمة أطفال كاملة إلى بطاقة لكل طفل. */
+export function parseChildrenMessage(text: string, surahs: SurahInfo[]): ParsedCard[] {
+  const si = buildSurahIndex(surahs);
+  type Entry = { name: string; mem: string; rev: string; absent: boolean; last: "mem" | "rev" | null; loose: string };
+  const entries: Entry[] = [];
+  let cur: Entry | null = null;
+  const stripName = (s: string) => clean(s).replace(/[^ء-ي\s]/g, " ").replace(/\s+/g, " ").trim();
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = clean(rawLine).replace(/^\s*\[[^\]]*\][^:]*:\s*/, "").trim(); // بادئة نسخ واتساب [التاريخ] المرسِل:
+    const f = fold(line).replace(/ء/g, "");
+    if (!line) continue;
+    if (CHILD_SKIP_LINE.test(f) && !CHILD_MEM_LABEL.test(f) && !CHILD_REV_LABEL.test(f)) continue;
+
+    if (CHILD_MEM_LABEL.test(f) && cur) { cur.mem = line.replace(/^[^:]*:\s*/, ""); cur.last = "mem"; if (ABSENT_RE.test(f)) cur.absent = true; continue; }
+    if (CHILD_REV_LABEL.test(f) && cur) { cur.rev = line.replace(/^[^:]*:\s*/, ""); cur.last = "rev"; if (ABSENT_RE.test(f)) cur.absent = true; continue; }
+
+    // «١- الاسم» (طفل جديد مرقّم)
+    const numbered = /^\s*\d{1,3}\s*[-.)]?\s*(.+)$/.exec(line);
+    if (numbered && !/:/.test(numbered[1]!) && stripName(numbered[1]!).length > 1) {
+      cur = { name: stripName(numbered[1]!), mem: "", rev: "", absent: ABSENT_RE.test(f), last: null, loose: "" };
+      entries.push(cur);
+      continue;
+    }
+    // «الاسم: مراجعة …» (سطر واحد)
+    const colon = /^([^:]{1,30}):\s*(.*)$/.exec(line);
+    if (colon && stripName(colon[1]!).split(" ").length <= 3 && stripName(colon[1]!).length > 1) {
+      const content = colon[2]!;
+      const cf = fold(content);
+      cur = { name: stripName(colon[1]!.replace(/^\s*\d{1,3}\s*[-.)]?\s*/, "")), mem: "", rev: "", absent: ABSENT_RE.test(cf), last: null, loose: "" };
+      const revAt = cf.search(/مراجع/);
+      const memAt = cf.search(/(^|\s)حفظ/);
+      if (revAt >= 0 && memAt >= 0) {
+        if (memAt < revAt) { cur.mem = content.slice(memAt, revAt); cur.rev = content.slice(revAt); cur.last = "rev"; }
+        else { cur.rev = content.slice(revAt, memAt); cur.mem = content.slice(memAt); cur.last = "mem"; }
+      } else if (revAt >= 0) { cur.rev = content; cur.last = "rev"; }
+      else if (memAt >= 0) { cur.mem = content; cur.last = "mem"; }
+      else { cur.loose = content; cur.last = null; }
+      entries.push(cur);
+      continue;
+    }
+    // سطر مكسور يكمل الحقل السابق («١-٥.»)، أو «غائب» وحدها
+    if (cur) {
+      if (ABSENT_RE.test(f)) { cur.absent = true; continue; }
+      if (cur.last === "mem") cur.mem += " " + line;
+      else if (cur.last === "rev") cur.rev += " " + line;
+      else cur.loose += " " + line;
+    }
+  }
+
+  return entries.map((e, index) => {
+    const warnings: string[] = [];
+    let memRaw = e.mem;
+    if (!memRaw && !e.rev && e.loose) { memRaw = e.loose; warnings.push("لم يُذكر «حفظ» أو «مراجعة» — اعتبرته حفظًا، تأكدي"); }
+    const memorize = e.absent ? emptyField(memRaw) : parseChildRange(memRaw, surahs, si);
+    const review = e.absent ? emptyField(e.rev) : parseChildRange(e.rev, surahs, si);
+    if (!e.name) warnings.push("لم أجد اسم الطفل");
+    return {
+      index, sender: null, name: e.name,
+      memorize, review, near: emptyField(), far: emptyField(),
+      absent: e.absent, listened: null, sentDay: null, sentMonth: null, warnings,
+    };
+  });
+}

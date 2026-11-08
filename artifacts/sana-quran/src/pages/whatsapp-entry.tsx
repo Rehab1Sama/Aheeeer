@@ -16,7 +16,7 @@ import { SURAHS, calculatePages, computeDayRanges, type DayRangeSegment } from "
 import { getDayDates, getPlanRanges, type ReviewPlan } from "@/components/ReviewPlanSection";
 import { getInputFields } from "@/lib/schoolConfig";
 import { getMakkahDay } from "@/lib/date";
-import { parseCards, matchStudent, type ParsedCard, type ParsedField, type StudentRef } from "@/lib/cardParser";
+import { parseCards, parseChildrenMessage, matchStudent, type ParsedCard, type ParsedField, type StudentRef } from "@/lib/cardParser";
 import { ClipboardPaste, CheckCircle2, AlertTriangle, Pencil, UserX, Loader2 } from "lucide-react";
 
 // ─── أنواع الحالة ────────────────────────────────────────────────
@@ -215,6 +215,7 @@ export default function WhatsappEntryPage() {
   const inputFields = getInputFields(circle?.dataEntryType);
   const activeFields = (["memorize", "near", "far", "review"] as FieldKey[]).filter((k) => inputFields.includes(FIELD_INPUT[k]));
   const useListen = inputFields.includes("listen");
+  const isChildren = circle?.dataEntryType === "children";
 
   // طالبات الحلقة المختارة (من نفس مصدر شاشة إدخال البيانات)
   const students = useMemo(() => {
@@ -251,7 +252,9 @@ export default function WhatsappEntryPage() {
   // ─── التحليل ───
   const analyze = () => {
     setResult(null);
-    const parsed = parseCards(text, SURAHS.map((s) => ({ name: s.name, ayahs: s.ayahs })));
+    const surahList = SURAHS.map((s) => ({ name: s.name, ayahs: s.ayahs }));
+    // حلقات الأطفال: رسالة المعلمة الواحدة فيها أنصبة كل الأطفال
+    const parsed = isChildren ? parseChildrenMessage(text, surahList) : parseCards(text, surahList);
     if (parsed.length === 0) {
       setCards([]);
       return;
@@ -264,7 +267,7 @@ export default function WhatsappEntryPage() {
       if (m.kind === "matched") studentId = m.student.id;
       else if (remembered && studentRefs.some((r) => r.id === remembered)) studentId = remembered; // اختيارك السابق لنفس الاسم
       else if (m.kind === "ambiguous") matchNote = "الاسم ينطبق على أكثر من طالبة — اختاري الصحيحة";
-      else matchNote = "لم أجد هذا الاسم بين طالبات الحلقة — اختاري الطالبة أو تجاهلي البطاقة";
+      else matchNote = isChildren ? "لم أجد هذا الاسم بين أطفال الحلقة — اختاري الطفل أو تجاهلي البطاقة" : "لم أجد هذا الاسم بين طالبات الحلقة — اختاري الطالبة أو تجاهلي البطاقة";
       return {
         key: `c${p.index}`,
         parsed: p,
@@ -424,7 +427,7 @@ export default function WhatsappEntryPage() {
     <div className="space-y-4 pb-24" dir="rtl">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><ClipboardPaste className="h-5 w-5" /> إدخال من بطاقات الواتساب</h1>
-        <p className="text-sm text-muted-foreground mt-1">الصقي بطاقات التحضير كما وصلتك، راجعي الملخص، ثم احفظي.</p>
+        <p className="text-sm text-muted-foreground mt-1">{isChildren ? "الصقي رسالة الأنصبة كما هي، حدّدي الغائبين، راجعي الملخص، ثم احفظي." : "الصقي بطاقات التحضير كما وصلتك، راجعي الملخص، ثم احفظي."}</p>
       </div>
 
       <Card>
@@ -442,8 +445,8 @@ export default function WhatsappEntryPage() {
               <Input type="date" className="h-10" value={date} onChange={(e) => { setDate(e.target.value); setCards(null); setResult(null); }} />
             </div>
           </div>
-          <Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="الصقي البطاقات هنا (يمكن لصق عدة بطاقات دفعة واحدة)" />
-          <Button className="w-full" disabled={!circleId || !text.trim()} onClick={analyze}>تحليل البطاقات</Button>
+          <Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder={isChildren ? "الصقي رسالة أنصبة الأطفال كاملة كما أُرسلت" : "الصقي البطاقات هنا (يمكن لصق عدة بطاقات دفعة واحدة)"} />
+          <Button className="w-full" disabled={!circleId || !text.trim()} onClick={analyze}>{isChildren ? "تحليل الرسالة" : "تحليل البطاقات"}</Button>
           {circleId && students.length === 0 && (
             <p className="text-xs text-amber-600">لا توجد طالبات مسجّلات في هذه الحلقة ليوم {date}.</p>
           )}
@@ -451,7 +454,9 @@ export default function WhatsappEntryPage() {
       </Card>
 
       {cards !== null && cards.length === 0 && (
-        <Card><CardContent className="pt-4 text-sm text-muted-foreground">لم أجد أي بطاقة تحضير في النص الملصوق. تأكدي أنها تحتوي على "النصاب الجديد" و"اسم الحبيبة".</CardContent></Card>
+        <Card><CardContent className="pt-4 text-sm text-muted-foreground">{isChildren
+          ? "لم أجد أطفالًا في الرسالة. تأكدي أن كل طفل مكتوب برقمه واسمه ثم «الحفظ :» و«المراجعة :»، أو بالشكل «الاسم: مراجعة …»."
+          : "لم أجد أي بطاقة تحضير في النص الملصوق. تأكدي أنها تحتوي على \"النصاب الجديد\" و\"اسم الحبيبة\"."}</CardContent></Card>
       )}
 
       {cards !== null && cards.length > 0 && (
