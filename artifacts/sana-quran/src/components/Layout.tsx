@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
 import { clearAuth, getToken, setToken } from "@/lib/auth";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { isFeatureEnabled, shouldHideShortcomings } from "@/lib/schoolConfig";
+import { isFeatureEnabled, shouldHideShortcomings, BRAND } from "@/lib/schoolConfig";
 import {
   Users, ClipboardList, BarChart3,
   UserCheck, UserX, Home, LogOut, Menu, X,
@@ -735,9 +735,9 @@ export default function Layout({ user, children }: LayoutProps) {
           <div className="p-5 border-b border-white/10">
             <div className="text-center">
               <div className="w-24 h-24 rounded-2xl bg-white flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-                <img src={logoUrl} alt="شعار مقرأة سَنا الآي" className="w-full h-full object-contain" />
+                <img src={logoUrl} alt={`شعار ${BRAND}`} className="w-full h-full object-contain" />
               </div>
-              <h1 className="text-white font-bold text-lg leading-tight">مقرأة سَنا الآي</h1>
+              <h1 className="text-white font-bold text-lg leading-tight">{BRAND}</h1>
               <p className="text-white/60 text-xs mt-1">نظام إدارة المقرأة</p>
             </div>
           </div>
@@ -840,7 +840,7 @@ export default function Layout({ user, children }: LayoutProps) {
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Mobile header */}
           <header className="md:hidden bg-white border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
-            <h1 className="text-primary font-bold text-base">مقرأة سَنا الآي</h1>
+            <h1 className="text-primary font-bold text-base">{BRAND}</h1>
             <Button
               variant="ghost"
               size="sm"
@@ -856,7 +856,7 @@ export default function Layout({ user, children }: LayoutProps) {
             {children}
           </div>
           <footer className="text-center py-3 px-4 pb-24 md:pb-3 text-xs text-muted-foreground border-t border-border bg-background/50">
-            جميع الحقوق محفوظة لمقرأة سَنا الآي &copy; 2026
+            جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
           </footer>
           <BottomNav role={user.role} items={navItems} onMore={() => setSidebarOpen(true)} />
         </main>

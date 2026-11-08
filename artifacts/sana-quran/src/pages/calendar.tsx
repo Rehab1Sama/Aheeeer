@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BRAND } from "@/lib/schoolConfig";
 import {
   useListCalendarEvents,
   useCreateCalendarEvent,
@@ -463,7 +464,7 @@ export default function CalendarPage({ userRole, publicView = false }: CalendarP
         <div className="absolute bottom-7 right-8 h-1.5 w-1.5 rounded-full bg-[#9EA8CC] md:bottom-9 md:right-10" />
         <img
           src="/logo.webp"
-          alt="شعار مقرأة سَنا الآي"
+          alt={`شعار ${BRAND}`}
           className="relative z-10 rounded-full"
           style={{
             width: 150,

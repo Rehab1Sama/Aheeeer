@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { BRAND } from "@/lib/schoolConfig";
 import { useGetRegistrationStatus } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -396,9 +397,9 @@ export default function RegisterPage() {
           {/* Header */}
           <div className="text-center mb-5">
             <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-              <img src={logoUrl} alt="شعار مقرأة سَنا الآي" className="w-full h-full object-contain" />
+              <img src={logoUrl} alt={`شعار ${BRAND}`} className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">مقرأة سَنا الآي</h1>
+            <h1 className="text-2xl font-bold text-foreground">{BRAND}</h1>
             <p className="text-muted-foreground text-sm">استمارة التسجيل</p>
           </div>
 

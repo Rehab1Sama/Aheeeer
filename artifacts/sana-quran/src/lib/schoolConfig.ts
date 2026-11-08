@@ -128,3 +128,6 @@ export function shouldHideShortcomings(
   return LEGACY_NO_SHORTCOMINGS_TRACKS.includes(trackName);
 }
 
+
+/** اسم المقرأة الظاهر في الواجهة (يُغيَّر لكل نسخة بمتغير VITE_SCHOOL_NAME دون تعديل الكود). */
+export const BRAND: string = schoolConfig.schoolName ?? "مقرأة سَنا الآي";

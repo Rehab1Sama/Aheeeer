@@ -1,4 +1,5 @@
 import { useListStoreProducts } from "@workspace/api-client-react";
+import { BRAND } from "@/lib/schoolConfig";
 import { Button } from "@/components/ui/button";
 import { ShoppingBag, MessageCircle, Tag } from "lucide-react";
 import logoUrl from "@/assets/logo.jpg";
@@ -18,8 +19,8 @@ export default function StorePage() {
     <div className="min-h-screen" style={{ background: "linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%)" }} dir="rtl">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="text-center mb-10">
-          <img src={logoUrl} alt="سنا الآي" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg object-cover" />
-          <h1 className="text-3xl font-bold text-primary mb-2">متجر مقرأة سنا الآي</h1>
+          <img src={logoUrl} alt={BRAND} className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg object-cover" />
+          <h1 className="text-3xl font-bold text-primary mb-2">متجر {BRAND}</h1>
           <p className="text-muted-foreground">مواد تعليمية ومستلزمات الحلقات القرآنية</p>
         </div>
 

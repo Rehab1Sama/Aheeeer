@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BRAND } from "@/lib/schoolConfig";
 import { useLocation } from "wouter";
 import { useLogin, useLoginSelectAccount, useGetRegistrationStatus } from "@workspace/api-client-react";
 import { setToken } from "@/lib/auth";
@@ -99,9 +100,9 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="w-32 h-32 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-xl overflow-hidden">
-              <img src={logoUrl} alt="شعار مقرأة سَنا الآي" className="w-full h-full object-contain" />
+              <img src={logoUrl} alt={`شعار ${BRAND}`} className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground mb-1">مقرأة سَنا الآي</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-1">{BRAND}</h1>
             <p className="text-muted-foreground text-sm">نظام إدارة المقرأة</p>
           </div>
 
@@ -245,7 +246,7 @@ export default function LoginPage() {
         </div>
       </div>
       <footer className="text-center py-3 text-xs text-muted-foreground">
-        جميع الحقوق محفوظة لمقرأة سَنا الآي &copy; 2026
+        جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
       </footer>
     </div>
   );

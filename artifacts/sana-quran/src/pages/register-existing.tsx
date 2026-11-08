@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { BRAND } from "@/lib/schoolConfig";
 import { useGetRegistrationStatus } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -247,9 +248,9 @@ export default function RegisterExistingPage() {
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
           <div className="w-24 h-24 rounded-2xl bg-white flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-            <img src={logoUrl} alt="شعار مقرأة سَنا الآي" className="w-full h-full object-contain" />
+            <img src={logoUrl} alt={`شعار ${BRAND}`} className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">مقرأة سَنا الآي</h1>
+          <h1 className="text-2xl font-bold text-foreground">{BRAND}</h1>
           <p className="text-muted-foreground text-sm">تسجيل الطالبات الحاليات</p>
         </div>
 
@@ -470,7 +471,7 @@ export default function RegisterExistingPage() {
       </div>
       </div>
       <footer className="text-center py-3 text-xs text-muted-foreground">
-        جميع الحقوق محفوظة لمقرأة سَنا الآي &copy; 2026
+        جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
       </footer>
     </div>
   );

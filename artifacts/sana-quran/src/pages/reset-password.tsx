@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/schoolConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,9 +59,9 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden">
-            <img src={logoUrl} alt="مقرأة سَنا الآي" className="w-full h-full object-contain" />
+            <img src={logoUrl} alt={BRAND} className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-xl font-bold text-foreground">مقرأة سَنا الآي</h1>
+          <h1 className="text-xl font-bold text-foreground">{BRAND}</h1>
         </div>
 
         <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
