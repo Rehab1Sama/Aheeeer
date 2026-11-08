@@ -472,7 +472,7 @@ type DayRecordShape = {
 // البعيدة (reviewFarPages) always, regardless of track.
 function getRecordDoneValue(
   isFixationPlan: boolean,
-  rec: { reviewFarPages: number | null; memorizePages: number | null } | undefined,
+  rec: { reviewFarPages: number | null; memorizePages?: number | null } | undefined,
 ): number | null {
   if (!rec) return null;
   const v = isFixationPlan ? rec.memorizePages : rec.reviewFarPages;
