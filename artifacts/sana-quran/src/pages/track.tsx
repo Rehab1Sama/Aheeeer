@@ -212,8 +212,8 @@ export default function TrackPage() {
           setTransferStudent(null);
           toast({ title: "تم النقل", description: `تم نقل ${transferStudent.student.fullName} بنجاح` });
         },
-        onError: () => {
-          toast({ title: "خطأ", description: "فشلت عملية النقل", variant: "destructive" });
+        onError: (e: any) => {
+          toast({ title: "تعذّر النقل", description: e?.message ?? "فشلت عملية النقل", variant: "destructive" });
         },
       }
     );

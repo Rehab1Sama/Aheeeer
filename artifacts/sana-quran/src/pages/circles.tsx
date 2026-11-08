@@ -183,7 +183,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
         queryClient.invalidateQueries({ queryKey: ["circles"] });
         setTransferModal(null);
       },
-      onError: () => toast({ title: "خطأ في النقل", variant: "destructive" }),
+      onError: (e: any) => toast({ title: "تعذّر النقل", description: e?.message, variant: "destructive" }),
       onSettled: () => setTransferring(false),
     });
   };
