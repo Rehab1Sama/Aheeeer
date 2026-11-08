@@ -108,7 +108,15 @@ async function canAccessStudentMemorization(req: Express.Request, studentId: num
       eq(circlesTable.track, req.userTrack),
     ))
     .limit(1);
-  return !!allowed;
+  if (allowed) return true;
+  // طالبة في قائمة التسجيل المشتركة (أو بلا حلقة): أي مسؤولة مسار تراها لتسحبها لمسارها —
+  // نفس قاعدة النقل من قائمة التسجيل. كانت تظهر لها «لم يتم العثور على الطالبة».
+  const active = await db
+    .select({ trackType: circlesTable.trackType })
+    .from(studentEnrollmentsTable)
+    .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
+    .where(and(eq(studentEnrollmentsTable.studentId, studentId), eq(studentEnrollmentsTable.isArchived, false)));
+  return active.length === 0 || active.every((e) => e.trackType === "registration");
 }
 
 function serializeMemorization(row: typeof studentMemorizationsTable.$inferSelect) {

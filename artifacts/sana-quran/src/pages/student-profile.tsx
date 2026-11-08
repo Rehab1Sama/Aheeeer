@@ -146,7 +146,7 @@ export default function StudentProfilePage({ id }: { id: number }) {
   const queryClient = useQueryClient();
   const [location, navigate] = useLocation();
 
-  const { data: profile, isLoading } = useGetStudentProfile(id, { query: { queryKey: ["studentProfile", id] } });
+  const { data: profile, isLoading, error: profileError } = useGetStudentProfile(id, { query: { queryKey: ["studentProfile", id], retry: false, meta: { silent: true } } });
   const { data: user } = useGetCurrentUser({ query: { queryKey: ["getCurrentUser"] } });
 
   const archiveStudent = useArchiveStudent();
@@ -510,7 +510,9 @@ export default function StudentProfilePage({ id }: { id: number }) {
   if (!profile) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-4" dir="rtl">
-        <p>لم يتم العثور على الطالبة</p>
+        <p>{(profileError as any)?.status === 403
+          ? `لا يمكنكِ فتح ملف هذه الطالبة: ${(profileError as any)?.message ?? "ليست ضمن نطاقكِ"}`
+          : "لم يتم العثور على الطالبة"}</p>
         <Button variant="outline" onClick={() => window.history.back()}>رجوع</Button>
       </div>
     );
