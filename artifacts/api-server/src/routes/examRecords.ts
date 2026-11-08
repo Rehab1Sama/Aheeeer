@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, examRecordsTable, studentsTable, studentMemorizationsTable, studentEnrollmentsTable, usersTable, recordsTable, circlesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -180,8 +180,17 @@ router.get("/volunteer/near-completion", authenticate, async (req, res): Promise
     allStudents = allStudents.filter(student => allowedStudentIds.has(student.id));
   }
 
-  const allRecords = await db.select().from(recordsTable);
-  const allMemorizations = await db.select().from(studentMemorizationsTable);
+  // مجموع صفحات الحفظ لكل طالبة من القاعدة مباشرة (كان يسحب جدول السجلات كله ~٣٠ ألف صف في كل فتح)
+  const ids = allStudents.map((s) => s.id);
+  const pageSums = ids.length
+    ? await db.select({ studentId: recordsTable.studentId, pages: sql<number>`coalesce(sum(${recordsTable.memorizePages}), 0)::float` })
+      .from(recordsTable).where(and(eq(recordsTable.isAbsent, false), inArray(recordsTable.studentId, ids)))
+      .groupBy(recordsTable.studentId)
+    : [];
+  const recordPagesByStudent = new Map(pageSums.map((r) => [r.studentId, Number(r.pages) || 0]));
+  const allMemorizations = ids.length
+    ? await db.select().from(studentMemorizationsTable).where(inArray(studentMemorizationsTable.studentId, ids))
+    : [];
   const allCircles = await db.select().from(circlesTable);
   const allExams = await db.select().from(examRecordsTable);
   const circleMap: Record<number, string> = {};
@@ -190,9 +199,8 @@ router.get("/volunteer/near-completion", authenticate, async (req, res): Promise
   const result = allStudents
     .filter(s => s.circleId != null)
     .map(s => {
-      const sRecords = allRecords.filter(r => r.studentId === s.id && !r.isAbsent);
       const totalPages = Math.round((
-        sRecords.reduce((a, r) => a + (r.memorizePages ?? 0), 0)
+        (recordPagesByStudent.get(s.id) ?? 0)
         + allMemorizations.filter(m => m.studentId === s.id).reduce((a, m) => a + (m.pages ?? 0), 0)
       ) * 2) / 2;
       const { juzCompleted, nearCompletion, atJuzBoundary } = getJuzStats(totalPages);

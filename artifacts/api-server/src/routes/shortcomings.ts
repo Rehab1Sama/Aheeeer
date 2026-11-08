@@ -73,7 +73,9 @@ router.get("/shortcomings", authenticate, async (req, res): Promise<void> => {
 
   const { circleId, trackName, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
 
-  const conditions: Parameters<typeof and>[0][] = [];
+  // الغائبات لا تقصير عليهن: يُستبعدن من القاعدة مباشرة (أخف في نقل البيانات)
+  const conditions: Parameters<typeof and>[0][] = [eq(recordsTable.isAbsent, false)];
+  if (circleId && Number.isFinite(Number(circleId))) conditions.push(eq(recordsTable.circleId, Number(circleId)));
   if (dateFrom) conditions.push(gte(recordsTable.date, dateFrom));
   if (dateTo) conditions.push(lte(recordsTable.date, dateTo));
 
