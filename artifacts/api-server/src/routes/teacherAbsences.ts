@@ -27,11 +27,16 @@ router.post("/circles/:id/teacher-absence", authenticate, async (req, res): Prom
     return;
   }
   const { date } = parsed.data;
+  // الغياب يُحسب على المعلمة نفسها (معلمة الحلقة يومها). لو سجّلته مسؤولة المسار من المهام
+  // اليومية لنفس الحلقة واليوم، يبقى غيابًا واحدًا (القيد الفريد على الحلقة واليوم).
+  const [circle] = await db.select({ teacherId: circlesTable.teacherId }).from(circlesTable).where(eq(circlesTable.id, circleId));
   try {
     await db.insert(teacherAbsencesTable).values({
       circleId,
       date,
       reportedById: req.userId!,
+      teacherId: circle?.teacherId ?? null,
+      source: "entry",
     }).onConflictDoNothing();
   } catch {
     // duplicate — already marked absent

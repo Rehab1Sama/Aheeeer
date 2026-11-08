@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import {
-  db, trackSupervisorNamesTable, dailyCircleTasksTable,
+  db, trackSupervisorNamesTable, dailyCircleTasksTable, teacherAbsencesTable,
   customQuestionsTable, customQuestionAnswersTable, circlesTable, tracksTable
 } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -104,15 +104,35 @@ router.post("/daily-circle-tasks", authenticate, async (req, res): Promise<void>
     return;
   }
 
+  // المعلمة والمشرفة الفعليتان يومها: تُحفظان مع المهمة فتُحسب عليهما بعينهما
+  // (لو سبق تسجيل المهمة، يبقى الشخص المسجَّل أول مرة).
+  const [circleRow] = await db.select({ teacherId: circlesTable.teacherId, supervisorId: circlesTable.supervisorId })
+    .from(circlesTable).where(eq(circlesTable.id, circleId));
+  const teacherId = existing?.teacherId ?? circleRow?.teacherId ?? null;
+  const supervisorId = existing?.supervisorId ?? circleRow?.supervisorId ?? null;
+
   const [row] = await db.insert(dailyCircleTasksTable).values({
     circleId, date, supervisorNameId, teacherAttendance, prepStatus,
     motivationStatus, reportStatus,
     circleAbsenceCount: circleAbsenceCount ?? 0,
     notes: notes ?? null,
+    teacherId, supervisorId,
   }).onConflictDoUpdate({
     target: [dailyCircleTasksTable.circleId, dailyCircleTasksTable.date, dailyCircleTasksTable.supervisorNameId],
     set: { teacherAttendance, prepStatus, motivationStatus, reportStatus, circleAbsenceCount: circleAbsenceCount ?? 0, notes: notes ?? null },
   }).returning();
+
+  // غياب المعلمة من المهام اليومية = نفس غياب إدخال الأنصبة: صف واحد للحلقة واليوم.
+  // إن كان مسجّلًا من الإدخال يبقى كما هو (غياب واحد)، وإن صُحّح إلى حضور يُحذف ما سجّلته المهام فقط.
+  if (teacherAttendance === "absent") {
+    await db.insert(teacherAbsencesTable).values({
+      circleId, date, reportedById: req.userId!, teacherId, source: "tasks",
+    }).onConflictDoNothing();
+  } else {
+    await db.delete(teacherAbsencesTable).where(and(
+      eq(teacherAbsencesTable.circleId, circleId), eq(teacherAbsencesTable.date, date), eq(teacherAbsencesTable.source, "tasks"),
+    ));
+  }
 
   // save custom answers
   if (customAnswers && customAnswers.length > 0) {

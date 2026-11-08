@@ -738,21 +738,27 @@ router.get("/stats/teacher-records", authenticate, async (req, res): Promise<voi
   const circleMap: Record<number, { name: string; track: string }> = {};
   allCircles.forEach(c => { circleMap[c.id] = { name: c.name, track: c.track ?? "" }; });
 
+  // تُحسب المعلمة بعينها (لا الحلقة): غياب واحد لكل يوم مهما تعدّد مصدره، والتأخر من المهام اليومية.
+  const circleTeacher = new Map(allCircles.map(c => [c.id, c.teacherId]));
   const absences = await db.select().from(teacherAbsencesTable)
     .where(and(gte(teacherAbsencesTable.date, fromStr), lte(teacherAbsencesTable.date, toStr)));
-  const absencesByCircle: Record<number, number> = {};
-  absences.forEach(a => { absencesByCircle[a.circleId] = (absencesByCircle[a.circleId] ?? 0) + 1; });
+  const absentDays = new Map<number, Set<string>>();
+  const addDay = (m: Map<number, Set<string>>, id: number | null | undefined, d: string) => {
+    if (!id) return; const set = m.get(id) ?? new Set<string>(); set.add(d); m.set(id, set);
+  };
+  absences.forEach(a => addDay(absentDays, a.teacherId ?? circleTeacher.get(a.circleId), a.date));
 
   const dailyTasks = await db.select().from(dailyCircleTasksTable)
     .where(and(gte(dailyCircleTasksTable.date, fromStr), lte(dailyCircleTasksTable.date, toStr)));
-  const tardyByCircle: Record<number, number> = {};
-  const prepIssuesByCircle: Record<number, number> = {};
+  const tardyDays = new Map<number, Set<string>>();
+  const prepIssuesByTeacher = new Map<number, number>();
   dailyTasks.forEach(t => {
-    if (t.teacherAttendance && t.teacherAttendance.includes("متأخر")) {
-      tardyByCircle[t.circleId] = (tardyByCircle[t.circleId] ?? 0) + 1;
-    }
-    if (t.prepStatus && !t.prepStatus.includes("جيد") && !t.prepStatus.includes("ممتاز") && !t.prepStatus.includes("حاضر")) {
-      prepIssuesByCircle[t.circleId] = (prepIssuesByCircle[t.circleId] ?? 0) + 1;
+    const tid = t.teacherId ?? circleTeacher.get(t.circleId);
+    if (t.teacherAttendance === "absent") addDay(absentDays, tid, t.date);
+    else if (t.teacherAttendance === "late") addDay(tardyDays, tid, t.date);
+    // قيم التحضير: on_time | late | not_done (كان يُقارن بكلمات عربية فيعدّ كل يوم مشكلة)
+    if (t.teacherAttendance !== "absent" && (t.prepStatus === "late" || t.prepStatus === "not_done") && tid) {
+      prepIssuesByTeacher.set(tid, (prepIssuesByTeacher.get(tid) ?? 0) + 1);
     }
   });
 
@@ -766,9 +772,9 @@ router.get("/stats/teacher-records", authenticate, async (req, res): Promise<voi
         circleId: t.circleId,
         circleName: circle?.name ?? "غير معروف",
         track: circle?.track ?? "",
-        absenceCount: absencesByCircle[t.circleId!] ?? 0,
-        tardyCount: tardyByCircle[t.circleId!] ?? 0,
-        prepIssueCount: prepIssuesByCircle[t.circleId!] ?? 0,
+        absenceCount: absentDays.get(t.id)?.size ?? 0,
+        tardyCount: tardyDays.get(t.id)?.size ?? 0,
+        prepIssueCount: prepIssuesByTeacher.get(t.id) ?? 0,
       };
     })
     .sort((a, b) => b.absenceCount - a.absenceCount);
@@ -1058,7 +1064,10 @@ router.get("/stats/teacher-performance", authenticate, async (req, res): Promise
     const reviewPages     = Math.round(presentRecords.reduce((s, r) =>
       s + (r.reviewNearPages ?? 0) + (r.reviewFarPages ?? 0) + (r.reviewFar2Pages ?? 0) + (r.reviewPages ?? 0), 0) * 2) / 2;
 
-    const teacherAbsCount = teacherAbsences.filter(ta => ta.circleId === teacher.circleId).length;
+    // غياب المعلمة نفسها (أيام مميزة)، لا غياب الحلقة — والمشرفة لا تُحسب عليها غيابات المعلمة
+    const teacherAbsCount = teacher.role === "teacher"
+      ? new Set(teacherAbsences.filter(ta => (ta.teacherId ?? allCircles.find(c => c.id === ta.circleId)?.teacherId) === teacher.id).map(ta => ta.date)).size
+      : 0;
     const studentCount    = studentIds.length;
 
     // نقاط الأداء: حضور الطالبات (40%) + حفظ لكل طالبة (40%) - تقصير (20%)

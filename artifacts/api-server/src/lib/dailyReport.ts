@@ -69,7 +69,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   const expectedIds = expected.map((c) => c.id);
   const circleIds = circles.map((c) => c.id);
 
-  const [enrollRows, dayRecords, recentRecords, tasks, absences, plans, lowAlerts] = await Promise.all([
+  const [enrollRows, dayRecords, recentRecords, tasks30, absences, plans, lowAlerts] = await Promise.all([
     circleIds.length ? db.select({
       studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId,
       leaveStart: studentEnrollmentsTable.leaveStart, leaveEnd: studentEnrollmentsTable.leaveEnd,
@@ -84,7 +84,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
       memorizePages: recordsTable.memorizePages, reviewNearPages: recordsTable.reviewNearPages, reviewFarPages: recordsTable.reviewFarPages,
       reviewFar2Pages: recordsTable.reviewFar2Pages, reviewPages: recordsTable.reviewPages, recitationPages: recordsTable.recitationPages,
     }).from(recordsTable).where(and(gte(recordsTable.date, d28), lte(recordsTable.date, D))),
-    db.select().from(dailyCircleTasksTable).where(eq(dailyCircleTasksTable.date, D)),
+    db.select().from(dailyCircleTasksTable).where(and(gte(dailyCircleTasksTable.date, d30), lte(dailyCircleTasksTable.date, D))),
     db.select().from(teacherAbsencesTable).where(and(gte(teacherAbsencesTable.date, d30), lte(teacherAbsencesTable.date, D))),
     db.select().from(reviewPlansTable).where(and(eq(reviewPlansTable.status, "active"), eq(reviewPlansTable.planType, "girls_review"))),
     db.select().from(lowMemorizationAlertsTable).where(eq(lowMemorizationAlertsTable.isRead, false)),
@@ -101,6 +101,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   const studentName = new Map(enrollRows.map((e) => [e.studentId, e.fullName]));
   const recsByCircle = new Map<number, typeof dayRecords>();
   for (const r of dayRecords) { const l = recsByCircle.get(r.circleId) ?? []; l.push(r); recsByCircle.set(r.circleId, l); }
+  const tasks = tasks30.filter((t) => t.date === D);
   const tasksByCircle = new Map<number, typeof tasks>();
   for (const t of tasks) { const l = tasksByCircle.get(t.circleId) ?? []; l.push(t); tasksByCircle.set(t.circleId, l); }
   const tsNameById = new Map(tsNames.map((n) => [n.id, n.name]));
@@ -128,6 +129,8 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     const lastAt = recs.reduce<Date | null>((m, x) => (x.createdAt && (!m || x.createdAt > m) ? x.createdAt : m), null);
     if (lastAt && minutesSinceMakkahDayStart(D, lastAt) > ONE_AM_MINUTES_SINCE_DAY_START) problems.push(`🕐 أنهت الإدخال متأخرة (${fmtTime(lastAt)})`);
     for (const t of tasksByCircle.get(c.id) ?? []) {
+      // يوم غياب المعلمة تُعلَّم مهام المشرفة «لم تتم» تلقائيًا — لا تُحسب عليها
+      if (t.teacherAttendance === "absent") continue;
       if (t.prepStatus === "not_done") problems.push("📝 لم تُرسل التحضير");
       else if (t.prepStatus === "late") problems.push("📝 تأخرت في التحضير");
       if (t.motivationStatus === "not_done") problems.push("💬 لم تحفّز");
@@ -135,7 +138,9 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
       else if (t.reportStatus === "late") problems.push("📊 تأخرت في التقرير");
     }
     if (problems.length === 0) { completeCircles++; continue; }
-    const who = c.supervisorId ? userName.get(c.supervisorId) : (c.teacherId ? userName.get(c.teacherId) : null);
+    const dayTask = (tasksByCircle.get(c.id) ?? [])[0];
+    const supId = dayTask?.supervisorId ?? c.supervisorId;
+    const who = supId ? userName.get(supId) : (c.teacherId ? userName.get(c.teacherId) : null);
     supIssues.push({ track: trackNameOf(c), line: `• <b>${esc(c.name)}</b>${who ? ` — ${esc(who)}` : ""}\n   ${problems.join("\n   ")}` });
   }
   const circlesWithRoster = expected.filter((c) => (roster.get(c.id) ?? []).length > 0).length;
@@ -203,20 +208,38 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
 
   if (!isWorkDay) return { date: D, messages };
 
-  // ── ٢. المعلمات ──
-  const absent30 = new Map<number, number>();
-  for (const a of absences) absent30.set(a.circleId, (absent30.get(a.circleId) ?? 0) + 1);
-  const absentToday = new Set(absences.filter((a) => a.date === D).map((a) => a.circleId));
+  // ── ٢. المعلمات (تُحسب المعلمة بعينها: غياب واحد في اليوم مهما تعدّد مصدره أو حلقاتها) ──
+  const absentDaysByTeacher = new Map<number, Set<string>>();
+  const lateDaysByTeacher = new Map<number, Set<string>>();
+  for (const a of absences) {
+    const tid = a.teacherId ?? circleById.get(a.circleId)?.teacherId;
+    if (!tid) continue;
+    absentDaysByTeacher.set(tid, (absentDaysByTeacher.get(tid) ?? new Set()).add(a.date));
+  }
+  for (const t of tasks30) {
+    const tid = t.teacherId ?? circleById.get(t.circleId)?.teacherId;
+    if (!tid) continue;
+    if (t.teacherAttendance === "absent") absentDaysByTeacher.set(tid, (absentDaysByTeacher.get(tid) ?? new Set()).add(t.date));
+    else if (t.teacherAttendance === "late") lateDaysByTeacher.set(tid, (lateDaysByTeacher.get(tid) ?? new Set()).add(t.date));
+  }
+  const absentTodayRows = absences.filter((a) => a.date === D);
   const teacherIssues: CircleIssue[] = [];
+  const reportedTeachers = new Set<number>();
   for (const c of expected) {
-    const statuses = new Set((tasksByCircle.get(c.id) ?? []).map((t) => t.teacherAttendance));
+    const dayTasks = tasksByCircle.get(c.id) ?? [];
+    const absRow = absentTodayRows.find((a) => a.circleId === c.id);
+    const tid = dayTasks[0]?.teacherId ?? absRow?.teacherId ?? c.teacherId ?? null;
+    const statuses = new Set(dayTasks.map((t) => t.teacherAttendance));
     let label: string | null = null;
-    if (absentToday.has(c.id) || statuses.has("absent")) label = "❌ غابت";
+    if (absRow || statuses.has("absent")) label = "❌ غابت";
     else if (statuses.has("late")) label = "🕐 تأخرت";
     if (!label) continue;
-    const teacher = c.teacherId ? userName.get(c.teacherId) : null;
-    const n30 = absent30.get(c.id) ?? 0;
-    teacherIssues.push({ track: trackNameOf(c), line: `• ${esc(teacher ?? "بلا معلمة مسجلة")} — ${esc(c.name)}: ${label}${n30 > 1 ? ` (غياب ${ar(n30)} مرات خلال ٣٠ يومًا)` : ""}` });
+    if (tid && reportedTeachers.has(tid)) continue; // المعلمة في حلقتين: تُذكر مرة واحدة
+    if (tid) reportedTeachers.add(tid);
+    const nAbs = tid ? absentDaysByTeacher.get(tid)?.size ?? 0 : 0;
+    const nLate = tid ? lateDaysByTeacher.get(tid)?.size ?? 0 : 0;
+    const history = [nAbs > 1 ? `غياب ${ar(nAbs)}` : "", nLate > 1 ? `تأخر ${ar(nLate)}` : ""].filter(Boolean).join("، ");
+    teacherIssues.push({ track: trackNameOf(c), line: `• ${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")} — ${esc(c.name)}: ${label}${history ? ` (${history} خلال ٣٠ يومًا)` : ""}` });
   }
   const noTaskCircles = expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
   const teacherMsg = [`👩‍🏫 <b>المعلمات الغائبات والمتأخرات</b>`, LINE, ...groupByTrack(teacherIssues, "✅ لا غياب ولا تأخير مسجّل.")];

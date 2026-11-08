@@ -22,6 +22,7 @@ interface DaySummary {
 interface OverviewData {
   circle: { id: number; name: string; track: string; teacherName: string | null; supervisorName: string | null };
   badges: { badgeId: string; tier: number; name: string; subtitle: string; emoji: string; image: string | null; color: string }[];
+  staffBadges?: { role: "teacher" | "supervisor"; personName: string; badgeId: string; name: string; emoji: string; count: number }[];
   today: { date: string; hasData: boolean; absentNames: string[] };
   week: { weekStart: string; weekEnd: string; days: DaySummary[]; totalAbsent: number };
 }
@@ -103,6 +104,22 @@ export default function CircleOverviewPage({ circleId }: { circleId: number }) {
                 />
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(data.staffBadges?.length ?? 0) > 0 && (
+        <Card className="border-0 shadow-sm border-r-4 border-r-amber-400">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-amber-700">🏅 أوسمة المعلمة والمشرفة</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-1 text-sm">
+            {data.staffBadges!.map(b => (
+              <p key={`${b.role}-${b.badgeId}`}>
+                <span className="text-muted-foreground">{b.role === "teacher" ? "المعلمة" : "المشرفة"} {b.personName}:</span>{" "}
+                {b.emoji} {b.name}{b.count > 1 ? ` ×${b.count}` : ""}
+              </p>
+            ))}
           </CardContent>
         </Card>
       )}

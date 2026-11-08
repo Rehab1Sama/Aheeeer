@@ -19,6 +19,9 @@ export const dailyCircleTasksTable = pgTable("daily_circle_tasks", {
   motivationStatus: text("motivation_status").notNull(),
   reportStatus: text("report_status").notNull(),
   circleAbsenceCount: integer("circle_absence_count").notNull().default(0),
+  // المعلمة والمشرفة الفعليتان يومها (users.id) — تُحسب المهام عليهما بعينهما
+  teacherId: integer("teacher_id"),
+  supervisorId: integer("supervisor_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

@@ -128,10 +128,13 @@ router.get("/stats/stumbling", authenticate, async (req, res): Promise<void> => 
     if (!u.circleId || !filteredCircleIds.has(u.circleId)) continue;
     const circle = circleMap[u.circleId];
     if (!circle) continue;
-    const absences = teacherAbsences.filter(a => a.circleId === u.circleId);
-    const lateRecords = recentRecords.filter(r => r.circleId === u.circleId && r.date >= thirtyDaysAgo && (r as any).isLate);
-    if (absences.length >= 2 || lateRecords.length >= 3) {
-      teacherAlerts.push({ userId: u.id, name: u.name, circleName: circle.name, track: circle.track ?? "", absenceCount: absences.length, lateCount: lateRecords.length });
+    // غياب المعلمة نفسها (أيام مميزة) — لا غياب حلقتها
+    const absences = new Set(teacherAbsences
+      .filter(a => (a.teacherId ?? circleMap[a.circleId]?.teacherId) === u.id)
+      .map(a => a.date));
+    const lateRecords = circleTasks.filter(t => (t.teacherId ?? circleMap[t.circleId]?.teacherId) === u.id && t.teacherAttendance === "late");
+    if (absences.size >= 2 || lateRecords.length >= 3) {
+      teacherAlerts.push({ userId: u.id, name: u.name, circleName: circle.name, track: circle.track ?? "", absenceCount: absences.size, lateCount: lateRecords.length });
     }
   }
 
@@ -142,10 +145,12 @@ router.get("/stats/stumbling", authenticate, async (req, res): Promise<void> => 
     if (!u.circleId || !filteredCircleIds.has(u.circleId)) continue;
     const circle = circleMap[u.circleId];
     if (!circle) continue;
-    const absences = teacherAbsences.filter(a => a.circleId === u.circleId);
-    const lateRecords = recentRecords.filter(r => r.circleId === u.circleId && r.date >= thirtyDaysAgo && (r as any).isLate);
-    if (absences.length >= 2 || lateRecords.length >= 3) {
-      supervisorStumbling.push({ userId: u.id, name: u.name, circleName: circle.name, track: circle.track ?? "", absenceCount: absences.length, lateCount: lateRecords.length });
+    // المشرفة بعينها: مهامها غير المنجزة أو المتأخرة (التحضير/التقرير) — لا غياب المعلمة
+    const myTasks = circleTasks.filter(t => (t.supervisorId ?? circleMap[t.circleId]?.supervisorId) === u.id && t.teacherAttendance !== "absent");
+    const notDone = myTasks.filter(t => t.prepStatus === "not_done" || t.reportStatus === "not_done").length;
+    const late = myTasks.filter(t => t.prepStatus === "late" || t.reportStatus === "late").length;
+    if (notDone >= 2 || late >= 3) {
+      supervisorStumbling.push({ userId: u.id, name: u.name, circleName: circle.name, track: circle.track ?? "", absenceCount: notDone, lateCount: late });
     }
   }
 

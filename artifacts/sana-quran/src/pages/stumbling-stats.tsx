@@ -498,7 +498,7 @@ export default function StumblingStatsPage() {
                           <p className="font-semibold text-sm text-foreground">{a.name}</p>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {a.absenceCount > 0 && (
-                              <Badge className="bg-rose-100 text-rose-800 border-0 text-xs">{a.absenceCount} غياب</Badge>
+                              <Badge className="bg-rose-100 text-rose-800 border-0 text-xs">{a.absenceCount} مهمة لم تُنجز</Badge>
                             )}
                             {(a.lateCount ?? 0) > 0 && (
                               <Badge className="bg-amber-100 text-amber-800 border-0 text-xs">{a.lateCount} تأخير</Badge>
