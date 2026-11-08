@@ -357,55 +357,34 @@ export default function MyProgressPage() {
             </Card>
           </div>
 
-          {/* أوسمتي اللحظية (بالكود، بدون تخزين قاعدة بيانات) */}
-          {myLiveBadges.length > 0 && (
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">🌟 أوسمتي</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex flex-wrap gap-4">
-                  {myLiveBadges.map((b: any) => (
-                    <BadgeChip key={b.badgeId} badge={b} size={400} compact />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* My Badges */}
-          {myBadges.length > 0 && (() => {
-            const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const thisWeek = myBadges.filter((b: any) => b.createdAt && new Date(b.createdAt) >= oneWeekAgo);
-            const older = myBadges.filter((b: any) => !b.createdAt || new Date(b.createdAt) < oneWeekAgo);
-            const BadgePill = ({ b }: { b: any }) => (
-              <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-white" style={{ backgroundColor: b.badgeColor ?? "#f59e0b" }}>
-                {b.badgeEmoji} {b.badgeName}
-              </span>
-            );
+          {/* الأوسمة الجديدة: تبقى في الصفحة الأمامية ٢٤ ساعة فقط، ثم تكون في صفحة «أوسمتي» */}
+          {(() => {
+            const DAY_MS = 24 * 60 * 60 * 1000;
+            const isNew = (t?: string | null) => !!t && Date.now() - new Date(t).getTime() < DAY_MS;
+            const newLive = myLiveBadges.filter((b: any) => isNew(b.awardedAt));
+            const newPersonal = myBadges.filter((b: any) => isNew(b.createdAt));
+            const total = myLiveBadges.length + myBadges.length;
+            if (total === 0) return null;
             return (
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">🏅 أوسمتي الشخصية</CardTitle>
+                  <CardTitle className="text-sm font-bold flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">🌟 {newLive.length + newPersonal.length > 0 ? "وسام جديد" : "أوسمتي"}</span>
+                    <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/badges`} className="text-xs font-normal text-primary">كل أوسمتي ({total}) ←</a>
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0 space-y-3">
-                  {thisWeek.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-amber-700 mb-1.5">✨ هذا الأسبوع</p>
-                      <div className="flex flex-wrap gap-2">
-                        {thisWeek.map((b: any) => <BadgePill key={b.id} b={b} />)}
-                      </div>
+                {newLive.length + newPersonal.length > 0 && (
+                  <CardContent className="pt-0">
+                    <div className="flex flex-wrap gap-4 items-center">
+                      {newLive.map((b: any) => <BadgeChip key={b.badgeId} badge={b} size={400} compact />)}
+                      {newPersonal.map((b: any) => (
+                        <span key={b.id} className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-white" style={{ backgroundColor: b.badgeColor ?? "#f59e0b" }}>
+                          {b.badgeEmoji} {b.badgeName}
+                        </span>
+                      ))}
                     </div>
-                  )}
-                  {older.length > 0 && (
-                    <div>
-                      {thisWeek.length > 0 && <p className="text-xs font-semibold text-muted-foreground mb-1.5">أوسمة سابقة</p>}
-                      <div className="flex flex-wrap gap-2">
-                        {older.map((b: any) => <BadgePill key={b.id} b={b} />)}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
+                  </CardContent>
+                )}
               </Card>
             );
           })()}

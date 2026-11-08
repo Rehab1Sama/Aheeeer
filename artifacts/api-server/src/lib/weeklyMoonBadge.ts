@@ -68,11 +68,7 @@ export async function runWeeklyMoonBadgeAward(): Promise<void> {
     // عدّاد "كم مرة" لكل حلقة استحقت أقمر الحلقة (بأي درجة) — رقم بس، بدون سجل تفصيلي
     for (const c of circles) {
       const badge = qualifying.get(c.id);
-      if (!badge) continue;
-      await recordBadgeAward("circle", c.id, "circle_weekly_moon", badge.tier, weekStart);
-      // الوسام للمعلمة والمشرفة بعينهما أيضًا: ينتقل معهما إن انتقلتا لحلقة أخرى
-      if (c.teacherId) await recordBadgeAward("teacher", c.teacherId, "circle_weekly_moon", badge.tier, weekStart);
-      if (c.supervisorId) await recordBadgeAward("supervisor", c.supervisorId, "circle_weekly_moon", badge.tier, weekStart);
+      if (badge) await recordBadgeAward("circle", c.id, "circle_weekly_moon", badge.tier, weekStart);
     }
 
     logger.info({ weekStart, weekEnd, count: qualifying.size }, "أقمر الحلقة: تم إرسال إشعارات الاستحقاق الأسبوعية");

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListBadgeEvents, useCreateBadgeEvent, useUpdateBadgeEvent, useDeleteBadgeEvent,
   useListBadgeAssignments, useCreateBadgeAssignment, useDeleteBadgeAssignment,
   useAutoAssignBadgeEvent,
-  useListUsers, useListCircles,
+  useListUsers, useListCircles, useGetCurrentUser,
 } from "@workspace/api-client-react";
+import { BadgeChip } from "@/components/badges/BadgeChip";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,19 @@ export default function BadgesPage({ userRole, userId }: BadgesPageProps) {
   const qc = useQueryClient();
 
   const isLeader = userRole === "leader" || userRole === "track_supervisor";
+
+  // أوسمة الطالبة اللحظية (إتمام الخطة، الحضور الكامل، التحسن): هنا تبقى دائمًا، والصفحة الأمامية تعرضها ٢٤ ساعة فقط
+  const { data: me } = useGetCurrentUser({ query: { queryKey: ["getCurrentUser"] } });
+  const myStudentId = (me as any)?.studentId as number | undefined;
+  const [liveBadges, setLiveBadges] = useState<any[]>([]);
+  useEffect(() => {
+    if (userRole !== "student" || !myStudentId) { setLiveBadges([]); return; }
+    const token = localStorage.getItem("sana_auth_token");
+    fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/live-badges/student/${myStudentId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setLiveBadges(Array.isArray(d) ? d : []))
+      .catch(() => setLiveBadges([]));
+  }, [userRole, myStudentId]);
 
   const { data: events = [] } = useListBadgeEvents({});
   const { data: assignments = [] } = useListBadgeAssignments({});
@@ -113,6 +127,15 @@ export default function BadgesPage({ userRole, userId }: BadgesPageProps) {
         </h1>
         {isLeader && <Button size="sm" onClick={openNewEvent}><Plus className="w-4 h-4 ml-1" />حدث جديد</Button>}
       </div>
+
+      {!isLeader && liveBadges.length > 0 && (
+        <div className="mb-6 p-4 rounded-xl border bg-gradient-to-r from-indigo-50 to-violet-50">
+          <h2 className="text-lg font-semibold mb-3">أوسمة إنجازي 🌟</h2>
+          <div className="flex flex-wrap gap-4">
+            {liveBadges.map((b: any) => <BadgeChip key={b.badgeId} badge={b} size={400} compact />)}
+          </div>
+        </div>
+      )}
 
       {!isLeader && myBadges.length > 0 && (() => {
         const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

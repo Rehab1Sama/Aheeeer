@@ -1,12 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, circlesTable, studentsTable, usersTable, recordsTable, badgeAwardCountsTable } from "@workspace/db";
+import { db, circlesTable, studentsTable, usersTable, recordsTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahWeekStart, addDaysStr, getMakkahDay } from "../lib/date";
 import { computeCircleWeeklyMoonBadge, type EarnedBadge } from "../lib/badgeEngine";
 import { ensureWeeklyMoonBadgeRan } from "../lib/weeklyMoonBadge";
 import { getBadgeAwardCount } from "../lib/badgeAwardCounts";
-import { getBadgeTier } from "../lib/badgeDefinitions";
 
 const router: IRouter = Router();
 
@@ -51,19 +50,6 @@ router.get("/circles/:id/overview", authenticate, async (req, res): Promise<void
     badges.push({ ...moon, timesAwarded });
   }
 
-  // ── أوسمة المعلمة والمشرفة بعينهما (تنتقل معهما بين الحلقات) ───────────────
-  const staffBadges: Array<{ role: "teacher" | "supervisor"; personName: string; badgeId: string; name: string; emoji: string; count: number }> = [];
-  for (const [role, personId] of [["teacher", circle.teacherId], ["supervisor", circle.supervisorId]] as const) {
-    if (!personId) continue;
-    const rows = await db.select().from(badgeAwardCountsTable)
-      .where(and(eq(badgeAwardCountsTable.entityType, role), eq(badgeAwardCountsTable.entityId, personId)));
-    for (const r of rows) {
-      if (r.count <= 0) continue;
-      const def = getBadgeTier(r.badgeId as Parameters<typeof getBadgeTier>[0], r.tier);
-      staffBadges.push({ role, personName: staffMap.get(personId) ?? "", badgeId: r.badgeId, name: def?.name ?? r.badgeId, emoji: def?.emoji ?? "🏅", count: r.count });
-    }
-  }
-
   // ── طالبات الحلقة النشطات ────────────────────────────────────────────────
   const students = await db.select({ id: studentsTable.id, fullName: studentsTable.fullName })
     .from(studentsTable).where(and(eq(studentsTable.circleId, circleId), eq(studentsTable.isArchived, false)));
@@ -104,7 +90,6 @@ router.get("/circles/:id/overview", authenticate, async (req, res): Promise<void
       supervisorName: circle.supervisorId ? staffMap.get(circle.supervisorId) ?? null : null,
     },
     badges,
-    staffBadges,
     today: { date: today, hasData: hasTodayData, absentNames: todayAbsentNames },
     week: { weekStart, weekEnd, days: weekSummary, totalAbsent: weekTotalAbsent },
   });

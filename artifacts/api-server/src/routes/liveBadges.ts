@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, circlesTable, studentsTable, trackSupervisorNamesTable, tracksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, circlesTable, studentsTable, trackSupervisorNamesTable, tracksTable, badgeAwardCountsTable, reviewPlansTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
+import { getMakkahDay, getLastCompletedWeekStart } from "../lib/date";
 import { authenticate } from "../middlewares/authenticate";
 import {
   computeCircleWeeklyMoonBadge,
@@ -13,6 +14,30 @@ import {
 } from "../lib/badgeEngine";
 
 const router: IRouter = Router();
+
+/**
+ * وقت أول ظهور للوسام لهذه الجهة في فترته (شهر/أسبوع/دورة خطة): يُستخدم لعرض الوسام في الصفحة
+ * الأمامية ٢٤ ساعة فقط، ثم يبقى في صفحة «أوسمتي». يُحفظ في عداد الأوسمة بنوع جهة منفصل
+ * ("seen:...") فلا يمسّ عدّاد مرات الاستحقاق الأصلي.
+ */
+async function firstSeenAt(entityType: string, entityId: number, badgeId: string, tier: number, periodKey: string): Promise<string> {
+  const seenType = `seen:${entityType}`;
+  const [row] = await db.select().from(badgeAwardCountsTable).where(and(
+    eq(badgeAwardCountsTable.entityType, seenType), eq(badgeAwardCountsTable.entityId, entityId), eq(badgeAwardCountsTable.badgeId, badgeId),
+  ));
+  const now = new Date();
+  if (!row) {
+    await db.insert(badgeAwardCountsTable).values({ entityType: seenType, entityId, badgeId, tier, count: 1, lastPeriod: periodKey, updatedAt: now })
+      .onConflictDoNothing();
+    return now.toISOString();
+  }
+  if (row.lastPeriod !== periodKey) {
+    await db.update(badgeAwardCountsTable).set({ lastPeriod: periodKey, tier, count: row.count + 1, updatedAt: now })
+      .where(eq(badgeAwardCountsTable.id, row.id));
+    return now.toISOString();
+  }
+  return row.updatedAt.toISOString();
+}
 
 /**
  * الأوسمة اللحظية (بالكود، بدون تخزين قاعدة بيانات) لحلقة واحدة.
@@ -75,7 +100,25 @@ router.get("/live-badges/student/:id", authenticate, async (req, res): Promise<v
   if (improvement) badges.push(improvement);
   if (planCompletion) badges.push(planCompletion);
 
-  res.json(badges);
+  // فترة كل وسام: الشهر، أو الأسبوع، أو دورة الخطة الحالية — وسام جديد في فترة جديدة يظهر من جديد ٢٤ ساعة
+  let planKey = "none";
+  if (planCompletion) {
+    const [plan] = await db.select({ id: reviewPlansTable.id }).from(reviewPlansTable)
+      .where(and(eq(reviewPlansTable.studentId, studentId), eq(reviewPlansTable.planType, "girls_review"), eq(reviewPlansTable.status, "active")))
+      .orderBy(desc(reviewPlansTable.createdAt)).limit(1);
+    planKey = plan ? `plan:${plan.id}` : "none";
+  }
+  const periodOf = (b: EarnedBadge) =>
+    b.badgeId === "monthly_perfect" ? getMakkahDay().slice(0, 7)
+      : b.badgeId === "improvement" ? getLastCompletedWeekStart()
+      : b.badgeId === "review_plan_completion" ? planKey
+      : getMakkahDay().slice(0, 7);
+  const withTime = await Promise.all(badges.map(async (b) => ({
+    ...b,
+    awardedAt: await firstSeenAt("student", studentId, b.badgeId, b.tier, `${b.tier}:${periodOf(b)}`).catch(() => null),
+  })));
+
+  res.json(withTime);
 });
 
 /**
