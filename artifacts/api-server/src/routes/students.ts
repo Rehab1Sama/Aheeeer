@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, studentsTable, circlesTable, studentTransfersTable, studentNotesTable, studentMemorizationsTable, messagesTable, recordsTable, usersTable, studentArchiveEventsTable, studentLeaveHistoryTable, studentEnrollmentsTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
 import { eq, and, gte, desc, sql, ne, isNull, inArray } from "drizzle-orm";
+import { isShortcomingRecord } from "../lib/shortcoming";
 import { authenticate } from "../middlewares/authenticate";
 import { canAccessStudent, canAccessCircle, accessibleCircleIds } from "../lib/access";
 import { CreateStudentBody, UpdateStudentBody } from "@workspace/api-zod";
@@ -1476,13 +1477,8 @@ router.get("/students/:id/profile", authenticate, async (req, res): Promise<void
   const totalRecitationPages = presentRecords.reduce((s, r) => s + (r.recitationPages ?? 0), 0);
 
   const isRecitationTrack = circle?.trackType === "recitation";
-  const totalShortcomings = presentRecords.filter(r => {
-    if (r.shortcomingOverride === true) return true;
-    if (r.shortcomingOverride === false) return false;
-    if (isRecitationTrack) return r.listenedToReciter === false;
-    const noReview = (r.reviewNearPages ?? 0) === 0 && (r.reviewFarPages ?? 0) === 0 && (r.reviewPages ?? 0) === 0;
-    return noReview || r.listenedToReciter === false;
-  }).length;
+  void isRecitationTrack;
+  const totalShortcomings = presentRecords.filter(r => isShortcomingRecord(r, circle?.trackType ?? "girls")).length;
 
   const leaveHistoryRaw = await db.select().from(studentLeaveHistoryTable)
     .where(eq(studentLeaveHistoryTable.studentId, id))

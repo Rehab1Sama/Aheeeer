@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, studentsTable, circlesTable, tracksTable, globalSettingsTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { autoShortcomingReason, isShortcomingRecord } from "../lib/shortcoming";
 import { authenticate } from "../middlewares/authenticate";
 import { UpdateShortcomingOverrideBody } from "@workspace/api-zod";
 
@@ -27,41 +28,10 @@ export function computeShortcoming(
     }
   }
 
-  const reasons: string[] = [];
-  const isGirls = trackType === "girls";
-  const isRecitation = trackType === "recitation";
-  const isChildren   = trackType === "children";
-  const isMothers    = trackType === "mothers";
-
-  // الأمهات والأطفال لا يدخلان في حسم التقصير. يبقى التجاوز اليدوي متاحاً
-  // لتسجيل حالة استثنائية فقط دون أي احتساب تلقائي.
-  if (isChildren || isMothers) {
-    if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) {
-      return { isShortcoming: r.shortcomingOverride, reasons };
-    }
-    return { isShortcoming: false, reasons: [] };
-  }
-
-  // خطط المراجعة والمراجعة القريبة/البعيدة خاصة بمسار الفتيات. غيابهما معاً
-  // في اليوم نفسه يسجل تقصيراً واحداً مهما تعددت الخانات الفارغة.
-  if (isGirls) {
-    const noReview =
-      (r.reviewNearPages ?? 0) === 0 &&
-      (r.reviewFarPages ?? 0) === 0 &&
-      (r.reviewPages ?? 0) === 0;
-    if (noReview) reasons.push("review");
-  } else if (r.listenedToReciter === false) {
-    // بقية المسارات التي تدخل في التقصير لا تتطلب خطة مراجعة؛ معيارها
-    // اليومي هو عدم التسميع المسجل.
-    reasons.push("listen");
-  }
-
-  const autoShortcoming = reasons.length > 0;
-
-  if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) {
-    return { isShortcoming: r.shortcomingOverride, reasons };
-  }
-  return { isShortcoming: autoShortcoming, reasons };
+  // القاعدة الموحّدة (lib/shortcoming.ts)
+  const reason = autoShortcomingReason(r, trackType);
+  const reasons: string[] = reason ? [reason] : [];
+  return { isShortcoming: isShortcomingRecord(r, trackType), reasons };
 }
 
 async function buildShortcomingItem(

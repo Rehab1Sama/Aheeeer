@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, studentsTable, studentEnrollmentsTable, studentMemorizationsTable, circlesTable, usersTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, examRecordsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { isShortcomingRecord } from "../lib/shortcoming";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay, getMakkahDaysAgo, getMakkahWeekStart, getMakkahLastWeekStart, getMakkahLastWeekEnd } from "../lib/date";
 
@@ -171,14 +172,7 @@ router.get("/stats/summary", authenticate, async (req, res): Promise<void> => {
 
   const totalAbsences = records.filter(r => r.isAbsent).length;
   const totalDeficiencies = records.filter(r => {
-    if (r.isAbsent) return false;
-    if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) return r.shortcomingOverride;
-    const trackType = circleTrackTypeMap[r.circleId] ?? "girls";
-    if (trackType === "children" || trackType === "mothers" || trackType === "recitation") return false;
-    const noReview =
-      (r.reviewNearPages ?? 0) === 0 && (r.reviewFarPages ?? 0) === 0 && (r.reviewPages ?? 0) === 0;
-    const notListened = r.listenedToReciter === false;
-    return noReview || notListened;
+    return isShortcomingRecord(r, circleTrackTypeMap[r.circleId] ?? "girls");
   }).length;
 
   const circlePageMap: Record<number, number> = {};
@@ -344,14 +338,7 @@ router.get("/stats/circles", authenticate, async (req, res): Promise<void> => {
       teacherAbsences: cTeacherAbsences,
       studentCount: cStudents.length,
       deficiencyCount: cRecords.filter(r => {
-        if (r.isAbsent) return false;
-        if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) return r.shortcomingOverride;
-        if (circleTrackType === "children" || circleTrackType === "mothers" || circleTrackType === "recitation") return false;
-        const noReview =
-          (r.reviewNearPages ?? 0) === 0 && (r.reviewFarPages ?? 0) === 0 &&
-          (r.reviewFar2Pages ?? 0) === 0 && (r.reviewPages ?? 0) === 0;
-        const noListened = r.listenedToReciter === false;
-        return noReview || noListened;
+        return isShortcomingRecord(r, circleTrackType);
       }).length,
     };
   });
@@ -1030,15 +1017,7 @@ router.get("/stats/teacher-performance", authenticate, async (req, res): Promise
 
   // حساب التقصير لسجل واحد
   const isShortcoming = (r: typeof recordsTable.$inferSelect): boolean => {
-    if (r.isAbsent) return false;
-    if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) return r.shortcomingOverride;
-    const trackType = circleTrackTypeMap[r.circleId];
-    if (trackType === "children" || trackType === "mothers" || trackType === "recitation") return false;
-    const noReview =
-      (r.reviewNearPages ?? 0) === 0 && (r.reviewFarPages ?? 0) === 0 &&
-      (r.reviewFar2Pages ?? 0) === 0 && (r.reviewPages ?? 0) === 0;
-    const notListened = r.listenedToReciter === false;
-    return noReview || notListened;
+    return isShortcomingRecord(r, circleTrackTypeMap[r.circleId]);
   };
 
   // بناء تقرير لكل معلمة/مشرفة
@@ -1155,15 +1134,7 @@ router.get("/stats/monthly-honor", authenticate, async (req, res): Promise<void>
     : records;
 
   const isShortcoming = (r: typeof recordsTable.$inferSelect): boolean => {
-    if (r.isAbsent) return false;
-    if (r.shortcomingOverride !== null && r.shortcomingOverride !== undefined) return r.shortcomingOverride;
-    const trackType = circleTrackTypeMap[r.circleId];
-    if (trackType === "children" || trackType === "mothers" || trackType === "recitation") return false;
-    const noReview =
-      (r.reviewNearPages ?? 0) === 0 && (r.reviewFarPages ?? 0) === 0 &&
-      (r.reviewFar2Pages ?? 0) === 0 && (r.reviewPages ?? 0) === 0;
-    const notListened = r.listenedToReciter === false;
-    return noReview || notListened;
+    return isShortcomingRecord(r, circleTrackTypeMap[r.circleId]);
   };
 
   // تجميع السجلات بالطالبة

@@ -21,6 +21,7 @@ import {
   SaveCertificateGradesBody,
   ResolveCertificateImportCandidatesBody,
 } from "@workspace/api-zod";
+import { isShortcomingRecord } from "../lib/shortcoming";
 import { authenticate } from "../middlewares/authenticate";
 import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
 import { getMakkahDay } from "../lib/date";
@@ -258,13 +259,7 @@ async function computeResults(
 
     const shortcomingDays = rule.shortcomingsMax === 0 ? 0 : eligibleDays.filter((day) => {
       const record = byDate.get(day);
-      if (!record || record.isAbsent) return false;
-      if (record.shortcomingOverride != null) return record.shortcomingOverride;
-      if (trackType === "girls") {
-        // غياب المراجعتين معًا تقصير واحد في اليوم
-        return (record.reviewNearPages ?? 0) === 0 && (record.reviewFarPages ?? 0) === 0 && (record.reviewFar2Pages ?? 0) === 0;
-      }
-      return record.listenedToReciter === false;
+      return Boolean(record && isShortcomingRecord(record, trackType));
     }).length;
     const shortcomingsScore = rule.shortcomingsMax === 0 || eligibleDays.length === 0
       ? rule.shortcomingsMax
