@@ -1,0 +1,39 @@
+# فحص تلقائي لكل تعديل: اختبارات قواعد المقرأة + فحص الأنواع (TypeScript) + بناء الموقع.
+# Render ينشر كل دفعة تلقائيًا؛ هذا الفحص يُظهر علامة حمراء على الدفعة إن كسرت شيئًا.
+name: الفحص التلقائي
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: اختبارات القواعد
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm --filter @workspace/api-server run test
+
+  typecheck:
+    name: فحص الأنواع والبناء
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - name: فحص الأنواع
+        run: pnpm run typecheck
+      - name: بناء الموقع
+        run: BASE_PATH=/ pnpm --filter @workspace/sana-quran run build && pnpm --filter @workspace/api-server run build
