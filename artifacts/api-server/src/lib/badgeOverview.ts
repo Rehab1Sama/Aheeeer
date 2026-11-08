@@ -113,7 +113,7 @@ export async function overviewReviewPlanCompletion(asOf: string = getMakkahDay()
     if (!tierDef) continue;
     entries.push({
       studentId, effectiveEndDate,
-      badge: { badgeId: "review_plan_completion", tier: tierDef.tier, name: tierDef.name, subtitle: tierDef.subtitle, emoji: tierDef.emoji, image: tierDef.image ?? null, color: tierDef.color },
+      badge: { badgeId: "review_plan_completion", tier: tierDef.tier, name: tierDef.name, subtitle: tierDef.subtitle, emoji: tierDef.emoji, image: tierDef.image ?? null, thumb: tierDef.thumb ?? null, color: tierDef.color },
     });
   }
   if (entries.length === 0) return [];

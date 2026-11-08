@@ -98,7 +98,7 @@ const NAV_GROUPS: Array<{ title: string; hrefs: string[] }> = [
   { title: "التسجيل", hrefs: ["/registration", "/pending-registrations", "/registration-students", "/registration-pool-search"] },
   { title: "التقارير والإحصائيات", hrefs: ["/statistics", "/track-report", "/monthly-report", "/reports"] },
   { title: "الأوسمة والتواصل", hrefs: ["/badges", "/badge-entitlements", "/messages", "/my-messages", "/calendar", "/store-manage"] },
-  { title: "الإعدادات والبيانات", hrefs: ["/export", "/db-settings", "/white-label"] },
+  { title: "الإعدادات والبيانات", hrefs: ["/audit-log", "/export", "/db-settings", "/white-label"] },
 ];
 const GROUPED_ROLES = ["leader", "deputy", "track_supervisor"];
 const isActivePath = (location: string, href: string) => location === href || (href !== "/" && location.startsWith(href));
@@ -945,6 +945,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/unlinked-students", label: "طالبات بدون حلقة", icon: UserX },
       { href: "/archived-staff", label: "الموظفات المؤرشفات", icon: Archive },
       { href: "/db-settings", label: "إعدادات قاعدة البيانات", icon: Database },
+      { href: "/audit-log", label: "سجل التعديلات", icon: Clock },
       { href: "/export", label: "تصدير البيانات", icon: FileDown },
     ]);
   }

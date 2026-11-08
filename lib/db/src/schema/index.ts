@@ -22,3 +22,4 @@ export * from "./reviewPlans";
 export * from "./globalSettings";
 export * from "./certificates";
 export * from "./badgeAwardCounts";
+export * from "./auditLogs";

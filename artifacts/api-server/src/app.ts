@@ -5,6 +5,7 @@ import path from "path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import router from "./routes";
+import { auditLog } from "./middlewares/auditLog";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -83,6 +84,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
+// سجل التدقيق: كل تعديل/حذف ناجح
+app.use("/api", auditLog);
 app.use("/api", router);
 
 // Serve frontend static files in production (Render deployment)
