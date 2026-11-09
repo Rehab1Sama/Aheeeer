@@ -1,3 +1,4 @@
+import { findExistingStudent } from "../lib/studentIdentity";
 import { Router, type IRouter } from "express";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, recordsTable, studentGoalsTable, studentNotesTable, studentTransfersTable, examRecordsTable, studentEnrollmentsTable } from "@workspace/db";
@@ -670,6 +671,14 @@ router.patch("/users/:id/set-role", authenticate, async (req, res): Promise<void
           .where(and(eq(studentsTable.fullName, user.name), eq(studentsTable.isArchived, false)))
           .limit(1);
         foundId = byName[0]?.id ?? null;
+        // الطالبة المؤرشفة نفسها (الاسم + الجوال): نعيد ربطها بدل إنشاء نسخة جديدة
+        if (!foundId) {
+          const existing = await findExistingStudent({ fullName: user.name, phone: user.phone, circleId: circleId ?? null });
+          if (existing) {
+            foundId = existing.id;
+            if (existing.isArchived) await db.update(studentsTable).set({ isArchived: false }).where(eq(studentsTable.id, existing.id));
+          }
+        }
       }
 
       if (foundId) {

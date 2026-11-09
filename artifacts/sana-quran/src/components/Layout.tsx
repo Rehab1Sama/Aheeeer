@@ -93,7 +93,7 @@ function NavLink({ href, label, icon: Icon, badge }: { href: string; label: stri
 // ── تجميع القائمة الجانبية تحت عناوين (للأدوار ذات القوائم الطويلة) ──
 const NAV_GROUPS: Array<{ title: string; hrefs: string[] }> = [
   { title: "المتابعة اليومية", hrefs: ["/data-entry", "/whatsapp-entry", "/data-entry-status", "/track-entry-status", "/leader-tasks", "/daily-tasks", "/deputy-board", "/deputy-tasks", "/supervisor-hours"] },
-  { title: "الطالبات والخطط", hrefs: ["/review-plans-overview", "/certificates", "/attendance", "/weekly-absence-groups", "/shortcomings", "/stumbling-stats", "/student-leaves", "/distinguished-students", "/volunteer", "/archived-students", "/unlinked-students"] },
+  { title: "الطالبات والخطط", hrefs: ["/review-plans-overview", "/certificates", "/attendance", "/weekly-absence-groups", "/shortcomings", "/stumbling-stats", "/student-leaves", "/distinguished-students", "/volunteer", "/archived-students", "/unlinked-students", "/duplicate-students"] },
   { title: "الحلقات والفريق", hrefs: ["/circles", "/deputy-circles", "/manage-tracks", "/accounts", "/circles-staffing", "/teacher-rotation", "/onboard", "/unlinked-staff", "/archived-staff"] },
   { title: "التسجيل", hrefs: ["/registration", "/pending-registrations", "/registration-students", "/registration-pool-search"] },
   { title: "التقارير والإحصائيات", hrefs: ["/statistics", "/track-report", "/monthly-report", "/reports"] },
@@ -946,6 +946,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/archived-staff", label: "الموظفات المؤرشفات", icon: Archive },
       { href: "/db-settings", label: "إعدادات قاعدة البيانات", icon: Database },
       { href: "/audit-log", label: "سجل التعديلات", icon: Clock },
+      { href: "/duplicate-students", label: "الحسابات المكررة", icon: Users },
       { href: "/export", label: "تصدير البيانات", icon: FileDown },
     ]);
   }
@@ -983,6 +984,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/circles-staffing", label: "توزيع المعلمات والمشرفات", icon: UserX },
       { href: "/unlinked-staff", label: "موظفات غير مرتبطات", icon: UserX },
       { href: "/unlinked-students", label: "طالبات بدون حلقة", icon: UserX },
+      { href: "/duplicate-students", label: "الحسابات المكررة", icon: Users },
       { href: "/archived-staff", label: "الموظفات المؤرشفات", icon: Archive },
     ]);
   }

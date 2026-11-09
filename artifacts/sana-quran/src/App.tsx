@@ -65,6 +65,7 @@ import UnlinkedStudentsPage from "@/pages/unlinked-students";
 import ArchivedStaffPage from "@/pages/archived-staff";
 import DbSettingsPage from "@/pages/db-settings";
 import AuditLogPage from "@/pages/audit-log";
+import DuplicateStudentsPage from "@/pages/duplicate-students";
 import RegistrationStudentsPage from "@/pages/registration-students";
 import RegistrationPoolSearchPage from "@/pages/registration-pool-search";
 import CirclesStaffingPage from "@/pages/circles-staffing";
@@ -322,6 +323,9 @@ function AppRoutes() {
         </Route>
         <Route path="/db-settings">
           {isLeader ? <DbSettingsPage /> : <Redirect to="/" />}
+        </Route>
+        <Route path="/duplicate-students">
+          {isLeaderOrDeputy ? <DuplicateStudentsPage isLeader={isLeader} /> : <Redirect to="/" />}
         </Route>
         <Route path="/audit-log">
           {isLeader ? <AuditLogPage /> : <Redirect to="/" />}

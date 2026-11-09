@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, registrationSettingsTable, usersTable, studentsTable, circlesTable, studentEnrollmentsTable } from "@workspace/db";
-import { eq, sql, desc, gt } from "drizzle-orm";
+import { eq, sql, desc, gt, and } from "drizzle-orm";
+import { findExistingStudent, existingAccountInCircle, maskEmail } from "../lib/studentIdentity";
 import { authenticate, requireRole } from "../middlewares/authenticate";
 import { hashPassword, generateToken } from "../lib/auth";
 import { rateLimit } from "../middlewares/rateLimit";
@@ -386,6 +387,32 @@ router.post("/registration/submit", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── منع الحسابات المكررة ──
+  // ١) البريد مستخدم في حساب نشط: لا ننشئ حسابًا ثانيًا (ولا نغيّر كلمة سر الحساب القائم)
+  const [emailOwner] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(and(sql`lower(${usersTable.email}) = ${email}`, eq(usersTable.isArchived, false))).limit(1);
+  if (emailOwner) {
+    res.status(409).json({ error: "لديكِ حساب بهذا البريد مسبقًا — سجّلي الدخول، أو استخدمي «نسيت كلمة المرور» إن لم تتذكريها" });
+    return;
+  }
+  // ٢) الطالبة نفسها موجودة (الاسم + الجوال أو الحلقة): نربط الحساب بسجلها بدل إنشاء نسخة
+  let studentTargetCircleId: number | null | undefined = circleId;
+  let existingStudent: Awaited<ReturnType<typeof findExistingStudent>> = null;
+  if (!role || role === "student") {
+    if (!studentTargetCircleId) {
+      const [regCircle] = await db.select({ id: circlesTable.id }).from(circlesTable).where(eq(circlesTable.trackType, "registration"));
+      studentTargetCircleId = regCircle?.id;
+    }
+    existingStudent = await findExistingStudent({ fullName, phone, circleId: circleId ?? null });
+    if (existingStudent) {
+      const account = await existingAccountInCircle(existingStudent.id, studentTargetCircleId);
+      if (account) {
+        res.status(409).json({ error: `لديكِ حساب في هذه الحلقة مسبقًا (${maskEmail(account.email)}) — سجّلي الدخول به، أو استخدمي «نسيت كلمة المرور»` });
+        return;
+      }
+    }
+  }
+
   const [newUser] = await db.insert(usersTable).values({
     email: email.toLowerCase(),
     name: fullName,
@@ -410,12 +437,20 @@ router.post("/registration/submit", async (req, res): Promise<void> => {
     }
   }
 
-  if (!role || role === "student") {
-    let targetCircleId = circleId;
-    if (!targetCircleId) {
-      const [regCircle] = await db.select().from(circlesTable).where(eq(circlesTable.trackType, "registration"));
-      targetCircleId = regCircle?.id;
+  if ((!role || role === "student") && existingStudent && newUser) {
+    // ربط الحساب الجديد بسجل الطالبة القائم، وتسجيلها في الحلقة (وإعادتها من الأرشيف إن كانت مؤرشفة)
+    const targetCircleId = studentTargetCircleId ?? null;
+    if (existingStudent.isArchived) {
+      await db.update(studentsTable).set({ isArchived: false, ...(targetCircleId ? { circleId: targetCircleId } : {}) }).where(eq(studentsTable.id, existingStudent.id));
     }
+    if (targetCircleId) {
+      await db.insert(studentEnrollmentsTable)
+        .values({ studentId: existingStudent.id, circleId: targetCircleId, isArchived: false })
+        .onConflictDoUpdate({ target: [studentEnrollmentsTable.studentId, studentEnrollmentsTable.circleId], set: { isArchived: false, archivedAt: null } });
+    }
+    await db.update(usersTable).set({ studentId: existingStudent.id }).where(eq(usersTable.id, newUser.id));
+  } else if (!role || role === "student") {
+    const targetCircleId = studentTargetCircleId;
 
     const mergedExtra = extraData ? { ...extraData } : {};
     if (isNewcomer) mergedExtra.__isNewcomer = true;
