@@ -79,6 +79,7 @@ import {
   type FormState,
 } from "@/components/data-entry/parts";
 import { searchMatch } from "@/lib/arabicSearch";
+import { notifyEntrySaved } from "@/lib/motivation";
 
 export default function DataEntryPage() {
   const [, navigate] = useLocation();
@@ -481,7 +482,7 @@ export default function DataEntryPage() {
         throw new Error(err?.error ?? "فشل الحفظ");
       }
       const data = await res.json();
-      toast({ title: `تم حفظ إدخال الأسبوع ✓ (${data.created} طالبة)` });
+      toast({ title: `تم حفظ إدخال الأسبوع ✓ (${data.created} طالبة)` }); notifyEntrySaved();
       setMothersWeekly({});
       invalidateQueries();
     } catch (e: any) {
@@ -750,7 +751,7 @@ export default function DataEntryPage() {
         { id: editingRecordId, data: payload },
         {
           onSuccess: () => {
-            toast({ title: "تم تحديث البيانات ✓" });
+            toast({ title: "تم تحديث البيانات ✓" }); notifyEntrySaved();
             invalidateQueries();
             setDialogOpen(false);
             setEditingRecordId(null);
@@ -764,7 +765,7 @@ export default function DataEntryPage() {
         { data: payload },
         {
           onSuccess: () => {
-            toast({ title: "تم حفظ البيانات ✓" });
+            toast({ title: "تم حفظ البيانات ✓" }); notifyEntrySaved();
             invalidateQueries();
             setDialogOpen(false);
           },
@@ -836,7 +837,7 @@ export default function DataEntryPage() {
       });
       if (!res.ok) throw new Error("فشل الحفظ");
       const data = await res.json();
-      toast({ title: `تم حفظ ${data.created} سجل ✓` });
+      toast({ title: `تم حفظ ${data.created} سجل ✓` }); notifyEntrySaved();
       invalidateQueries();
       setBulkDialogOpen(false);
       setBulkStep(1);

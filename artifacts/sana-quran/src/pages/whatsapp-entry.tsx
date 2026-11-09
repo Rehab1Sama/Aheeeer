@@ -18,6 +18,7 @@ import { getInputFields } from "@/lib/schoolConfig";
 import { getMakkahDay } from "@/lib/date";
 import { parseCards, parseChildrenMessage, matchStudent, type ParsedCard, type ParsedField, type StudentRef } from "@/lib/cardParser";
 import { ClipboardPaste, CheckCircle2, AlertTriangle, Pencil, UserX, Loader2 } from "lucide-react";
+import { notifyEntrySaved } from "@/lib/motivation";
 
 // ─── أنواع الحالة ────────────────────────────────────────────────
 
@@ -410,6 +411,7 @@ export default function WhatsappEntryPage() {
       title: failed.length ? `تم حفظ ${ok} وتعذّر ${failed.length}` : `تم حفظ ${ok} سجل ✓`,
       variant: failed.length ? "destructive" : undefined,
     });
+    if (ok > 0) notifyEntrySaved();
     if (failed.length === 0 && blocked.length === 0) {
       setCards(null);
       setText("");

@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
 import { clearAuth, getToken, setToken } from "@/lib/auth";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { motivationMessage, isLateEntryNow } from "@/lib/motivation";
 import { isFeatureEnabled, shouldHideShortcomings, BRAND } from "@/lib/schoolConfig";
 import {
   Users, ClipboardList, BarChart3,
@@ -240,6 +241,83 @@ function useMobileTableLabels() {
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, []);
+}
+
+// ── رسالة التحفيز بعد الإدخال، وتذكير المتأخرة ──
+const ENTRY_ROLES = ["supervisor", "teacher", "track_supervisor", "data_entry"];
+function readLS(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
+function writeLS(key: string, v: string) { try { localStorage.setItem(key, v); } catch { /* المتصفح يمنع التخزين */ } }
+
+async function fetchToday(): Promise<{ missing?: number; date?: string } | null> {
+  try {
+    const r = await fetch("/api/today-summary", { headers: { Authorization: `Bearer ${getToken()}` } });
+    return r.ok ? r.json() : null;
+  } catch { return null; }
+}
+
+function EntryMotivation({ role, name }: { role: string; name: string }) {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ENTRY_ROLES.includes(role)) return;
+    let timer = 0;
+    const onSaved = async () => {
+      qc.invalidateQueries({ queryKey: ["todaySummary"] });
+      const t = await fetchToday();
+      if (!t || t.missing == null) return;
+      const now = Date.now();
+      // اكتمال اليوم: مرة واحدة في اليوم. وما دون ذلك: مرة كل ١٥ دقيقة على الأكثر (لا تزعج بعد كل طالبة)
+      if (t.missing === 0) {
+        if (readLS("motivation-complete") === t.date) return;
+        writeLS("motivation-complete", t.date ?? "");
+      } else {
+        const last = Number(readLS("motivation-partial") ?? 0);
+        if (now - last < 15 * 60 * 1000) return;
+        writeLS("motivation-partial", String(now));
+      }
+      setMsg(motivationMessage({ missing: t.missing, late: isLateEntryNow(), name }));
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setMsg(null), 9000);
+    };
+    window.addEventListener("sana:entry-saved", onSaved);
+    return () => { window.removeEventListener("sana:entry-saved", onSaved); window.clearTimeout(timer); };
+  }, [role, name, qc]);
+  if (!msg) return null;
+  return (
+    <div className="fixed z-50 inset-x-3 bottom-20 md:bottom-6 md:left-6 md:right-auto md:max-w-sm" role="status" aria-live="polite">
+      <div className="rounded-2xl shadow-xl border border-primary/15 bg-card p-4 pr-5 flex gap-3 items-start animate-in fade-in slide-in-from-bottom-4">
+        <span className="w-1.5 self-stretch rounded-full bg-gradient-to-b from-[#1A2260] to-[#2B3784]" />
+        <p className="flex-1 text-sm font-semibold leading-7">{msg}</p>
+        <button type="button" onClick={() => setMsg(null)} className="text-muted-foreground text-lg leading-none" aria-label="إغلاق">×</button>
+      </div>
+    </div>
+  );
+}
+
+/** تذكير لطيف في كل الصفحات بعد التاسعة مساءً بتوقيت مكة إن بقيت طالبات بلا إدخال (يُخفى لليوم بضغطة) */
+function LateReminder({ role, name }: { role: string; name: string }) {
+  const [, force] = useState(0);
+  const makkahHour = new Date(Date.now() + 3 * 3600 * 1000).getUTCHours();
+  const evening = makkahHour >= 21 || makkahHour < 1;
+  const { data } = useQuery({
+    queryKey: ["todaySummary"],
+    enabled: ["supervisor", "teacher"].includes(role) && evening,
+    staleTime: 30 * 1000,
+    queryFn: async () => (await fetchToday()) ?? { items: [] },
+  });
+  const t = data as { missing?: number; date?: string } | undefined;
+  if (!evening || !t?.missing || readLS("late-reminder-hidden") === t.date) return null;
+  const first = name.trim().split(/\s+/)[0] || "قمرة";
+  const hoursLeft = makkahHour >= 21 ? 25 - makkahHour : 1 - makkahHour;
+  return (
+    <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-4 py-3 flex items-center gap-3 text-sm">
+      <span className="flex-1 font-semibold text-amber-900 dark:text-amber-200">
+        حبيبة {first} 🌷 باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، والوقت يقرّب ({hoursLeft <= 1 ? "أقل من ساعة" : `نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الواحدة) — الله يعينكِ ✨
+      </span>
+      <Link href="/data-entry" className="rounded-xl bg-amber-600 text-white px-3 py-1.5 text-xs font-bold whitespace-nowrap">أدخلي الآن</Link>
+      <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-amber-800/70 text-lg leading-none" aria-label="إخفاء لليوم">×</button>
+    </div>
+  );
 }
 
 // ── «المطلوب اليوم» أعلى الصفحة الرئيسية ──
@@ -852,6 +930,7 @@ export default function Layout({ user, children }: LayoutProps) {
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            <LateReminder role={user.role} name={user.name ?? ""} />
             {isHome && <TodayBar role={user.role} />}
             {children}
           </div>
@@ -859,6 +938,7 @@ export default function Layout({ user, children }: LayoutProps) {
             جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
           </footer>
           <BottomNav role={user.role} items={navItems} onMore={() => setSidebarOpen(true)} />
+          <EntryMotivation role={user.role} name={user.name ?? ""} />
         </main>
       </div>
     </div>

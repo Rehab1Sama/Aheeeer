@@ -35,6 +35,13 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
   const circles = allCircles
     .filter((c) => scope === "all" || scope.includes(c.id))
     .filter((c) => isEntryExpectedOn((c.trackId ? typeById.get(c.trackId) : null) ?? c.trackType ?? "girls", c.name, D));
+  // المعلمة لا تُدخل بيانات حلقات الفتيات (تُدخلها المشرفة)، فلا تُحسب عليها
+  if (role === "teacher") {
+    for (let k = circles.length - 1; k >= 0; k--) {
+      const c = circles[k]!;
+      if (((c.trackId ? typeById.get(c.trackId) : null) ?? c.trackType ?? "girls") === "girls") circles.splice(k, 1);
+    }
+  }
   if (circles.length === 0) {
     res.json({ items: [] });
     return;
@@ -103,7 +110,7 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
     }
   }
 
-  res.json({ date: D, items });
+  res.json({ date: D, items, missing, circles: withRoster });
 });
 
 export default router;
