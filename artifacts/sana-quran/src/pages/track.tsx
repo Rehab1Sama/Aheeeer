@@ -27,8 +27,8 @@ type EnrichedCircle = {
   students: { id: number; fullName: string; email: string | null }[];
 };
 
-/** أول اسمين فقط في سطر الحلقة المختصر */
-const shortName = (n?: string | null) => (n ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
+/** الاسم الأول فقط في سطر الحلقة المختصر */
+const firstName = (n?: string | null) => (n ?? "").trim().split(/\s+/)[0] ?? "";
 
 function ClockFace({ time }: { time: string }) {
   const [h, m] = time ? time.split(":").map(Number) : [0, 0];
@@ -539,16 +539,21 @@ export default function TrackPage() {
                       onClick={() => setExpandedCircle(isExpanded ? null : circle.id)}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{circle.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate flex items-center gap-1">
+                        <p className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{circle.name}</span>
                           {displayTime && (
-                            <span className={`inline-flex items-center gap-0.5 ${isPm ? "text-indigo-600" : "text-amber-600"}`}>
+                            <span className={`inline-flex items-center gap-0.5 text-[11px] ${isPm ? "text-indigo-600" : "text-amber-600"}`}>
                               {isPm ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}{displayTime}
                             </span>
                           )}
-                          {displayTime && (enriched?.teacherName || enriched?.supervisorName) && <span>·</span>}
-                          <span className="truncate">{shortName(enriched?.teacherName ?? enriched?.supervisorName)}</span>
                         </p>
+                        {(enriched?.teacherName || enriched?.supervisorName) && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                            {enriched?.teacherName && <span>المعلمة <span className="text-foreground font-medium">{firstName(enriched.teacherName)}</span></span>}
+                            {enriched?.teacherName && enriched?.supervisorName && <span className="text-border">|</span>}
+                            {enriched?.supervisorName && <span>المشرفة <span className="text-foreground font-medium">{firstName(enriched.supervisorName)}</span></span>}
+                          </p>
+                        )}
                       </div>
                       <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5 flex-shrink-0">{displayStudents.length}</span>
                       {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
