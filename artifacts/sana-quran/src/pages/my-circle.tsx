@@ -13,6 +13,7 @@ import { getInputFields, getFieldLabel } from "@/lib/schoolConfig";
 import MessagesSection from "@/components/MessagesSection";
 import MonthlyLeaderboardCard from "@/components/MonthlyLeaderboardCard";
 import { getCurrentPlanDay, getDayDates, formatArDate, getPlanRanges, type ReviewPlan } from "@/components/ReviewPlanSection";
+import { isFreshBadge } from "@/lib/badgeWindow";
 
 // حقول "الصفحات" القابلة للعرض من سجل يومي واحد، وكيفية استخراج كل حقل من الـ record.
 // يُطابق تمامًا حقول الإدخال المُستخدمة في شاشة إدخال البيانات (data-entry.tsx)
@@ -333,26 +334,28 @@ export default function MyCirclePage() {
 
       <MonthlyLeaderboardCard userRole={(user as any)?.role} />
 
-      {(circleBadges.length > 0 || liveCircleBadges.length > 0) && (
+      {(() => { const freshLive = liveCircleBadges.filter((b: any) => isFreshBadge(b)); const freshManual = circleBadges.filter((b: any) => isFreshBadge(b)); const total = circleBadges.length + liveCircleBadges.length; return total > 0 && (
         <Card className="border-0 shadow-sm border-r-4 border-r-indigo-400">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-indigo-700">
-              🌙 أوسمة حلقتنا
+            <CardTitle className="text-sm font-bold flex items-center justify-between gap-2 text-indigo-700">
+              <span>🌙 أوسمة حلقتنا</span>
+              <a href={`${BASE}/badges`} className="text-xs font-semibold text-primary hover:underline">كل الأوسمة ({total}) ←</a>
             </CardTitle>
           </CardHeader>
+          {freshLive.length + freshManual.length > 0 && (
           <CardContent className="pt-0">
             <div className="flex flex-wrap gap-6">
-              {liveCircleBadges.map((b: any) => (
+              {freshLive.map((b: any) => (
                 <BadgeChip key={`live-${b.badgeId}`} badge={b} size={400} compact />
               ))}
-              {circleBadges.map((b: any) => (
+              {freshManual.map((b: any) => (
                 <BadgeChip key={b.id} badge={b} size={400} compact />
               ))}
             </div>
           </CardContent>
+          )}
         </Card>
-      )}
-
+      ); })()}
       {((user?.role === "teacher" && (user as any)?.circleSupervisorName) ||
         (user?.role === "supervisor" && (user as any)?.circleTeacherName)) && (
         <Card className="border-0 shadow-sm">

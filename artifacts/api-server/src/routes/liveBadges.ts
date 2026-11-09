@@ -64,7 +64,11 @@ router.get("/live-badges/circle/:id", authenticate, async (req, res): Promise<vo
   const moon = await computeCircleWeeklyMoonBadge(circleId);
   if (moon) badges.push(moon);
 
-  res.json(badges);
+  // وقت أول ظهور: الواجهة تعرض الوسام في الصفحة الأمامية ٢٤ ساعة فقط
+  const week = getLastCompletedWeekStart();
+  res.json(await Promise.all(badges.map(async (b) => ({
+    ...b, awardedAt: await firstSeenAt("circle", circleId, b.badgeId, b.tier, `${b.tier}:${week}`).catch(() => null),
+  }))));
 });
 
 /**
@@ -138,7 +142,11 @@ router.get("/live-badges/track/:trackName", authenticate, async (req, res): Prom
   const noShortcoming = await computeTrackNoShortcoming(trackName);
   if (noShortcoming) badges.push(noShortcoming);
 
-  res.json(badges);
+  const weekT = getLastCompletedWeekStart();
+  const trackKey = [...trackName].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 2_000_000_000, 7);
+  res.json(await Promise.all(badges.map(async (b) => ({
+    ...b, awardedAt: await firstSeenAt("track", trackKey, b.badgeId, b.tier, `${b.tier}:${weekT}`).catch(() => null),
+  }))));
 });
 
 const stripPrefix = (s: string) => s.replace(/^مسار\s+/, "").trim();
@@ -166,7 +174,10 @@ router.get("/live-badges/track-supervisor/:supervisorNameId", authenticate, asyn
   const pride = await computeSupervisorWeeklyCommitment(supervisorNameId);
   if (pride) badges.push(pride);
 
-  res.json(badges);
+  const weekS = getLastCompletedWeekStart();
+  res.json(await Promise.all(badges.map(async (b) => ({
+    ...b, awardedAt: await firstSeenAt("track_supervisor", supervisorNameId, b.badgeId, b.tier, `${b.tier}:${weekS}`).catch(() => null),
+  }))));
 });
 
 export default router;
