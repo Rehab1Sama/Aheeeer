@@ -5,6 +5,7 @@ import {
   certificateTermsTable,
   certificateScoresTable,
   certificateImportCandidatesTable,
+  calendarEventsTable,
   studentsTable,
   circlesTable,
   tracksTable,
@@ -324,6 +325,27 @@ async function computeResults(
     };
   });
 }
+
+/**
+ * الفصول من التقويم: «بداية الفصل X» = البداية، والنهاية = اليوم السابق لأول إجازة بعدها
+ * (أو لبداية الفصل التالي إن لم تُسجَّل إجازة).
+ */
+router.get("/certificate-terms/calendar-terms", authenticate, async (req, res): Promise<void> => {
+  if (!MANAGER_ROLES.includes(req.userRole!)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const events = (await db.select({ title: calendarEventsTable.title, date: calendarEventsTable.date, eventType: calendarEventsTable.eventType })
+    .from(calendarEventsTable)).sort((a, b) => a.date.localeCompare(b.date));
+  const dayBefore = (iso: string) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+  const isHoliday = (e: { title: string; eventType: string }) => e.eventType === "holiday" || /[اإ]?[جح]ازة/.test(e.title);
+  const starts = events.filter((e) => /بداية\s+الفصل/.test(e.title));
+  const terms = starts.map((st, k) => {
+    const name = (/بداية\s+(الفصل\s+\S+)/.exec(st.title)?.[1] ?? st.title).trim();
+    const nextStart = starts[k + 1]?.date;
+    const holiday = events.find((e) => e.date > st.date && (!nextStart || e.date < nextStart) && isHoliday(e));
+    const endDate = holiday ? dayBefore(holiday.date) : nextStart ? dayBefore(nextStart) : null;
+    return { name, startDate: st.date, endDate };
+  });
+  res.json(terms);
+});
 
 router.get("/certificate-terms", authenticate, async (req, res): Promise<void> => {
   const terms = await db.select().from(certificateTermsTable).orderBy(desc(certificateTermsTable.startDate));

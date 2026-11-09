@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useListCertificateTerms, useCreateCertificateTerm, useUpdateCertificateTerm,
   useListCertificateStudentResults, useSaveCertificateGrades, usePublishCertificateTerm,
@@ -21,8 +21,15 @@ function TermForm({ open, onOpenChange, initial, onSaved }: { open: boolean; onO
   const create = useCreateCertificateTerm(); const update = useUpdateCertificateTerm();
   const [form, setForm] = useState({ name: initial?.name ?? "", academicYear: initial?.academicYear ?? "", startDate: initial?.startDate?.slice(0, 10) ?? "", endDate: initial?.endDate?.slice(0, 10) ?? "", reviewCycleOneStart: initial?.reviewCycleOneStart?.slice(0, 10) ?? "", reviewCycleTwoStart: initial?.reviewCycleTwoStart?.slice(0, 10) ?? "" });
   const busy = create.isPending || update.isPending;
+  // الفصول من التقويم: البداية من «بداية الفصل»، والنهاية قبل إجازته
+  const { data: calendarTerms = [] } = useQuery<Array<{ name: string; startDate: string; endDate: string | null }>>({
+    queryKey: ["calendarTerms"], enabled: open, staleTime: 5 * 60 * 1000,
+    queryFn: async () => { const r = await fetch("/api/certificate-terms/calendar-terms", { headers: { Authorization: `Bearer ${getToken()}` } }); return r.ok ? r.json() : []; },
+  });
+  const pickCalendar = (i: string) => { const t = calendarTerms[Number(i)]; if (t) setForm((f) => ({ ...f, name: t.name, startDate: t.startDate, endDate: t.endDate ?? f.endDate })); };
   const submit = (e: React.FormEvent) => { e.preventDefault(); const data = { name: form.name, startDate: form.startDate, endDate: form.endDate, ...(form.academicYear ? { academicYear: form.academicYear } : {}), ...(form.reviewCycleOneStart ? { reviewCycleOneStart: form.reviewCycleOneStart } : {}), ...(form.reviewCycleTwoStart ? { reviewCycleTwoStart: form.reviewCycleTwoStart } : {}) }; const done = () => { onSaved(); onOpenChange(false); }; initial ? update.mutate({ termId: initial.id, data }, { onSuccess: done }) : create.mutate({ data }, { onSuccess: done }); };
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent dir="rtl" className="max-w-lg"><DialogHeader><DialogTitle className="text-right text-xl">{initial ? "تعديل الفصل" : "فصل دراسي جديد"}</DialogTitle></DialogHeader><form onSubmit={submit} className="space-y-4">
+    {calendarTerms.length > 0 && <div className="rounded-xl border border-primary/15 bg-primary/5 p-3"><label className="text-sm font-semibold text-primary">من التقويم</label><select defaultValue="" onChange={e => pickCalendar(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5"><option value="" disabled>اختاري الفصل لتُملأ التواريخ تلقائيًا</option>{calendarTerms.map((t, i) => <option key={i} value={i}>{t.name} — {t.startDate}{t.endDate ? ` إلى ${t.endDate}` : ""}</option>)}</select><p className="text-xs text-muted-foreground mt-1">البداية من «بداية الفصل» في التقويم، والنهاية اليوم السابق لإجازته.</p></div>}
     <div><label className="text-sm font-semibold">اسم الفصل</label><input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="الفصل الدراسي الأول" className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/25" /></div>
     <div className="grid grid-cols-2 gap-3"><div><label className="text-sm font-semibold">العام الأكاديمي</label><input value={form.academicYear} onChange={e => setForm({ ...form, academicYear: e.target.value })} placeholder="1446 هـ" className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5" /></div><div><label className="text-sm font-semibold">بداية الفصل</label><input required type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5" /></div></div>
     <div><label className="text-sm font-semibold">نهاية الفصل</label><input required type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5" /></div>
