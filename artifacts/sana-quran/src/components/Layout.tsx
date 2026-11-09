@@ -294,11 +294,11 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
   );
 }
 
-/** تذكير لطيف في كل الصفحات بعد التاسعة مساءً بتوقيت مكة إن بقيت طالبات بلا إدخال (يُخفى لليوم بضغطة) */
+/** تذكير لطيف في كل الصفحات من التاسعة حتى الثانية عشرة ليلًا (موعد انتهاء الإدخال) بتوقيت مكة (يُخفى لليوم بضغطة) */
 function LateReminder({ role, name }: { role: string; name: string }) {
   const [, force] = useState(0);
   const makkahHour = new Date(Date.now() + 3 * 3600 * 1000).getUTCHours();
-  const evening = makkahHour >= 21 || makkahHour < 1;
+  const evening = makkahHour >= 21;
   const { data } = useQuery({
     queryKey: ["todaySummary"],
     enabled: ["supervisor", "teacher"].includes(role) && evening,
@@ -308,11 +308,11 @@ function LateReminder({ role, name }: { role: string; name: string }) {
   const t = data as { missing?: number; date?: string } | undefined;
   if (!evening || !t?.missing || readLS("late-reminder-hidden") === t.date) return null;
   const first = name.trim().split(/\s+/)[0] || "قمرة";
-  const hoursLeft = makkahHour >= 21 ? 25 - makkahHour : 1 - makkahHour;
+  const hoursLeft = 24 - makkahHour;
   return (
     <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-4 py-3 flex items-center gap-3 text-sm">
       <span className="flex-1 font-semibold text-amber-900 dark:text-amber-200">
-        حبيبتنا {first}! باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، و{hoursLeft <= 1 ? "بقي أقل من ساعة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الواحدة، أعانكِ الله 🌿
+        حبيبتنا {first}! باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، و{hoursLeft <= 1 ? "بقي أقل من ساعة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الثانية عشرة، أعانكِ الله 🌿
       </span>
       <Link href="/data-entry" className="rounded-xl bg-amber-600 text-white px-3 py-1.5 text-xs font-bold whitespace-nowrap">أدخلي الآن</Link>
       <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-amber-800/70 text-lg leading-none" aria-label="إخفاء لليوم">×</button>
