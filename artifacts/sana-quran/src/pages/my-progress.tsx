@@ -54,6 +54,10 @@ export default function MyProgressPage() {
   const { data: nextCalendarEvents = [] } = useListCalendarEvents({ year: calendarYear + 1 }, {
     query: { queryKey: ["calendarEvents", calendarYear + 1] },
   });
+  // السنة السابقة أيضًا: فصل بدأ في نوفمبر يبقى «الحالي» في يناير
+  const { data: prevCalendarEvents = [] } = useListCalendarEvents({ year: calendarYear - 1 }, {
+    query: { queryKey: ["calendarEvents", calendarYear - 1] },
+  });
   useEffect(() => {
     const token = localStorage.getItem("sana_auth_token");
     fetch(`${BASE}/api/settings`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
@@ -153,14 +157,19 @@ export default function MyProgressPage() {
     .slice()
     .sort((a: any, b: any) => b.date.localeCompare(a.date));
   const visibleRecords = sortedRecords.filter((r: any) => (!dateFrom || r.date >= dateFrom) && (!dateTo || r.date <= dateTo));
-  const allCalendarEvents = [...(calendarEvents as any[]), ...(nextCalendarEvents as any[])];
+  const allCalendarEvents = [...(prevCalendarEvents as any[]), ...(calendarEvents as any[]), ...(nextCalendarEvents as any[])];
   const semesterStarts = allCalendarEvents
     .filter(e => /بداية\s+الفصل/.test(e.title ?? ""))
     .sort((a, b) => a.date.localeCompare(b.date));
   const firstTermStart = semesterStarts.find(e => /الفصل\s*الأول/.test(e.title ?? ""))?.date;
-  const secondTermStart = semesterStarts.find(e => /الفصل\s*الثاني/.test(e.title ?? ""))?.date
-    ?? semesterStarts[1]?.date;
-  // الفصل الأول مغلق، وكل ما يبدأ من تاريخ الفصل الثاني يتبع السجل الجديد.
+  // الفصل الحالي من التقويم: آخر «بداية الفصل» بدأ فعلًا (كان مكتوبًا «الفصل الثاني» ثابتًا)
+  const todayIso = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+  const startedTerms = semesterStarts.filter(e => e.date <= todayIso);
+  const currentTermEvent = startedTerms[startedTerms.length - 1] ?? semesterStarts.find(e => /الفصل\s*الثاني/.test(e.title ?? "")) ?? semesterStarts[1];
+  const secondTermStart = currentTermEvent?.date;
+  const currentTermName = (/بداية\s+(الفصل\s+\S+)/.exec(currentTermEvent?.title ?? "")?.[1] ?? "الفصل الحالي").trim();
+  const nextTermEvent = semesterStarts.find(e => e.date > todayIso);
+  // ما قبل بداية الفصل الحالي يُعرض أرشيفًا، وما بعدها سجل الفصل الحالي.
   const archivedRecords = visibleRecords.filter((r: any) =>
     secondTermStart ? r.date < secondTermStart : archivePeriods.some(p => r.date >= p.from && r.date <= p.to)
   );
@@ -483,13 +492,13 @@ export default function MyProgressPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />
-                سجل الفصل الثاني
+                سجل {currentTermName}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {currentRecords.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground text-sm">
-                  لم يبدأ الفصل الثاني بعد — ستظهر هنا أي سجلات جديدة مباشرة.
+                  لا سجلات في {currentTermName} بعد — ستظهر هنا أي سجلات جديدة مباشرة.
                   {secondTermStart && <span className="block mt-1 text-xs">يبدأ في {secondTermStart}</span>}
                 </p>
               ) : (
