@@ -244,7 +244,8 @@ function useMobileTableLabels() {
 }
 
 // ── رسالة التحفيز بعد الإدخال، وتذكير المتأخرة ──
-const ENTRY_ROLES = ["supervisor", "teacher", "track_supervisor", "data_entry"];
+// للمشرفات والمعلمات اللواتي يُدخلن البيانات فقط
+const ENTRY_ROLES = ["supervisor", "teacher"];
 function readLS(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
 function writeLS(key: string, v: string) { try { localStorage.setItem(key, v); } catch { /* المتصفح يمنع التخزين */ } }
 
