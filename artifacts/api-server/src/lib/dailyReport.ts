@@ -1,5 +1,7 @@
 // ============================================================================
-// تقرير القائدة اليومي — يُرسل إلى بوت تيليجرام رسائل منفصلة مرتبة حسب المسار.
+// تقرير القائدة اليومي — يُرسل إلى بوت تيليجرام.
+// الافتراضي: خلاصة واحدة مختصرة (الأرقام + ما يحتاج تدخلها فقط)، وأوسمة الأسبوع يوم الجمعة وأول الشهر.
+// التقرير المفصَّل أدناه (رسائل منفصلة حسب المسار) يُطلب بـ detail=1.
 // ============================================================================
 // اليوم المُبلَّغ عنه = يوم العمل الذي انتهى (أمس بتوقيت مكة افتراضيًا).
 // الرسائل:
@@ -7,7 +9,7 @@
 //   ١. مستحقات الأوسمة
 //   ٢. المعلمات الغائبات والمتأخرات
 //   ٣. المشرفات: إدخال البيانات (لم تُدخل / ناقص / متأخر) ومهام التحضير والتحفيز والتقرير
-//   ٤. مسؤولات المسارات: مهام اليوم غير المعبّأة، وتأخر إنهاء المسار، وعدم الدخول
+//   ٤. مسؤولات المسارات: مهام اليوم غير المعبَّأة، وتأخر إنهاء المسار، وعدم الدخول
 //   ٥. الطالبات المتعثرات: تأخر الخطة، الغياب، التقصير، نزول المستوى
 //   ٦. من أتممن خطة المراجعة
 // لا يكتب شيئًا في القاعدة سوى إعدادين صغيرين (معرّف المحادثة وتاريخ آخر إرسال).
@@ -56,7 +58,7 @@ function trackOrder(a: string, b: string) { return a.localeCompare(b, "ar"); }
 
 export interface DailyReport { date: string; messages: string[] }
 
-export async function buildDailyReport(reportDate?: string): Promise<DailyReport> {
+export async function buildDailyReport(reportDate?: string, opts: { detail?: boolean } = {}): Promise<DailyReport> {
   const today = getMakkahDay();
   const D = reportDate ?? addDaysStr(today, -1);
   const d14 = addDaysStr(D, -13);
@@ -119,6 +121,12 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   // رأس كل رسالة: النداء، ثم التاريخ، ثم فاصل
   const header = (icon: string, what: string) => [greet(icon, what), `<i>${fmtDate(D)}</i>`, ""];
   const isWorkDay = expected.length > 0;
+  // للخلاصة المختصرة: ما يستدعي تدخل القائدة فقط
+  const noDataCircles: string[] = [];
+  const urgentTeachers: string[] = [];
+  const urgentTracks: string[] = [];
+  const awaySupervisors: string[] = [];
+  const urgentStudents: string[] = [];
 
   // ── ٣. المشرفات (يُحسب أولًا لأن الملخص يحتاجه) ──
   type CircleIssue = Issue;
@@ -135,7 +143,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     absentCount += recs.filter((x) => x.isAbsent).length;
     const missing = r.filter((s) => !entered.has(s.studentId));
     const problems: Row[] = [];
-    if (recs.length === 0) problems.push(["الإدخال", "لم تُدخل البيانات"]);
+    if (recs.length === 0) { problems.push(["الإدخال", "لم تُدخل البيانات"]); noDataCircles.push(c.name); }
     else if (missing.length > 0) problems.push(["الإدخال", `ناقص ${ar(missing.length)} من ${ar(r.length)} (${missing.slice(0, 6).map((s) => esc(s.fullName.split(" ")[0])).join("، ")}${missing.length > 6 ? "…" : ""})`]);
     const lastAt = recs.reduce<Date | null>((m, x) => (x.createdAt && (!m || x.createdAt > m) ? x.createdAt : m), null);
     if (lastAt && minutesSinceMakkahDayStart(D, lastAt) > ONE_AM_MINUTES_SINCE_DAY_START) problems.push(["وقت الإنهاء", `متأخر ${fmtTime(lastAt)}`]);
@@ -175,10 +183,12 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   // ── ١. مستحقات الأوسمة ──
   const badgeLines: string[] = [...header("🎀", "مستحقات الأوسمة")];
   const todayDow = dow(today);
+  let hasOverview = false;
   const addOverview = async (title: string, fn: () => Promise<OverviewEntry[]>) => {
     try {
       const rows = await fn();
       if (rows.length === 0) return;
+      hasOverview = true;
       badgeLines.push(`<code>${esc(title)}</code> ✨`);
       badgeLines.push(`<blockquote>${rows.map((e) => `<b>${esc(e.label)}</b>${e.meta ? ` | ${esc(e.meta)}` : ""}${e.badge.name ? ` ← ${esc(e.badge.name)}` : ""}`).join("\n")}</blockquote>`, "");
     } catch (err) {
@@ -190,7 +200,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     const weekStart = getLastCompletedWeekStart();
     await addOverview("أقمر حلقة الأسبوع", () => overviewCircleWeeklyMoon(weekStart));
     await addOverview("حضور كامل هذا الأسبوع", () => overviewPerfectAttendanceInRange(weekStart, addDaysStr(weekStart, 4)));
-    await addOverview("التحسّن", () => overviewImprovement(weekStart));
+    await addOverview("التحسُّن", () => overviewImprovement(weekStart));
     await addOverview("مسار بلا تقصير", () => overviewTrackNoShortcoming(weekStart));
     await addOverview("التزام مسؤولة المسار", () => overviewSupervisorWeeklyCommitment(weekStart));
   }
@@ -201,9 +211,12 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   if (todayDow !== 5) badgeLines.push("<i>الأوسمة الأسبوعية تصلكِ يوم الجمعة</i>");
   messages.push(badgeLines.join("\n"));
 
-  if (!isWorkDay) { messages.unshift(buildSummary()); return { date: D, messages }; }
+  if (!isWorkDay) {
+    if (!opts.detail) return { date: D, messages: [buildDigest(), ...(hasOverview ? [messages[0]!] : [])] };
+    messages.unshift(buildSummary()); return { date: D, messages };
+  }
 
-  // ── ٢. المعلمات (تُحسب المعلمة بعينها: غياب واحد في اليوم مهما تعدّد مصدره أو حلقاتها) ──
+  // ── ٢. المعلمات (تُحسب المعلمة بعينها: غياب واحد في اليوم مهما تعدَّد مصدره أو حلقاتها) ──
   const absentDaysByTeacher = new Map<number, Set<string>>();
   const lateDaysByTeacher = new Map<number, Set<string>>();
   for (const a of absences) {
@@ -236,6 +249,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     const rows: Row[] = [["الحالة", label]];
     if (nAbs > 1) rows.push(["الغياب", `${ar(nAbs)} أيام خلال ٣٠ يومًا`]);
     if (nLate > 1) rows.push(["التأخر", `${ar(nLate)} أيام خلال ٣٠ يومًا`]);
+    if (tid && label === "غابت" && nAbs >= 3) urgentTeachers.push(`${esc(userName.get(tid) ?? "—")} (${esc(c.name)}) غابت اليوم، وهذا غيابها الـ${ar(nAbs)} خلال شهر`);
     teacherIssues.push({ track: trackNameOf(c), title: `${esc(c.name)} | ${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")}`, rows });
   }
   const noTaskCircles = expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
@@ -258,7 +272,7 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
   for (const [trackName, cs] of [...byTrack.entries()].sort((a, b) => trackOrder(a[0], b[0]))) {
     const problems: Row[] = [];
     const missingTasks = cs.filter((c) => !(tasksByCircle.get(c.id)?.length));
-    if (missingTasks.length === cs.length) problems.push(["المهام", `لم تُعبّأ لأي حلقة (${ar(cs.length)})`]);
+    if (missingTasks.length === cs.length) { problems.push(["المهام", `لم تُعبَّأ لأي حلقة (${ar(cs.length)})`]); urgentTracks.push(trackName.replace(/^مسار\s+/, "")); }
     else if (missingTasks.length > 0) problems.push(["المهام", `ناقصة ${ar(missingTasks.length)}: ${missingTasks.map((c) => esc(c.name)).join("، ")}`]);
     const times = [
       ...cs.flatMap((c) => (recsByCircle.get(c.id) ?? []).map((r) => r.createdAt)),
@@ -275,12 +289,12 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
     for (const a of accounts) {
       const days = a.lastLoginAt ? Math.floor((Date.now() - new Date(a.lastLoginAt).getTime()) / 86400000) : null;
       if (days === null) problems.push([esc(a.name), "لم تدخل الموقع أبدًا"]);
-      else if (days >= 3) problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]);
+      else if (days >= 3) { problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]); awaySupervisors.push(`${esc(a.name)} (${ar(days)} أيام)`); }
     }
     if (problems.length === 0) continue;
     tsProblems++;
     const who = names.length ? names.join("، ") : accounts.map((a) => a.name).join("، ");
-    if (filledBy.length) problems.push(["عبّأت المهام", filledBy.map((n) => esc(n!)).join("، ")]);
+    if (filledBy.length) problems.push(["عبَّأت المهام", filledBy.map((n) => esc(n!)).join("، ")]);
     tsLines.push(itemBlock({ track: trackName, title: `مسار ${esc(trackName.replace(/^مسار\s+/, ""))}${who ? ` | ${esc(who)}` : ""}`, rows: problems }), "");
   }
   if (tsProblems === 0) tsLines.push("ما شاء الله، كل المسارات أنجزت مهامها.");
@@ -318,6 +332,8 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
       const low = lowByStudent.get(k);
       if (low) reasons.push(["الحفظ", `منخفض: ${ar(Math.round((low.totalPages ?? 0) * 10) / 10)} صفحة في ${ar(low.periodDays)} يومًا`]);
       if (reasons.length === 0) continue;
+      const absent3 = tail.length === 3 && tail.every((r) => r.isAbsent);
+      if (absent3 || delay >= 5) urgentStudents.push(`${esc(s.fullName.split(" ").slice(0, 2).join(" "))} (${esc(c.name)})`);
       studentIssues.push({ track: trackNameOf(c), title: `${esc(c.name)} | ${esc(s.fullName)}`, rows: reasons });
     }
   }
@@ -325,11 +341,54 @@ export async function buildDailyReport(reportDate?: string): Promise<DailyReport
 
   // ── ٦. من أتممن خطة المراجعة ──
   const doneIssues: CircleIssue[] = completed.map((x) => ({ track: x.track, title: `${esc(x.circle)} | ${esc(x.name)}`, rows: x.pages ? [["الخطة", `${ar(x.pages)} صفحة`]] : [] }));
-  messages.push([...header("✨", "بشرى من أتممن خطة المراجعة"), `العدد: <b>${ar(completed.length)}</b> طالبة`, ...groupByTrack(doneIssues, "لم تُتمّ أي طالبة خطتها بعد."), "", "<i>بارك الله فيكِ وفي جهودكِ يا رِحاب</i>"].join("\n"));
+  messages.push([...header("✨", "بشرى من أتممن خطة المراجعة"), `العدد: <b>${ar(completed.length)}</b> طالبة`, ...groupByTrack(doneIssues, "لم تُتِمَّ أي طالبة خطتها بعد."), "", "<i>بارك الله فيكِ وفي جهودكِ يا رِحاب</i>"].join("\n"));
 
+  if (!opts.detail) {
+    return { date: D, messages: [buildDigest({ teachers: teacherIssues.length, circles: supIssues.length, students: studentIssues.length }), ...(hasOverview ? [messages[0]!] : [])] };
+  }
   messages.unshift(buildSummary({ teachers: teacherIssues.length, supervisors: supIssues.length, tracks: tsProblems, students: studentIssues.length, completed: completed.length }));
 
   return { date: D, messages };
+
+  // ── الخلاصة اليومية المختصرة (الافتراضية): رسالة واحدة فيها ما يستدعي تدخل القائدة فقط ──
+  function buildDigest(counts?: { teachers: number; circles: number; students: number }): string {
+    const lines = [`🌸 <b>${NAMES[dow(D) % NAMES.length]}</b>، خلاصة يوم ${fmtDate(D)}`, ""];
+    if (!isWorkDay) {
+      lines.push("لا دوام في هذا اليوم، دمتِ بخير 🌿");
+      if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
+      return lines.join("\n");
+    }
+    const attendTotal = presentCount + absentCount;
+    const pct = attendTotal ? ar(Math.round((presentCount / attendTotal) * 100)) : "٠";
+    lines.push(
+      `• الحلقات المكتملة: <b>${ar(completeCircles)}</b> من ${ar(circlesWithRoster)}`,
+      `• الحضور: <b>${pct}٪</b>`,
+      `• خطط المراجعة المتأخرة: <b>${ar(behind)}</b> من ${ar(behind + ontrack + ahead)}`,
+      "",
+    );
+    const list = (xs: string[], max = 4) => xs.slice(0, max).join("، ") + (xs.length > max ? ` و${ar(xs.length - max)} غيرها` : "");
+    const urgent: string[] = [];
+    for (const t of urgentTeachers) urgent.push(t);
+    if (noDataCircles.length) urgent.push(`لم تُدخل بيانات ${noDataCircles.length === 1 ? "حلقة" : "حلقات"}: ${list(noDataCircles.map((n) => esc(n)))}`);
+    if (urgentTracks.length) urgent.push(`لم تُعبَّأ مهام اليوم في: ${list(urgentTracks.map((t) => `مسار ${esc(t)}`))}`);
+    if (awaySupervisors.length) urgent.push(`لم تدخل الموقع منذ أيام: ${list(awaySupervisors)}`);
+    if (urgentStudents.length) urgent.push(`طالبات غبن ٣ أيام متتالية أو تأخرت خطتهن كثيرًا: ${list(urgentStudents, 3)}`);
+    if (urgent.length) {
+      lines.push("<b>يحتاج تدخلكِ</b> 🌧️", `<blockquote>${urgent.slice(0, 6).map((u) => `• ${u}`).join("\n")}</blockquote>`);
+    } else {
+      lines.push("ما شاء الله، لا شيء يستدعي تدخلكِ اليوم 🌿");
+    }
+    if (counts) {
+      const info: string[] = [];
+      if (counts.teachers) info.push(`غياب أو تأخر معلمات: ${ar(counts.teachers)}`);
+      if (counts.circles) info.push(`حلقات عليها ملاحظات: ${ar(counts.circles)}`);
+      if (counts.students) info.push(`طالبات يحتجن متابعة: ${ar(counts.students)}`);
+      if (info.length) lines.push("", `<i>للعلم: ${info.join(" · ")}، وتفاصيلها في الموقع</i>`);
+    }
+    if (completed.length) lines.push("", `أتمَّت ${ar(completed.length)} ${completed.length >= 3 && completed.length <= 10 ? "طالبات" : "طالبة"} خطة المراجعة ♥️`);
+    if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
+    return lines.join("\n");
+  }
 
   // ── ٠. الملخص (يُبنى أخيرًا ليحمل أعداد التقارير التالية، ويوضع أول رسالة) ──
   function buildSummary(counts?: { teachers: number; supervisors: number; tracks: number; students: number; completed: number }): string {
@@ -404,10 +463,10 @@ async function resolveChatId(token: string): Promise<string | null> {
   return String(chat.id);
 }
 
-export async function sendDailyReportToTelegram(opts: { date?: string; force?: boolean } = {}): Promise<{ sent: number; date: string; skipped?: string }> {
+export async function sendDailyReportToTelegram(opts: { date?: string; force?: boolean; detail?: boolean } = {}): Promise<{ sent: number; date: string; skipped?: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN غير مضبوط في إعدادات الخادم");
-  const report = await buildDailyReport(opts.date);
+  const report = await buildDailyReport(opts.date, { detail: opts.detail });
   if (!opts.force && (await getSetting("telegram_last_report_date")) === report.date) {
     return { sent: 0, date: report.date, skipped: "أُرسل تقرير هذا اليوم مسبقًا" };
   }

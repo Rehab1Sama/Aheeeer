@@ -27,10 +27,10 @@ router.get("/reports/telegram/run", async (req, res): Promise<void> => {
   const date = isDate(req.query.date) ? req.query.date : undefined;
   try {
     if (req.query.dry === "1") {
-      res.json(await buildDailyReport(date));
+      res.json(await buildDailyReport(date, { detail: req.query.detail === "1" }));
       return;
     }
-    const result = await sendDailyReportToTelegram({ date, force: req.query.force === "1" });
+    const result = await sendDailyReportToTelegram({ date, force: req.query.force === "1", detail: req.query.detail === "1" });
     logger.info(result, "Daily telegram report");
     res.json(result);
   } catch (err) {
@@ -50,7 +50,7 @@ router.get("/reports/weekly-badges/run", async (req, res): Promise<void> => {
 router.get("/reports/daily-preview", authenticate, async (req, res): Promise<void> => {
   if (req.userRole !== "leader") { res.status(403).json({ error: "Forbidden" }); return; }
   try {
-    res.json(await buildDailyReport(isDate(req.query.date) ? req.query.date : undefined));
+    res.json(await buildDailyReport(isDate(req.query.date) ? req.query.date : undefined, { detail: req.query.detail === "1" }));
   } catch (err) {
     logger.error({ err }, "Daily report preview failed");
     res.status(500).json({ error: err instanceof Error ? err.message : "فشل التقرير" });
