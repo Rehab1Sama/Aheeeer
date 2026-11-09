@@ -67,6 +67,7 @@ import DbSettingsPage from "@/pages/db-settings";
 import AuditLogPage from "@/pages/audit-log";
 import DuplicateStudentsPage from "@/pages/duplicate-students";
 import TransferRequestsPage from "@/pages/transfer-requests";
+import MessagesHub from "@/pages/messages-hub";
 import RegistrationStudentsPage from "@/pages/registration-students";
 import RegistrationPoolSearchPage from "@/pages/registration-pool-search";
 import CirclesStaffingPage from "@/pages/circles-staffing";
@@ -247,10 +248,12 @@ function AppRoutes() {
           {(isLeaderOrDeputy || isTrackSupervisor) ? <DailyTasksPage /> : <Redirect to="/" />}
         </Route>
         <Route path="/messages">
-          {(isLeaderOrDeputy || isTrackSupervisor) && isFeatureEnabled("messages") ? <MessagesPage /> : <Redirect to="/" />}
+          {isTrackSupervisor && isFeatureEnabled("messages") ? <MessagesHub initialTab="inbox" />
+            : isLeaderOrDeputy && isFeatureEnabled("messages") ? <MessagesPage /> : <Redirect to="/" />}
         </Route>
         <Route path="/my-messages">
-          {(isStudent || isTeacher || isSupervisor || isTrackSupervisor) && isFeatureEnabled("messages")
+          {isTrackSupervisor && isFeatureEnabled("messages") ? <MessagesHub initialTab="inbox" />
+            : (isStudent || isTeacher || isSupervisor) && isFeatureEnabled("messages")
             ? <MyMessagesPage />
             : <Redirect to="/" />}
         </Route>

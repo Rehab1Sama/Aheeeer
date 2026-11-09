@@ -754,7 +754,7 @@ export default function Layout({ user, children }: LayoutProps) {
   const otherAccounts = allAccounts.filter(a => !a.isCurrent);
 
   const isHome = location === "/";
-  const isMessagesPage = location === "/my-messages";
+  const isMessagesPage = location === "/my-messages" || (user.role === "track_supervisor" && location === "/messages");
   const unreadCount = useUnreadMessageCount(user.id, user.role, isHome, isMessagesPage);
 
   const handleLogout = () => {
@@ -1134,8 +1134,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/calendar", label: "التقويم", icon: Calendar, feature: "calendar" },
       ...(!hideShortcomings ? [{ href: "/shortcomings", label: "التقصير", icon: AlertTriangle, feature: "shortcomings" }] : []),
       ...(!hideShortcomings ? [{ href: "/stumbling-stats", label: "إحصائيات التعثر", icon: AlertTriangle, feature: "stats_stumbling" }] : []),
-      { href: "/messages", label: "الرسائل", icon: MessageSquare, feature: "messages" },
-      { href: "/my-messages", label: "رسائلي", icon: MessageSquare, badge: unreadCount, feature: "messages" },
+      { href: "/messages", label: "الرسائل", icon: MessageSquare, badge: unreadCount, feature: "messages" },
       { href: "/student-leaves", label: "طالبات الإجازة", icon: PlaneTakeoff, feature: "leaves" },
       { href: "/pending-registrations", label: "طلبات التسجيل", icon: ClipboardList, feature: "registration" },
       { href: "/registration-pool-search", label: "قائمة التسجيل", icon: UserSearch },
