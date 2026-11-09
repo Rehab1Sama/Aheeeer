@@ -23,6 +23,11 @@ export async function runWeeklyMoonBadgeAward(): Promise<void> {
   try {
     const weekStart = getLastCompletedWeekStart();
     const weekEnd = addDaysStr(weekStart, 4);
+    // مرة واحدة لكل أسبوع: يُستدعى من مجدول الخادم ومن GitHub (الخادم المجاني ينام فقد يفوته موعده)
+    const [done] = await db.select().from(globalSettingsTable).where(eq(globalSettingsTable.key, "moon_badge_last_week"));
+    if (done?.value === weekStart) { logger.info({ weekStart }, "أقمر الحلقة: أُرسل مسبقًا لهذا الأسبوع"); return; }
+    await db.insert(globalSettingsTable).values({ key: "moon_badge_last_week", value: weekStart })
+      .onConflictDoUpdate({ target: globalSettingsTable.key, set: { value: weekStart } });
     const qualifying = await computeAllCirclesWeeklyMoonBadges(weekStart);
     if (qualifying.size === 0) {
       logger.info({ weekStart, weekEnd }, "أقمر الحلقة: لا توجد حلقات مؤهلة هذا الأسبوع");

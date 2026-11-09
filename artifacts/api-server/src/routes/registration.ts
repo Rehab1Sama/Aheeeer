@@ -352,7 +352,10 @@ router.put("/registration/admin/wizard-config", authenticate, requireRole("leade
   res.json({ success: true });
 });
 
-router.post("/registration/submit", async (req, res): Promise<void> => {
+// حد للإرسال المتكرر من الجهاز نفسه (منع إغراق الموقع بحسابات وهمية)
+const submitRateLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 12, keyPrefix: "registration-submit" });
+
+router.post("/registration/submit", submitRateLimit, async (req, res): Promise<void> => {
   const settings = await getSettings();
   if (!settings.isOpen) {
     res.status(400).json({ error: "التسجيل مغلق حاليًا" });

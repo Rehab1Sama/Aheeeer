@@ -8,6 +8,7 @@ import { timingSafeEqual } from "crypto";
 import { authenticate } from "../middlewares/authenticate";
 import { buildDailyReport, sendDailyReportToTelegram } from "../lib/dailyReport";
 import { logger } from "../lib/logger";
+import { runWeeklyMoonBadgeAward } from "../lib/weeklyMoonBadge";
 
 const router: IRouter = Router();
 const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -36,6 +37,14 @@ router.get("/reports/telegram/run", async (req, res): Promise<void> => {
     logger.error({ err }, "Daily telegram report failed");
     res.status(500).json({ error: err instanceof Error ? err.message : "فشل التقرير" });
   }
+});
+
+/** وسام أقمر الحلقة الأسبوعي — يستدعيه GitHub كل جمعة (مرة واحدة لكل أسبوع مهما تكرر الاستدعاء). */
+router.get("/reports/weekly-badges/run", async (req, res): Promise<void> => {
+  if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط في إعدادات الخادم" }); return; }
+  if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  await runWeeklyMoonBadgeAward();
+  res.json({ ok: true });
 });
 
 router.get("/reports/daily-preview", authenticate, async (req, res): Promise<void> => {

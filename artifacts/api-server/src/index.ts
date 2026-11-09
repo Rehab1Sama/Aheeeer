@@ -4,7 +4,6 @@ import { db, usersTable, studentsTable, studentMemorizationsTable, circlesTable,
 import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { hashPassword } from "./lib/auth";
 import cron from "node-cron";
-import { runWeeklyBackup } from "./lib/backup";
 import { runWeeklyMoonBadgeAward } from "./lib/weeklyMoonBadge";
 
 async function migrateGlobalSettings() {
@@ -638,13 +637,8 @@ void Promise.all([migrateStudentMemorizations(), migrateReviewPlansTable()]).the
     await mergeDuplicateStudents();
   })();
 
-  cron.schedule("0 2 * * 0", () => {
-    logger.info("Starting weekly backup...");
-    runWeeklyBackup()
-      .then(() => logger.info("Weekly backup completed"))
-      .catch((e: unknown) => logger.error({ err: e }, "Weekly backup failed"));
-  }, { timezone: "Asia/Riyadh" });
-  logger.info("Weekly backup cron scheduled (Sundays 2:00 AM Riyadh time)");
+  // النسخ الاحتياطي: كان يحفظ ملف Excel على قرص Render المؤقت (يُمحى مع كل إعادة تشغيل)؛
+  // البديل الفعلي: .github/workflows/weekly-backup.yml (نسخة كاملة مشفّرة كل جمعة).
 
   // وسام "قمر الأسبوع" التلقائي: يشتغل كل جمعة (بعد ما ينتهي أسبوع العمل الأحد-الخميس)
   cron.schedule("0 3 * * 5", () => {

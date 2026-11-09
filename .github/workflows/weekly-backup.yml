@@ -30,7 +30,7 @@ jobs:
           DB_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PASS: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then echo "أضيفي BACKUP_DATABASE_URL و BACKUP_PASSPHRASE في أسرار المستودع"; exit 1; fi
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then echo "::warning::أضيفي BACKUP_DATABASE_URL و BACKUP_PASSPHRASE في أسرار المستودع — لم تُؤخذ نسخة"; echo "SKIP=1" >> "$GITHUB_ENV"; exit 0; fi
           STAMP=$(TZ=Asia/Riyadh date +%Y-%m-%d)
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
           /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --no-owner --no-privileges --schema=public \
@@ -42,6 +42,7 @@ jobs:
           gpg --batch --pinentry-mode loopback --passphrase "$PASS" --decrypt "sana-backup-$STAMP.sql.gz.gpg" 2>/dev/null | gunzip | grep -c "CREATE TABLE" | xargs -I{} sh -c 'test {} -gt 10 && echo "جداول في النسخة: {}"'
 
       - uses: actions/upload-artifact@v4
+        if: env.SKIP != '1'
         with:
           name: sana-backup-${{ env.STAMP }}
           path: sana-backup-*.sql.gz.gpg

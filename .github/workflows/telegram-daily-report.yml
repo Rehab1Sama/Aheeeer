@@ -27,12 +27,17 @@ jobs:
           DATE: ${{ github.event.inputs.date }}
           FORCE: ${{ github.event.inputs.force }}
         run: |
-          if [ -z "$REPORT_KEY" ]; then echo "REPORT_KEY secret is missing"; exit 1; fi
+          if [ -z "$REPORT_KEY" ]; then echo "::notice::لم يُضف سر REPORT_KEY بعد — تخطّي التقرير"; exit 0; fi
           # الخادم المجاني ينام: نوقظه أولًا
           for i in 1 2 3 4 5 6; do
             if curl -fsS --max-time 60 "$SITE/api/healthz" >/dev/null 2>&1; then break; fi
             echo "waiting for server ($i)"; sleep 20
           done
+          # الجمعة: وسام أقمر الحلقة الأسبوعي أولًا (مرة واحدة لكل أسبوع — مجدول الخادم قد يفوته وهو نائم)
+          if [ "$(TZ=Asia/Riyadh date +%u)" = "5" ]; then
+            curl -fsS --max-time 240 "$SITE/api/reports/weekly-badges/run?key=$REPORT_KEY" || echo "weekly badges call failed"
+            echo
+          fi
           URL="$SITE/api/reports/telegram/run?key=$REPORT_KEY"
           [ -n "$DATE" ] && URL="$URL&date=$DATE"
           [ "$FORCE" = "1" ] && URL="$URL&force=1"
