@@ -299,7 +299,7 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
       if (days === null) problems.push([esc(a.name), "لم تدخل الموقع أبدًا"]);
       else if (days >= 3) problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]);
       // يومان فأكثر، حتى شهر (الحساب الذي لم يُدخل أبدًا أو هجر من أشهر حسابٌ قديم غير مستخدم)
-      if (days !== null && days >= 2 && days <= 30) awaySupervisors.push(`${esc(firstTwo(a.name))} (مسار ${esc(trackName.replace(/^مسار\s+/, ""))}): ${days === null ? "لم تدخل أبدًا" : `لم تدخل منذ ${ar(days)} أيام`}`);
+      if (days !== null && days >= 2 && days <= 30) awaySupervisors.push(`${esc(firstTwo(a.name))} (مسار ${esc(trackName.replace(/^مسار\s+/, ""))}): ${days === null ? "لم تدخل أبدًا" : `لم تدخل منذ ${ar(days)} ${days <= 10 ? "أيام" : "يومًا"}`}`);
     }
     if (problems.length === 0) continue;
     tsProblems++;
