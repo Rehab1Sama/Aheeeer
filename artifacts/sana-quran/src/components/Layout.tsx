@@ -321,12 +321,23 @@ function LateReminder({ role, name }: { role: string; name: string }) {
   const first = name.trim().split(/\s+/)[0] || "قمرة";
   const hoursLeft = 24 - makkahHour;
   return (
-    <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-4 py-3 flex items-center gap-3 text-sm">
-      <span className="flex-1 font-semibold text-amber-900 dark:text-amber-200">
-        حبيبتنا {first}! باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، و{hoursLeft <= 1 ? "بقي أقل من ساعة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الثانية عشرة، أعانكِ الله 🌿
-      </span>
-      <Link href="/data-entry" className="rounded-xl bg-amber-600 text-white px-3 py-1.5 text-xs font-bold whitespace-nowrap">أدخلي الآن</Link>
-      <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-amber-800/70 text-lg leading-none" aria-label="إخفاء لليوم">×</button>
+    <div className="mb-4 rounded-2xl border border-primary/15 bg-card shadow-sm overflow-hidden" role="status">
+      <div className="flex items-stretch">
+        <span className="w-1.5 flex-none bg-gradient-to-b from-[#1A2260] to-[#2B3784]" />
+        <div className="flex-1 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <p className="flex-1 text-sm leading-7">
+              <span className="font-bold text-primary">حبيبتنا {first}!</span>{" "}
+              <span className="text-foreground">باقي <b>{t.missing.toLocaleString("ar-EG")}</b> {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، أعانكِ الله 🌿</span>
+            </p>
+            <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-muted-foreground hover:text-foreground text-lg leading-none" aria-label="إخفاء لليوم">×</button>
+          </div>
+          <div className="flex items-center justify-between gap-3 mt-2">
+            <span className="text-xs text-muted-foreground">{hoursLeft <= 1 ? "بقي أقل من ساعة قبل الثانية عشرة" : hoursLeft === 2 ? "بقيت ساعتان قبل الثانية عشرة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات قبل الثانية عشرة`}</span>
+            <Link href="/data-entry" className="rounded-xl bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold whitespace-nowrap hover:opacity-90">أدخلي الآن</Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
