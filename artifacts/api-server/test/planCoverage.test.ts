@@ -76,3 +76,30 @@ test("إنجاز نصيب أيام قادمة ← متقدمة", () => {
   assert.equal(r.status, "ahead");
   assert.equal(r.daysReached, 4);
 });
+
+import { evaluateCompletion } from "../src/lib/planProgress";
+const allDays = () => Object.fromEntries(DAYS.map((_, i) => [DATES[i]!, rec(day(i + 1))]));
+
+test("وسام المراجعة: أنهت كل الأيام بانتظام ← في وقتها", () => {
+  assert.deepEqual(evaluateCompletion(wajhs, DAYS, DATES, allDays()), { reached: true, onTime: true });
+});
+
+test("وسام المراجعة: تأخرت يومًا ثم لحقت ← «تأخرتِ بس وصلتِ»", () => {
+  const recs = allDays();
+  recs[DATES[2]!] = rec([]);                                   // اليوم ٣ بسجل بلا تغطية
+  recs[DATES[3]!] = rec([...day(3), ...day(4)]);               // اليوم ٤ غطّى ٣ و٤
+  assert.deepEqual(evaluateCompletion(wajhs, DAYS, DATES, recs), { reached: true, onTime: false });
+});
+
+test("وسام المراجعة: يوم بلا إدخال من المشرفة لا يُفقدها «في وقتها»", () => {
+  const recs = allDays();
+  delete recs[DATES[2]!];                                      // لم تُدخل المشرفة اليوم ٣
+  recs[DATES[3]!] = rec([...day(3), ...day(4)]);
+  assert.deepEqual(evaluateCompletion(wajhs, DAYS, DATES, recs), { reached: true, onTime: true });
+});
+
+test("وسام المراجعة: لم تُنهِ آخر يوم ← بلا وسام", () => {
+  const recs = allDays();
+  recs[DATES[DAYS.length - 1]!] = rec([]);
+  assert.equal(evaluateCompletion(wajhs, DAYS, DATES, recs).reached, false);
+});

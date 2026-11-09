@@ -416,3 +416,28 @@ export function farRangesOf(r: {
     out.push({ surahStart: r.reviewFar2SurahStart, ayahStart: r.reviewFar2AyahStart, surahEnd: r.reviewFar2SurahEnd, ayahEnd: r.reviewFar2AyahEnd });
   return out;
 }
+
+
+/**
+ * وسام المراجعة: هل أنهت كل أيام الخطة؟ وهل كانت منتظمة كل يوم؟
+ * «منتظمة» = في أي يوم من أيام الخطة لم يكن عليها يوم تأخير قائم (بسجلات ذلك اليوم وما قبله).
+ * أيام لم تُدخل فيها المشرفة لا تُعد تأخيرًا، وتغطية يوم لاحق تُسقط ما قبله — نفس قواعد evaluateCoverage.
+ */
+export function evaluateCompletion(
+  planWajhs: number[],
+  planDays: Array<{ dayNumber: number; pages: number | null }>,
+  cycleDates: string[],
+  dayRecords: Record<string, CoverageDayRecord>,
+): { reached: boolean; onTime: boolean } {
+  const total = planDays.length || cycleDates.length;
+  const final = evaluateCoverage(planWajhs, planDays, cycleDates, cycleDates.length + 1, dayRecords);
+  const reached = final.daysReached >= total;
+  if (!reached) return { reached, onTime: false };
+  for (let i = 1; i <= cycleDates.length; i++) {
+    const until = cycleDates[i - 1]!;
+    const partial: Record<string, CoverageDayRecord> = {};
+    for (const [d, r] of Object.entries(dayRecords)) if (d <= until) partial[d] = r;
+    if (evaluateCoverage(planWajhs, planDays, cycleDates, i + 1, partial).unresolvedDelayDays > 0) return { reached, onTime: false };
+  }
+  return { reached, onTime: true };
+}

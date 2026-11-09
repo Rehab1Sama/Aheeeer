@@ -13,6 +13,7 @@ import { isEntryExpectedOn } from "./dataEntrySchedule";
 import { isCircleFullyRecorded, type RosterStudent, type LeaveRange } from "./weeklyCompleteness";
 import { getPlanCycleDates, getEffectiveEndDate, PLAN_TOTAL_DAYS, type PlanType } from "../routes/reviewPlans";
 import { getBadgeTier, type BadgeTierDefinition } from "./badgeDefinitions";
+import { reviewCompletions } from "./reviewCompletion";
 
 export interface EarnedBadge {
   badgeId: string;
@@ -374,51 +375,10 @@ export async function computeTrackNoShortcoming(
 // المجاميع التراكمية فقط، وهو أبسط لكن يعكس نفس الفكرة. راجعيه مع المستخدمة
 // لو حبت مطابقة أدق لاحقًا.
 export async function computeReviewPlanCompletion(studentId: number): Promise<EarnedBadge | null> {
-  const today = getMakkahDay();
-
-  // فقط الخطة النشطة حاليًا (status='active') — مو أي خطة قديمة معتمدة بتاريخها.
-  // لو دورتها الحالية لسا ما خلصت، ما نرجع وسام أبدًا (ولا نرجع نطالع خطط أقدم).
-  const plans = await db.select().from(reviewPlansTable)
-    .where(and(eq(reviewPlansTable.studentId, studentId), eq(reviewPlansTable.approvalStatus, "approved"), eq(reviewPlansTable.status, "active")));
-
-  const finished: { plan: typeof plans[number]; effectiveEndDate: string }[] = [];
-  for (const plan of plans) {
-    if (plan.planType !== "girls_review" && plan.planType !== "fixation") continue;
-    const effectiveEndDate = await getEffectiveEndDate(plan);
-    if (today > effectiveEndDate) finished.push({ plan, effectiveEndDate });
-  }
-  if (finished.length === 0) return null;
-
-  finished.sort((a, b) => b.plan.startDate.localeCompare(a.plan.startDate));
-  const { plan, effectiveEndDate } = finished[0];
-  const planType = plan.planType as PlanType;
-
-  const daysSinceEnd = Math.round((new Date(today).getTime() - new Date(effectiveEndDate).getTime()) / 86400000);
-  if (daysSinceEnd > PLAN_TOTAL_DAYS[planType] * 2) return null; // دورة قديمة جدًا — تجاهليها
-
-  const dates = getPlanCycleDates(plan.startDate, planType).filter(d => d <= effectiveEndDate);
-  if (dates.length === 0) return null;
-
-  const [dayRows, records] = await Promise.all([
-    db.select().from(reviewPlanDaysTable).where(eq(reviewPlanDaysTable.planId, plan.id)),
-    db.select().from(recordsTable).where(and(
-      eq(recordsTable.studentId, studentId), eq(recordsTable.circleId, plan.circleId), inArray(recordsTable.date, dates),
-    )),
-  ]);
-  const quotaByDayNumber = new Map(dayRows.map(d => [d.dayNumber, d.pages ?? 0]));
-  const recordByDate = new Map(records.map(r => [r.date, r]));
-
-  let cumQuota = 0, cumDone = 0, everBehind = false;
-  dates.forEach((d, i) => {
-    cumQuota += quotaByDayNumber.get(i + 1) ?? 0;
-    const rec = recordByDate.get(d);
-    const done = rec ? (planType === "fixation" ? (rec.reviewPages ?? rec.reviewFarPages) : rec.reviewFarPages) ?? 0 : 0;
-    cumDone += done;
-    if (cumDone < cumQuota) everBehind = true;
-  });
-
-  const tier = !everBehind ? 0 : (cumDone >= cumQuota ? 1 : 2);
-  const tierDef = getBadgeTier("review_plan_completion", tier);
+  // المصدر الموحّد (lib/reviewCompletion.ts): نفس حساب صفحة الخطط
+  const [c] = await reviewCompletions(getMakkahDay(), studentId);
+  if (!c) return null;
+  const tierDef = getBadgeTier("review_plan_completion", c.tier);
   return tierDef ? tierToEarned("review_plan_completion", tierDef) : null;
 }
 

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, circlesTable, studentsTable, trackSupervisorNamesTable, tracksTable, badgeAwardCountsTable, reviewPlansTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { getMakkahDay, getLastCompletedWeekStart } from "../lib/date";
+import { reviewCompletions } from "../lib/reviewCompletion";
 import { authenticate } from "../middlewares/authenticate";
 import {
   computeCircleWeeklyMoonBadge,
@@ -107,10 +108,9 @@ router.get("/live-badges/student/:id", authenticate, async (req, res): Promise<v
   // فترة كل وسام: الشهر، أو الأسبوع، أو دورة الخطة الحالية — وسام جديد في فترة جديدة يظهر من جديد ٢٤ ساعة
   let planKey = "none";
   if (planCompletion) {
-    const [plan] = await db.select({ id: reviewPlansTable.id }).from(reviewPlansTable)
-      .where(and(eq(reviewPlansTable.studentId, studentId), eq(reviewPlansTable.planType, "girls_review"), eq(reviewPlansTable.status, "active")))
-      .orderBy(desc(reviewPlansTable.createdAt)).limit(1);
-    planKey = plan ? `plan:${plan.id}` : "none";
+    // الخطة التي استحقت عليها الوسام (قد تكون أُغلقت بتجديد الدورة)
+    const [c] = await reviewCompletions(getMakkahDay(), studentId);
+    planKey = c ? `plan:${c.planId}` : "none";
   }
   const periodOf = (b: EarnedBadge) =>
     b.badgeId === "monthly_perfect" ? getMakkahDay().slice(0, 7)

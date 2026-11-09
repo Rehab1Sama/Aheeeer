@@ -19,7 +19,7 @@ import {
   computeCurrentDay, hasStudentTargets, pagesDaysReached, plannedPagesThrough,
   orderedPlanWajhs, coveredWajhSet, coverageProgress, coveredDayNumbers, wajhsToQuotaRanges,
   seedRangesFromOldPlan, isSaturdayDate, stripApprovedMemorization,
-  evaluateCoverage, farRangesOf, type CoverageResult, type CoverageDayRecord,
+  evaluateCoverage, evaluateCompletion, farRangesOf, type CoverageResult, type CoverageDayRecord,
 } from "../lib/planProgress";
 
 const router: IRouter = Router();
@@ -145,8 +145,9 @@ function distribute(total: number, parts: number): number[] {
 export async function loadGirlsCoverage(
   plans: ReadonlyArray<typeof reviewPlansTable.$inferSelect>,
   daysByPlan?: Map<number, Array<{ dayNumber: number; pages: number | null }>>,
-): Promise<Map<number, CoverageResult>> {
-  const out = new Map<number, CoverageResult>();
+  opts?: { withCompletion?: boolean },
+): Promise<Map<number, CoverageResult & { completion?: { reached: boolean; onTime: boolean } }>> {
+  const out = new Map<number, CoverageResult & { completion?: { reached: boolean; onTime: boolean } }>();
   const girls = plans.filter((p) => p.planType === "girls_review" && p.startDate);
   if (girls.length === 0) return out;
 
@@ -198,7 +199,13 @@ export async function loadGirlsCoverage(
       planDays = planDays.map((d) => ({ ...d, pages: d.pages ?? dist[d.dayNumber - 1] ?? 0 }));
     }
     const planWajhs = orderedPlanWajhs(getPlanQuotaRanges(p));
-    out.set(p.id, evaluateCoverage(planWajhs, planDays, dates, currentDay, recMap.get(`${p.studentId}:${p.circleId}`) ?? {}));
+    const dayRecords = recMap.get(`${p.studentId}:${p.circleId}`) ?? {};
+    const result = evaluateCoverage(planWajhs, planDays, dates, currentDay, dayRecords);
+    if (opts?.withCompletion) {
+      (result as CoverageResult & { completion?: { reached: boolean; onTime: boolean } }).completion =
+        evaluateCompletion(planWajhs, planDays, dates, dayRecords);
+    }
+    out.set(p.id, result);
   }
   return out;
 }

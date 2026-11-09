@@ -26,6 +26,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import { getLastCompletedWeekStart, getMakkahDay } from "./date";
 import { getPlanCycleDates, getEffectiveEndDate, PLAN_TOTAL_DAYS, type PlanType } from "../routes/reviewPlans";
+import { reviewCompletions } from "./reviewCompletion";
 import { getBadgeTier } from "./badgeDefinitions";
 import {
   computeAllCirclesWeeklyMoonBadges,
@@ -66,53 +67,13 @@ export async function overviewCircleWeeklyMoon(weekStart: string = getLastComple
 // (asOf <= نهاية الدورة الفعلية)، ما نعرض لها وسام أبدًا لهذا الوسام — ننتظر
 // حتى تنتهي دورتها الحالية فعليًا، وما نرجع نطالع خططها القديمة المنتهية.
 export async function overviewReviewPlanCompletion(asOf: string = getMakkahDay()): Promise<OverviewEntry[]> {
-  const plans = await db.select().from(reviewPlansTable)
-    .where(and(eq(reviewPlansTable.approvalStatus, "approved"), eq(reviewPlansTable.status, "active")));
-  const relevant = plans.filter(p => p.planType === "girls_review" || p.planType === "fixation");
-  if (relevant.length === 0) return [];
-
-  const withEnd = await Promise.all(relevant.map(async p => ({ plan: p, effectiveEndDate: await getEffectiveEndDate(p) })));
-  const finished = withEnd.filter(({ effectiveEndDate }) => asOf > effectiveEndDate);
-
-  // دفاعية: نظريًا خطة نشطة وحدة بس لكل طالبة/نوع، بس لو صار تكرار نأخذ الأحدث startDate
-  const latestByStudent = new Map<number, { plan: typeof relevant[number]; effectiveEndDate: string }>();
-  for (const item of finished) {
-    const existing = latestByStudent.get(item.plan.studentId);
-    if (!existing || item.plan.startDate > existing.plan.startDate) latestByStudent.set(item.plan.studentId, item);
-  }
-
+  // المصدر الموحّد (lib/reviewCompletion.ts): نفس حساب صفحة الخطط وصفحة الطالبة
   const entries: { studentId: number; effectiveEndDate: string; badge: EarnedBadge }[] = [];
-  for (const [studentId, { plan, effectiveEndDate }] of latestByStudent) {
-    const planType = plan.planType as PlanType;
-    const daysSinceEnd = Math.round((new Date(asOf).getTime() - new Date(effectiveEndDate).getTime()) / 86400000);
-    if (daysSinceEnd > PLAN_TOTAL_DAYS[planType] * 2) continue; // دورة قديمة جدًا — تجاهليها
-
-    const dates = getPlanCycleDates(plan.startDate, planType).filter(d => d <= effectiveEndDate);
-    if (dates.length === 0) continue;
-
-    const [dayRows, records] = await Promise.all([
-      db.select().from(reviewPlanDaysTable).where(eq(reviewPlanDaysTable.planId, plan.id)),
-      db.select().from(recordsTable).where(and(
-        eq(recordsTable.studentId, studentId), eq(recordsTable.circleId, plan.circleId), inArray(recordsTable.date, dates),
-      )),
-    ]);
-    const quotaByDayNumber = new Map(dayRows.map(d => [d.dayNumber, d.pages ?? 0]));
-    const recordByDate = new Map(records.map(r => [r.date, r]));
-
-    let cumQuota = 0, cumDone = 0, everBehind = false;
-    dates.forEach((d, i) => {
-      cumQuota += quotaByDayNumber.get(i + 1) ?? 0;
-      const rec = recordByDate.get(d);
-      const done = rec ? (planType === "fixation" ? (rec.reviewPages ?? rec.reviewFarPages) : rec.reviewFarPages) ?? 0 : 0;
-      cumDone += done;
-      if (cumDone < cumQuota) everBehind = true;
-    });
-
-    const tier = !everBehind ? 0 : (cumDone >= cumQuota ? 1 : 2);
-    const tierDef = getBadgeTier("review_plan_completion", tier);
+  for (const c of await reviewCompletions(asOf)) {
+    const tierDef = getBadgeTier("review_plan_completion", c.tier);
     if (!tierDef) continue;
     entries.push({
-      studentId, effectiveEndDate,
+      studentId: c.studentId, effectiveEndDate: c.effectiveEndDate,
       badge: { badgeId: "review_plan_completion", tier: tierDef.tier, name: tierDef.name, subtitle: tierDef.subtitle, emoji: tierDef.emoji, image: tierDef.image ?? null, thumb: tierDef.thumb ?? null, color: tierDef.color },
     });
   }
