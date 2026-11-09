@@ -77,7 +77,9 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const typeOf = (c: typeof circles[number]) => (c.trackId ? trackById.get(c.trackId)?.dataEntryType : null) ?? c.trackType ?? "girls";
   const trackNameOf = (c: typeof circles[number]) => (c.trackId ? trackById.get(c.trackId)?.name : null) ?? c.track ?? "بلا مسار";
   const circleById = new Map(circles.map((c) => [c.id, c]));
-  const expected = circles.filter((c) => isEntryExpectedOn(typeOf(c), c.name, D));
+  // حلقة التسجيل ليست حلقة دراسة، فلا تُحسب في الإدخال ولا الملاحظات
+  const isRegistration = (c: typeof circles[number]) => c.trackType === "registration" || typeOf(c) === "registration";
+  const expected = circles.filter((c) => !isRegistration(c) && isEntryExpectedOn(typeOf(c), c.name, D));
   const expectedIds = expected.map((c) => c.id);
   const circleIds = circles.map((c) => c.id);
 
@@ -296,7 +298,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
       const days = a.lastLoginAt ? Math.floor((Date.now() - new Date(a.lastLoginAt).getTime()) / 86400000) : null;
       if (days === null) problems.push([esc(a.name), "لم تدخل الموقع أبدًا"]);
       else if (days >= 3) problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]);
-      if (days === null || days >= 2) awaySupervisors.push(`${esc(firstTwo(a.name))} (مسار ${esc(trackName.replace(/^مسار\s+/, ""))}): ${days === null ? "لم تدخل أبدًا" : `لم تدخل منذ ${ar(days)} أيام`}`);
+      // يومان فأكثر، حتى شهر (الحساب الذي لم يُدخل أبدًا أو هجر من أشهر حسابٌ قديم غير مستخدم)
+      if (days !== null && days >= 2 && days <= 30) awaySupervisors.push(`${esc(firstTwo(a.name))} (مسار ${esc(trackName.replace(/^مسار\s+/, ""))}): ${days === null ? "لم تدخل أبدًا" : `لم تدخل منذ ${ar(days)} أيام`}`);
     }
     if (problems.length === 0) continue;
     tsProblems++;
@@ -315,6 +318,7 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const lowByStudent = new Map(lowAlerts.map((a) => [`${a.studentId}:${a.circleId}`, a]));
   const studentIssues: CircleIssue[] = [];
   for (const c of circles) {
+    if (isRegistration(c)) continue;
     for (const s of roster.get(c.id) ?? []) {
       const k = `${s.studentId}:${c.id}`;
       const recs = (recsByStudent.get(k) ?? []).sort((a, b) => a.date.localeCompare(b.date));
@@ -353,6 +357,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
 
   // مشرفة تكرر عدم إدخالها: لم تُدخل اليوم، ولم تُدخل يومين أو أكثر من أيام الدوام في آخر ٧ أيام
   // حلقة غيابها كثير: ٣٠٪ فأكثر من سجلات آخر ٧ أيام
+  // أيام الدوام الفعلية فقط: يوم أدخلت فيه حلقة واحدة على الأقل (أيام الإجازة لا تُحسب على أحد)
+  const activeDates = new Set(recentRecords.map((r) => r.date));
   const week = Array.from({ length: 7 }, (_, i) => addDaysStr(D, -i));
   const recDatesByCircle = new Map<number, Set<string>>();
   const weekAbs = new Map<number, { abs: number; total: number }>();
@@ -365,7 +371,7 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   }
   for (const c of expected) {
     if ((roster.get(c.id) ?? []).length === 0) continue;
-    const days = week.filter((d) => isEntryExpectedOn(typeOf(c), c.name, d));
+    const days = week.filter((d) => activeDates.has(d) && isEntryExpectedOn(typeOf(c), c.name, d));
     const missed = days.filter((d) => !recDatesByCircle.get(c.id)?.has(d)).length;
     if (!recDatesByCircle.get(c.id)?.has(D) && missed >= 2) {
       const supId = (tasksByCircle.get(c.id) ?? [])[0]?.supervisorId ?? c.supervisorId;
@@ -387,6 +393,12 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
     const lines = [`🌸 <b>${NAMES[dow(D) % NAMES.length]}</b>، خلاصة يوم ${fmtDate(D)}`, ""];
     if (!isWorkDay) {
       lines.push("لا دوام في هذا اليوم، دمتِ بخير 🌿");
+      if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
+      return lines.join("\n");
+    }
+    if (dayRecords.length === 0) {
+      lines.push("لم تُدخل أي حلقة بيانات هذا اليوم، لعلَّه إجازة 🌿");
+      if (awaySupervisors.length) lines.push("", "<b>مسؤولات مسار لم يدخلن الموقع</b>", `<blockquote>${awaySupervisors.map((x) => `• ${x}`).join("\n")}</blockquote>`);
       if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
       return lines.join("\n");
     }
