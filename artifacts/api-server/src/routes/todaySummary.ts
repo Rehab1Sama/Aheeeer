@@ -11,6 +11,7 @@ import { accessibleCircleIds } from "../lib/access";
 import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
 import { getMakkahDay } from "../lib/date";
 import { loadGirlsCoverage } from "./reviewPlans";
+import { holidayOn } from "../lib/academicCalendar";
 
 const router: IRouter = Router();
 const AR = (n: number) => n.toLocaleString("ar-EG");
@@ -26,6 +27,12 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
     return;
   }
   const D = getMakkahDay();
+  // الإجازة: لا مطلوب ولا تذكير
+  const holiday = await holidayOn(D);
+  if (holiday) {
+    res.json({ date: D, items: [], holiday });
+    return;
+  }
   const scope = await accessibleCircleIds(req);
   const [allCircles, tracks] = await Promise.all([
     db.select().from(circlesTable).where(eq(circlesTable.isArchived, false)),

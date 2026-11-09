@@ -244,12 +244,12 @@ function useMobileTableLabels() {
 }
 
 // ── رسالة التحفيز بعد الإدخال، وتذكير المتأخرة ──
-// للمشرفات والمعلمات اللواتي يُدخلن البيانات فقط
-const ENTRY_ROLES = ["supervisor", "teacher"];
+// للمشرفات والمعلمات اللواتي يُدخلن البيانات، ولمسؤولات المسارات (عند الإدخال وتعبئة المهام)
+const ENTRY_ROLES = ["supervisor", "teacher", "track_supervisor"];
 function readLS(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
 function writeLS(key: string, v: string) { try { localStorage.setItem(key, v); } catch { /* المتصفح يمنع التخزين */ } }
 
-async function fetchToday(): Promise<{ missing?: number; date?: string } | null> {
+async function fetchToday(): Promise<{ missing?: number; date?: string; holiday?: string } | null> {
   try {
     const r = await fetch("/api/today-summary", { headers: { Authorization: `Bearer ${getToken()}` } });
     return r.ok ? r.json() : null;
@@ -264,9 +264,19 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
     let timer = 0;
     const onSaved = async () => {
       qc.invalidateQueries({ queryKey: ["todaySummary"] });
+      const now = Date.now();
+      // مسؤولة المسار: رسالة تحفيز على متابعتها، مرة كل ١٥ دقيقة على الأكثر (ولو في الإجازة)
+      if (role === "track_supervisor") {
+        const last = Number(readLS("motivation-track") ?? 0);
+        if (now - last < 15 * 60 * 1000) return;
+        writeLS("motivation-track", String(now));
+        setMsg(motivationMessage({ missing: 0, late: false, name, role }));
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => setMsg(null), 9000);
+        return;
+      }
       const t = await fetchToday();
       if (!t || t.missing == null) return;
-      const now = Date.now();
       // اكتمال اليوم: مرة واحدة في اليوم. وما دون ذلك: مرة كل ١٥ دقيقة على الأكثر (لا تزعج بعد كل طالبة)
       if (t.missing === 0) {
         if (readLS("motivation-complete") === t.date) return;

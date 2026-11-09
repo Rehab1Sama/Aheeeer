@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { notifyEntrySaved } from "@/lib/motivation";
 import {
   useGetCurrentUser, useListCircles, useListTracks,
   useListSupervisorNames, useSaveDailyCircleTask,
@@ -300,7 +301,7 @@ export default function DailyTasksPage() {
       });
       setSaved(prev => ({ ...prev, [circleId]: true }));
       qc.invalidateQueries({ queryKey: ["dailyCircleTasks"] });
-      toast({ title: "تم الحفظ ✓" });
+      toast({ title: "تم الحفظ ✓" }); notifyEntrySaved();
     } catch (err: unknown) {
       const e = err as { response?: { status?: number } };
       if (e?.response?.status === 409) {

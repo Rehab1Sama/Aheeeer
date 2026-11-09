@@ -4,6 +4,7 @@ import { eq, and, gte, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay } from "../lib/date";
 import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
+import { holidayOn } from "../lib/academicCalendar";
 
 const router: IRouter = Router();
 
@@ -290,6 +291,10 @@ router.get("/data-entry/track-status", authenticate, async (req, res): Promise<v
 
   if (!req.userTrack) {
     res.json({ date, circles: [] }); return;
+  }
+  const holiday = await holidayOn(date);
+  if (holiday) {
+    res.json({ date, circles: [], holiday }); return;
   }
 
   const trackCircles = await db.select({

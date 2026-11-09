@@ -1,7 +1,7 @@
 // رسائل التحفيز بعد الإدخال — بأسلوب القائدة رِحاب: نداء محبَّب ودعاء قصير،
 // وتختلف كل مرة. تُختار حسب الحال: اكتمل الإدخال في وقته، أو اكتمل متأخرًا، أو بقي جزء.
 
-export type EntryState = { missing: number; late: boolean; name: string };
+export type EntryState = { missing: number; late: boolean; name: string; role?: string };
 
 const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)]!;
 
@@ -32,6 +32,18 @@ const PARTIAL = [
   "تعبتِ؟ احتسبي حبيبة، باقي {n} وتختمين 🌧️",
 ];
 
+// لمسؤولات المسارات: على متابعة المسار وتعبئة المهام، لا على عدد الطالبات
+const TRACK_SUPERVISOR = [
+  "قمرتنا {name}، بارك الله في متابعتكِ لمساركِ ♥️",
+  "حبيبتنا {name}! جعل الله حرصكِ على حلقاتكِ في ميزانكِ 🌧️",
+  "يا مُبهجة! رفع المولى قدركِ كما ترفعين همَّة مساركِ 🌸",
+  "قمرتنا {name}، شكر الله لكِ عنايتكِ بالمشرفات والطالبات ♥️",
+  "حبيبتنا {name}! ربي يبارك في وقتكِ ويعينكِ على ما بين يديكِ 🌿",
+  "تعبتِ؟ احتسبي حبيبة، وتذكري جزاء جُهدكِ 🌧️",
+  "يا غالية! أحسن الله إليكِ وعظَّم لكِ الأجر 🌸",
+  "قمرتنا {name}! مساركِ بخير ما دمتِ فيه، حفظكِ الله ♥️",
+];
+
 function plural(n: number): string {
   if (n === 1) return "طالبة واحدة";
   if (n === 2) return "طالبتان";
@@ -40,7 +52,7 @@ function plural(n: number): string {
 
 export function motivationMessage(s: EntryState): string {
   const first = (s.name || "").trim().split(/\s+/)[0] || "الغالية";
-  const tpl = s.missing > 0 ? pick(PARTIAL) : s.late ? pick(COMPLETE_LATE) : pick(COMPLETE_ON_TIME);
+  const tpl = s.role === "track_supervisor" ? pick(TRACK_SUPERVISOR) : s.missing > 0 ? pick(PARTIAL) : s.late ? pick(COMPLETE_LATE) : pick(COMPLETE_ON_TIME);
   return tpl.replace("{name}", first).replace("{n}", plural(s.missing));
 }
 

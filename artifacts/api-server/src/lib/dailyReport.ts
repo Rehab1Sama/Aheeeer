@@ -23,6 +23,7 @@ import {
 import { and, eq, gte, lte, inArray } from "drizzle-orm";
 import { addDaysStr, getMakkahDay, getLastCompletedWeekStart, minutesSinceMakkahDayStart, ONE_AM_MINUTES_SINCE_DAY_START } from "./date";
 import { isEntryExpectedOn } from "./dataEntrySchedule";
+import { holidayOn } from "./academicCalendar";
 import { loadGirlsCoverage } from "../routes/reviewPlans";
 import {
   overviewCircleWeeklyMoon, overviewImprovement, overviewTrackNoShortcoming,
@@ -79,7 +80,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const circleById = new Map(circles.map((c) => [c.id, c]));
   // حلقة التسجيل ليست حلقة دراسة، فلا تُحسب في الإدخال ولا الملاحظات
   const isRegistration = (c: typeof circles[number]) => c.trackType === "registration" || typeOf(c) === "registration";
-  const expected = circles.filter((c) => !isRegistration(c) && isEntryExpectedOn(typeOf(c), c.name, D));
+  const holiday = await holidayOn(D);
+  const expected = holiday ? [] : circles.filter((c) => !isRegistration(c) && isEntryExpectedOn(typeOf(c), c.name, D));
   const expectedIds = expected.map((c) => c.id);
   const circleIds = circles.map((c) => c.id);
 
@@ -392,7 +394,7 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   function buildDigest(counts?: { teachers: number; circles: number; students: number }): string {
     const lines = [`🌸 <b>${NAMES[dow(D) % NAMES.length]}</b>، خلاصة يوم ${fmtDate(D)}`, ""];
     if (!isWorkDay) {
-      lines.push("لا دوام في هذا اليوم، دمتِ بخير 🌿");
+      lines.push(holiday ? `${esc(holiday)}، دمتِ بخير 🌿` : "لا دوام في هذا اليوم، دمتِ بخير 🌿");
       if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
       return lines.join("\n");
     }

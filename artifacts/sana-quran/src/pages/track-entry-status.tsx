@@ -51,13 +51,14 @@ export default function TrackEntryStatusPage() {
   const [date, setDate] = useState(today);
   const [circles, setCircles] = useState<CircleStatus[]>([]);
   const [loading, setLoading] = useState(false);
+  const [holiday, setHoliday] = useState<string | null>(null);
 
   const fetchStatus = useCallback((d: string) => {
     setLoading(true);
     fetch(`${BASE}/api/data-entry/track-status?date=${d}`, { headers: authHeader() })
       .then(r => (r.ok ? r.json() : { circles: [] }))
-      .then(data => setCircles(Array.isArray(data.circles) ? data.circles : []))
-      .catch(() => setCircles([]))
+      .then(data => { setCircles(Array.isArray(data.circles) ? data.circles : []); setHoliday(typeof data.holiday === "string" ? data.holiday : null); })
+      .catch(() => { setCircles([]); setHoliday(null); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -104,6 +105,12 @@ export default function TrackEntryStatusPage() {
 
       {loading ? (
         <div className="text-center py-10 text-muted-foreground text-sm">جاري التحميل...</div>
+      ) : holiday ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-10 text-center text-sm font-semibold text-primary">
+            {holiday}، لا إدخال في هذا اليوم. دمتِ بخير 🌿
+          </CardContent>
+        </Card>
       ) : circles.length === 0 ? (
         <Card className="border-0 shadow-sm">
           <CardContent className="py-10 text-center text-muted-foreground text-sm">
