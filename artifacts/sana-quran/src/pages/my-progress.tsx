@@ -19,7 +19,6 @@ import AudioContent from "@/pages/audio";
 import { useToast } from "@/hooks/use-toast";
 import ReviewPlanSection from "@/components/ReviewPlanSection";
 import MonthlyLeaderboardCard from "@/components/MonthlyLeaderboardCard";
-import { isFreshBadge } from "@/lib/badgeWindow";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function authHdr(): Record<string, string> {
@@ -716,14 +715,14 @@ export default function MyProgressPage() {
           </Card>
 
           {/* Circle badges */}
-          {circleBadges.filter((b: any) => isFreshBadge(b)).length > 0 && (
+          {circleBadges.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold">🏆 أوسمة الحلقة</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex flex-wrap gap-2">
-                  {circleBadges.filter((b: any) => isFreshBadge(b)).map((b: any) => (
+                  {circleBadges.map((b: any) => (
                     <span
                       key={b.id}
                       className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-semibold text-white"
