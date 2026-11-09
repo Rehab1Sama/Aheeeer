@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, studentsTable, studentEnrollmentsTable, studentMemorizationsTable, circlesTable, usersTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, examRecordsTable } from "@workspace/db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { isShortcomingRecord } from "../lib/shortcoming";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay, getMakkahDaysAgo, getMakkahWeekStart, getMakkahLastWeekStart, getMakkahLastWeekEnd } from "../lib/date";
@@ -793,18 +793,15 @@ router.get("/stats/juz-stats", authenticate, async (req, res): Promise<void> => 
     return;
   }
 
-  const allStudentRecords = await db.select({
+  // المجموع يُحسب في القاعدة (كان يسحب كل جدول السجلات في كل فتح)
+  const sums = await db.select({
     studentId: recordsTable.studentId,
-    memorizePages: recordsTable.memorizePages,
-    isAbsent: recordsTable.isAbsent,
-  }).from(recordsTable);
-
+    pages: sql<number>`coalesce(sum(${recordsTable.memorizePages}), 0)::float`,
+  }).from(recordsTable)
+    .where(and(eq(recordsTable.isAbsent, false), inArray(recordsTable.studentId, studentIds)))
+    .groupBy(recordsTable.studentId);
   const memorizeByStudent: Record<number, number> = {};
-  for (const r of allStudentRecords) {
-    if (!studentIds.includes(r.studentId)) continue;
-    if (r.isAbsent) continue;
-    memorizeByStudent[r.studentId] = (memorizeByStudent[r.studentId] ?? 0) + (r.memorizePages ?? 0);
-  }
+  for (const r of sums) memorizeByStudent[r.studentId] = Number(r.pages) || 0;
 
   const PAGES_PER_JUZ = 20;
 

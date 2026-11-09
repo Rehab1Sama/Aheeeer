@@ -120,9 +120,12 @@ router.get("/records", authenticate, async (req, res): Promise<void> => {
   if (date) conds.push(eq(recordsTable.date, date));
   if (dateFrom) conds.push(gte(recordsTable.date, dateFrom));
   if (dateTo) conds.push(lte(recordsTable.date, dateTo));
-  let records = conds.length > 0
-    ? await db.select().from(recordsTable).where(and(...conds))
-    : await db.select().from(recordsTable);
+  // بلا أي فلتر: آخر ١٢٠ يومًا فقط بدل جدول السجلات كاملًا (التصدير الكامل له صفحة مستقلة)
+  if (conds.length === 0) {
+    const since = new Date(Date.now() - 120 * 86_400_000).toISOString().slice(0, 10);
+    conds.push(gte(recordsTable.date, since));
+  }
+  let records = await db.select().from(recordsTable).where(and(...conds));
 
   // سجلات الفصل المؤرشف تبقى للإدارة والتقارير، ولا تظهر للمعلمة أو المشرفة.
   if (req.userRole === "teacher" || req.userRole === "supervisor") {

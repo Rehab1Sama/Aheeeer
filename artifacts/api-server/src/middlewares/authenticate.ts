@@ -15,6 +15,8 @@ declare global {
   }
 }
 
+const studentResolveCache = new Map<string, { studentId: number | null; circleId: number | null; exp: number }>();
+
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -47,6 +49,15 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   // حل studentId للطالبات
   if (user.role === "student") {
+    // ذاكرة مؤقتة ٥ دقائق: كانت كل طلبات الطالبة تشغّل حتى ٧ استعلامات للبحث عن سجلها
+    const cacheKey = `${user.id}|${user.studentId ?? ""}|${user.circleId ?? ""}|${user.name}`;
+    const hit = studentResolveCache.get(cacheKey);
+    if (hit && hit.exp > Date.now()) {
+      req.userStudentId = hit.studentId;
+      req.userCircleId = hit.circleId;
+      next();
+      return;
+    }
     let studentId: number | null = null;
 
     // أولاً: الرابط المحفوظ في users.student_id — لكن فقط إذا كانت الطالبة في نفس حلقة المستخدمة
@@ -128,6 +139,8 @@ if (studentId && !user.studentId) {
 
     req.userStudentId = studentId;
     req.userCircleId = resolvedCircleId;
+    if (studentResolveCache.size > 5000) studentResolveCache.clear();
+    studentResolveCache.set(cacheKey, { studentId, circleId: resolvedCircleId, exp: Date.now() + 5 * 60 * 1000 });
   }
 
   next();

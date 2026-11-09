@@ -623,19 +623,20 @@ void Promise.all([migrateStudentMemorizations(), migrateReviewPlansTable()]).the
   void migrateGlobalSettings();
   void migrateExamRotationsScope();
   void migrateRecordsUniqueConstraint();
-  void normalizeEmails();
-  void repairMissingEnrollments();
-  void syncCircleStaff();
-  void syncStudentUserCircleIds();
   void ensureRegistrationCircle();
-  // دوال بيانات الطالبات — يجب أن تشتغل بالترتيب:
-  // 1) ربط student_id
-  // 2) دمج النسخ المكررة الحقيقية فقط (بعد الحماية الجديدة)
-  void (async () => {
-    await migrateAndLinkStudentIds();
-    await seedLeader();
-    await mergeDuplicateStudents();
-  })();
+  void seedLeader();
+  // مهام إصلاح الربط (الحسابات↔الطالبات↔الحلقات): كانت تعمل مع كل تشغيل وتربط بالاسم أحيانًا.
+  // اشتغلت مرات كثيرة فاكتمل الربط؛ أُوقفت بقرار القائدة. لتشغيلها مرة عند الحاجة: RUN_STARTUP_REPAIRS=1 في Render.
+  if (process.env.RUN_STARTUP_REPAIRS === "1") {
+    void normalizeEmails();
+    void repairMissingEnrollments();
+    void syncCircleStaff();
+    void syncStudentUserCircleIds();
+    void (async () => {
+      await migrateAndLinkStudentIds();
+      await mergeDuplicateStudents();
+    })();
+  }
 
   // النسخ الاحتياطي: كان يحفظ ملف Excel على قرص Render المؤقت (يُمحى مع كل إعادة تشغيل)؛
   // البديل الفعلي: .github/workflows/weekly-backup.yml (نسخة كاملة مشفّرة كل جمعة).

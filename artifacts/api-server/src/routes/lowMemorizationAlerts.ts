@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, lowMemorizationAlertsTable, circlesTable, studentsTable, usersTable, recordsTable, tracksTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, gte } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -42,6 +42,7 @@ export async function checkAndCreateLowMemorizationAlert(studentId: number, ente
       .where(and(
         eq(recordsTable.studentId, studentId),
         eq(recordsTable.circleId, student.circleId),
+        gte(recordsTable.date, fourteenDaysAgo),
       ));
 
     const filteredRecords = recentRecords.filter(r =>
