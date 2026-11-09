@@ -378,7 +378,7 @@ router.get("/data-entry/track-status", authenticate, async (req, res): Promise<v
   });
 
   // الحلقات اللي ما دخّلت أولاً، ثم المكتملة
-  circles.sort((a, b) => Number(a.completed) - Number(b.completed) || a.circleName.localeCompare(b.circleName, "ar"));
+  circles.sort((a, b) => Number(a.completed) - Number(b.completed) || a.circleName.localeCompare(b.circleName, "ar", { numeric: true }));
 
   res.json({ date, circles });
 });

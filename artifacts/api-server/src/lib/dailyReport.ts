@@ -52,7 +52,7 @@ function greet(icon: string, what: string): string {
   return `${icon} <b>${name}</b>، إليكِ حبيبة ${what}`;
 }
 
-function trackOrder(a: string, b: string) { return a.localeCompare(b, "ar"); }
+function trackOrder(a: string, b: string) { return a.localeCompare(b, "ar", { numeric: true }); }
 
 // ── تجميع البيانات ────────────────────────────────────────────────────────
 

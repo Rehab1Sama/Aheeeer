@@ -522,7 +522,7 @@ export default function LeaderCirclesPage() {
                                 <div className="mt-2 space-y-1.5">
                                   {circle.students.length === 0 ? (
                                     <p className="text-xs text-muted-foreground">لا توجد طالبات</p>
-                                  ) : [...circle.students].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar")).map(s => (
+                                  ) : [...circle.students].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { numeric: true })).map(s => (
                                     <div key={s.id} className="flex items-center justify-between gap-2 py-0.5">
                                       <button onClick={() => navigate(`/students/${s.id}`)} className="text-sm text-primary hover:underline text-right flex-1 min-w-0 truncate">{s.fullName}</button>
                                       <div className="flex gap-1 shrink-0">
@@ -797,7 +797,7 @@ export default function LeaderCirclesPage() {
                                 <div className="mt-2 space-y-1.5">
                                   {circle.students.length === 0 ? (
                                     <p className="text-xs text-muted-foreground">لا توجد طالبات</p>
-                                  ) : [...circle.students].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar")).map(s => (
+                                  ) : [...circle.students].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { numeric: true })).map(s => (
                                     <div key={s.id} className="flex items-center justify-between gap-2 py-0.5">
                                       <button
                                         onClick={() => navigate(`/students/${s.id}`)}

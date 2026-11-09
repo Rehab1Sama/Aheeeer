@@ -155,7 +155,7 @@ router.get("/attendance/weekly-circle-groups", authenticate, async (req, res): P
   }
 
   // قائمة المسارات المتاحة للفلترة (قبل تطبيق فلتر track نفسه، عشان القائمة ما تفضى)
-  const availableTracks = Array.from(new Set(circles.map(c => c.track))).sort((a, b) => a.localeCompare(b, "ar"));
+  const availableTracks = Array.from(new Set(circles.map(c => c.track))).sort((a, b) => a.localeCompare(b, "ar", { numeric: true }));
 
   const trackFilter = req.query.track as string | undefined;
   if (trackFilter) {
@@ -185,9 +185,9 @@ router.get("/attendance/weekly-circle-groups", authenticate, async (req, res): P
     groups[key].push({ id: c.id, name: c.name, track: c.track, absenceCount: count, prevAbsenceCount: prevCount, trend });
   }
   for (const key of Object.keys(groups)) {
-    groups[key].sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    groups[key].sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true }));
   }
-  noData.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+  noData.sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true }));
 
   res.json({ weekStart, weekEnd, availableTracks, groups, noData });
 });

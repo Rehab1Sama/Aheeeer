@@ -6,6 +6,9 @@ import { authenticate } from "../middlewares/authenticate";
 import { CreateCircleBody, UpdateCircleBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+// ترتيب الحلقات بالأرقام: «وهج ١» ثم «وهج ٢» … ثم «وهج ١٠» (لا «وهج ١٠» قبل «وهج ٢»)
+const circleCollator = new Intl.Collator("ar", { numeric: true, sensitivity: "base" });
+const byCircleName = <T extends { name: string }>(a: T, b: T) => circleCollator.compare(a.name ?? "", b.name ?? "");
 
 router.get("/circles", authenticate, async (req, res): Promise<void> => {
   const trackFilter = req.query.track as string | undefined;
@@ -51,7 +54,7 @@ router.get("/circles", authenticate, async (req, res): Promise<void> => {
     circles = circles.filter(c => allowedIds.has(c.id));
   }
 
-  res.json(circles);
+  res.json(circles.sort(byCircleName));
 });
 
 router.post("/circles", authenticate, async (req, res): Promise<void> => {
@@ -95,7 +98,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     }
   }
   Object.values(volunteersByCircle).forEach(volunteers =>
-    volunteers.sort((a, b) => a.name.localeCompare(b.name, "ar", { sensitivity: "base" })),
+    volunteers.sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true, sensitivity: "base" })),
   );
 
   // بناء خريطة إيميل الطالبات: مفتاح = الاسم الكامل + circleId
@@ -125,7 +128,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
   }
   Object.keys(studentsByCircle).forEach(circleId => {
     studentsByCircle[Number(circleId)].sort((a, b) =>
-      a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }),
+      a.fullName.localeCompare(b.fullName, "ar", { numeric: true, sensitivity: "base" }),
     );
   });
 
@@ -139,7 +142,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     volunteers: volunteersByCircle[c.id] ?? [],
   }));
 
-  res.json(enriched);
+  res.json(enriched.sort(byCircleName));
 });
 
 // Returns minimal circle info (id, name, track) for ALL circles regardless of role — used for transfer selections
@@ -152,7 +155,7 @@ router.get("/circles/names", authenticate, async (req, res): Promise<void> => {
   // ملاحظة: تُترك بلا فلترة حسب المسار عمدًا — هذا الـ endpoint مخصص لقوائم
   // النقل (اختيار الحلقة الهدف)، ومسؤولة المسار مسموح لها تنقل طالباتها/كادرها
   // إلى أي حلقة بالمقرأة، مو بس حلقات مسارها.
-  res.json(circles);
+  res.json(circles.sort(byCircleName));
 });
 
 router.get("/circles/:id", authenticate, async (req, res): Promise<void> => {
@@ -257,7 +260,7 @@ router.get("/circles/:id", authenticate, async (req, res): Promise<void> => {
   }
 
   studentsRaw.sort((a, b) =>
-    String(a.fullName).localeCompare(String(b.fullName), "ar", { sensitivity: "base" }),
+    String(a.fullName).localeCompare(String(b.fullName), "ar", { numeric: true, sensitivity: "base" }),
   );
   res.json({ ...circle, teacher, supervisor, students: studentsRaw });
 });

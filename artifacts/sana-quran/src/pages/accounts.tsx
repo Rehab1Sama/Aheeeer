@@ -118,7 +118,7 @@ function groupByEmail(users: UserRow[]): PersonGroup[] {
         name: accounts.find(account => !account.isArchived)?.name ?? accounts[0]?.name ?? person.name,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name, "ar", { sensitivity: "base" }));
+    .sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true, sensitivity: "base" }));
 }
 
 function useDataEntryAssignments(canManage: boolean) {

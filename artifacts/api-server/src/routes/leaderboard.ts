@@ -65,7 +65,7 @@ router.get("/leaderboard/monthly", authenticate, async (req, res): Promise<void>
   const zeroAbsenceCircles = eligibleCircles
     .filter(c => hasAnyRecord.has(c.id) && !hasAbsence.has(c.id))
     .map(c => ({ id: c.id, name: c.name, track: c.track }))
-    .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    .sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true }));
 
   res.json({ visible: true, windowFrom, windowTo, weekStart, weekEnd, circles: zeroAbsenceCircles });
 });

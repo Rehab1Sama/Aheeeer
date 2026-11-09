@@ -101,7 +101,7 @@ export function countBy(values: Array<string | null>): Entry[] {
 /** ترتيب تنازلي، مع "غير مذكور" ثم "أخرى" في النهاية */
 export function sortEntries(entries: Entry[]): Entry[] {
   const rank = (l: string) => (l === UNKNOWN ? 2 : l === OTHER ? 1 : 0);
-  return [...entries].sort((a, b) => rank(a.label) - rank(b.label) || b.count - a.count || a.label.localeCompare(b.label, "ar"));
+  return [...entries].sort((a, b) => rank(a.label) - rank(b.label) || b.count - a.count || a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 /**

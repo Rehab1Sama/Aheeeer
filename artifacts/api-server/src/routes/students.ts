@@ -28,7 +28,7 @@ function hidePrivateForStudent<T extends { id: number }>(req: Express.Request, r
 }
 const SCOPED_ROLES = ["teacher", "supervisor", "data_entry"];
 const sortArabicNames = <T extends { fullName: string }>(rows: T[]): T[] =>
-  [...rows].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }));
+  [...rows].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { numeric: true, sensitivity: "base" }));
 
 // Cumulative wajhs at the end of each juz in Mushaf Madinah. Historical
 // memorization is entered as exact complete juzs when possible, so the server
@@ -473,38 +473,27 @@ router.patch("/students/:id", authenticate, async (req, res): Promise<void> => {
 
   const [before] = await db.select().from(studentsTable).where(eq(studentsTable.id, id));
   if (!before) { res.status(404).json({ error: "Student not found" }); return; }
-  let claimingFromRegistrationPool = false;
+  // مسؤولة المسار تنقل أي طالبة إلى أي مسار وأي حلقة مباشرة (بطلب القائدة)،
+  // فلا قيد على نطاق الطالبة ولا على الحلقة الهدف سوى أن تكون متاحة.
+  // أما تعديل بيانات الطالبة نفسها (الاسم، الجوال…) فيبقى لطالبات مسارها فقط.
   if (req.userRole === "track_supervisor") {
-    const allowed = await db
-      .select({ track: circlesTable.track })
-      .from(studentEnrollmentsTable)
-      .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
-      .where(and(
-        eq(studentEnrollmentsTable.studentId, id),
-        eq(studentEnrollmentsTable.isArchived, false),
-        eq(circlesTable.track, req.userTrack!),
-      ));
-    if (allowed.length === 0) {
-      // ما عندها تسجيل نشط بمسارها — تحقق إن كانت أصلًا بقائمة التسجيل المشتركة
-      // (أو بلا حلقة إطلاقًا)، عشان أي مسؤولة مسار تقدر "تسحب" طالبتها من هناك.
-      const activeElsewhere = await db
-        .select({ trackType: circlesTable.trackType })
+    const editsOtherFields = Object.keys(parsed.data).some(k => k !== "circleId");
+    if (editsOtherFields) {
+      const inMyTrack = await db
+        .select({ id: studentEnrollmentsTable.id })
         .from(studentEnrollmentsTable)
         .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
         .where(and(
           eq(studentEnrollmentsTable.studentId, id),
           eq(studentEnrollmentsTable.isArchived, false),
+          eq(circlesTable.track, req.userTrack!),
         ));
-      const onlyInRegistrationOrNone =
-        activeElsewhere.length === 0 || activeElsewhere.every(e => e.trackType === "registration");
-      if (!onlyInRegistrationOrNone) {
-        res.status(403).json({ error: "الطالبة خارج نطاق المسار" });
+      if (inMyTrack.length === 0) {
+        res.status(403).json({ error: "تعديل بيانات الطالبة لمسؤولة مسارها، والنقل متاح لكِ" });
         return;
       }
-      claimingFromRegistrationPool = true;
     }
   }
-
   const requestedCircleId = parsed.data.circleId;
   if (typeof requestedCircleId === "number") {
     const [targetCircle] = await db
@@ -513,14 +502,6 @@ router.patch("/students/:id", authenticate, async (req, res): Promise<void> => {
       .where(eq(circlesTable.id, requestedCircleId));
     if (!targetCircle || targetCircle.isArchived) {
       res.status(400).json({ error: "الحلقة الهدف غير متاحة" });
-      return;
-    }
-    // مسؤولة المسار تقدر تنقل طالبات مسارها لأي حلقة بالمقرأة (كل المسارات)،
-    // طالما الطالبة نفسها ضمن نطاق مسارها (يُتحقق منه أعلاه).
-    // لكن لو كانت تسحبها من قائمة التسجيل المشتركة، لازم الوجهة تكون ضمن
-    // مسارها هي بالذات — ما نسمح لها تحط طالبة قائمة تسجيل بمسار غير مسارها.
-    if (claimingFromRegistrationPool && targetCircle.track !== req.userTrack) {
-      res.status(403).json({ error: "لا يمكن نقل طالبة من قائمة التسجيل إلا إلى حلقة ضمن مسارك" });
       return;
     }
   }

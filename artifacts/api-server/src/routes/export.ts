@@ -198,7 +198,7 @@ router.get("/export/track-report", authenticate, async (req, res): Promise<void>
     const teacher = circle.teacherId ? userMap.get(circle.teacherId) : undefined;
     const supervisor = circle.supervisorId ? userMap.get(circle.supervisorId) : undefined;
     const circleStudents = [...(studentsByCircle.get(circle.id) ?? [])].sort((a, b) =>
-      a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }),
+      a.fullName.localeCompare(b.fullName, "ar", { numeric: true, sensitivity: "base" }),
     );
 
     circleRows.push({

@@ -178,7 +178,7 @@ export default function RegisterExistingPage() {
   }, []);
 
   const trackNames = useMemo(
-    () => [...new Set(circles.map(c => c.track))].filter(Boolean).sort((a, b) => a.localeCompare(b, "ar")),
+    () => [...new Set(circles.map(c => c.track))].filter(Boolean).sort((a, b) => a.localeCompare(b, "ar", { numeric: true })),
     [circles]
   );
   const filteredCircles = circles.filter(c => !form.track || c.track === form.track);

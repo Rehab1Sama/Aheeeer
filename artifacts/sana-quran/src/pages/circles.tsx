@@ -71,7 +71,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
   const { data: archivedStudents } = useListStudents({ circleId, isArchived: true }, { query: { queryKey: ["circle-students-archived", circleId] } });
   const { data: allCircles } = useListCircles(undefined, { query: { queryKey: ["circles"] } });
   const sortedStudents = [...(students ?? [])].sort((a, b) =>
-    a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }),
+    a.fullName.localeCompare(b.fullName, "ar", { numeric: true, sensitivity: "base" }),
   );
 
   const restoreStudent = useRestoreStudent();

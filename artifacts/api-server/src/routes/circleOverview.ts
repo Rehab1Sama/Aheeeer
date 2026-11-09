@@ -62,7 +62,7 @@ router.get("/circles/:id/overview", authenticate, async (req, res): Promise<void
   const todayAbsentNames = todayRecords
     .filter(r => r.isAbsent)
     .map(r => studentMap.get(r.studentId) ?? "—")
-    .sort((a, b) => a.localeCompare(b, "ar"));
+    .sort((a, b) => a.localeCompare(b, "ar", { numeric: true }));
   const hasTodayData = todayRecords.length > 0;
 
   // ── ملخص الأسبوع الحالي (الأحد-الخميس): كل يوم كم حاضرة وكم غايبة ────────

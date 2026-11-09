@@ -95,7 +95,7 @@ async function buildMerits(
     });
   }
 
-  return result.sort((a, b) => a.studentName.localeCompare(b.studentName, "ar"));
+  return result.sort((a, b) => a.studentName.localeCompare(b.studentName, "ar", { numeric: true }));
 }
 
 function assertAccess(role?: string): boolean {

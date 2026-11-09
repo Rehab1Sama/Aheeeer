@@ -102,7 +102,7 @@ export default function CertificatesPage() {
   const canPublish = (me as any)?.role === "leader" || (me as any)?.role === "deputy";
   const publishedTracks: string[] = (active as any)?.publishedTracks ?? [];
   const isPublishedTrack = (name?: string | null) => active?.status === "published" || publishedTracks.includes(name ?? "بلا مسار");
-  const trackSummary = useMemo(() => { const m = new Map<string, { total: number; ready: number }>(); for (const r of rows as any[]) { const t = r.trackName ?? "بلا مسار"; const x = m.get(t) ?? { total: 0, ready: 0 }; x.total++; if (r.status === "ready" || r.status === "no_exam") x.ready++; m.set(t, x); } return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "ar")); }, [rows]);
+  const trackSummary = useMemo(() => { const m = new Map<string, { total: number; ready: number }>(); for (const r of rows as any[]) { const t = r.trackName ?? "بلا مسار"; const x = m.get(t) ?? { total: 0, ready: 0 }; x.total++; if (r.status === "ready" || r.status === "no_exam") x.ready++; m.set(t, x); } return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "ar", { numeric: true })); }, [rows]);
   const [publishingTrack, setPublishingTrack] = useState<string | null>(null);
   const publishTrack = async (track: string) => {
     if (!activeId || !window.confirm(`سيتم نشر نتائج ${track} للطالبات وتثبيتها. هل تريدين المتابعة؟`)) return;

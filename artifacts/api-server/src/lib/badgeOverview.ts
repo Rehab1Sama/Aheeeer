@@ -58,7 +58,7 @@ export async function overviewCircleWeeklyMoon(weekStart: string = getLastComple
 
   return circles
     .map(c => ({ key: String(c.id), label: c.name, meta: c.track, badge: badgeMap.get(c.id)! }))
-    .sort((a, b) => a.badge.tier - b.badge.tier || a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.badge.tier - b.badge.tier || a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٢. إنهاء خطة المراجعة — كل الطالبات، حتى تاريخ مرجعي (asOf) ───────────
@@ -98,7 +98,7 @@ export async function overviewReviewPlanCompletion(asOf: string = getMakkahDay()
         badge: e.badge,
       };
     })
-    .sort((a, b) => a.badge.tier - b.badge.tier || a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.badge.tier - b.badge.tier || a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٣. حضور الشهر الكامل — كل الطالبات النشيطات ───────────────────────────
@@ -117,7 +117,7 @@ export async function overviewMonthlyPerfect(month: string = getMakkahDay().slic
 
   return qualifying
     .map(({ s, badge }) => ({ key: String(s.id), label: s.fullName, meta: s.circleId ? circleNameById.get(s.circleId) : undefined, badge }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٣ب. حضور فترة كاملة بلا غياب — نطاق تاريخ حر (dateFrom/dateTo) تحدده القائدة ──
@@ -138,7 +138,7 @@ export async function overviewPerfectAttendanceInRange(dateFrom: string, dateTo:
 
   return qualifying
     .map(({ s, badge }) => ({ key: String(s.id), label: s.fullName, meta: s.circleId ? circleNameById.get(s.circleId) : undefined, badge }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٤. التطور — كل الطالبات النشيطات ──────────────────────────────────────
@@ -157,7 +157,7 @@ export async function overviewImprovement(weekStart: string = getLastCompletedWe
 
   return qualifying
     .map(({ s, badge }) => ({ key: String(s.id), label: s.fullName, meta: s.circleId ? circleNameById.get(s.circleId) : undefined, badge }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٥. مسارنا الأحب — كل المسارات ─────────────────────────────────────────
@@ -170,7 +170,7 @@ export async function overviewTrackNoShortcoming(weekStart: string = getLastComp
   return results
     .filter((r): r is { t: string; badge: EarnedBadge } => r.badge !== null)
     .map(({ t, badge }) => ({ key: t, label: t, badge }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.label.localeCompare(b.label, "ar", { numeric: true }));
 }
 
 // ── ٦. فخر الأسبوع (مسؤولة المسار) — كل مسؤولات المسار ────────────────────
@@ -186,5 +186,5 @@ export async function overviewSupervisorWeeklyCommitment(weekStart: string = get
   return results
     .filter((r): r is { n: typeof names[number]; badge: EarnedBadge } => r.badge !== null)
     .map(({ n, badge }) => ({ key: String(n.id), label: n.name, meta: trackNameById.get(n.trackId), badge }))
-    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+    .sort((a, b) => a.label.localeCompare(b.label, "ar", { numeric: true }));
 }

@@ -361,7 +361,7 @@ export default function DataEntryPage() {
     return ((missingData as unknown) as any[])
       .filter((s: any) => Number(s.circleId) === Number(selectedCircleId))
       .sort((a: any, b: any) =>
-        String(a.studentName ?? "").localeCompare(String(b.studentName ?? ""), "ar", { sensitivity: "base" }),
+        String(a.studentName ?? "").localeCompare(String(b.studentName ?? ""), "ar", { numeric: true, sensitivity: "base" }),
       );
   }, [missingData, selectedCircleId]);
 

@@ -139,7 +139,7 @@ async function buildReport(month: string) {
     const name = info.get(cid)!.name;
     circlesByTrack.set(name, (circlesByTrack.get(name) ?? 0) + 1);
   }
-  const trackNames = [...circlesByTrack.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, "ar"));
+  const trackNames = [...circlesByTrack.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b, "ar", { numeric: true }));
   const byTrack = trackNames.map((name) => ({
     track: name,
     circles: circlesByTrack.get(name) ?? 0,

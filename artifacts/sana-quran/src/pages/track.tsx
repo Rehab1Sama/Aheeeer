@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { getToken } from "@/lib/auth";
 import { searchMatch } from "@/lib/arabicSearch";
-import { offerTransferRequest } from "@/lib/transferRequest";
+import TransferWizard from "@/components/TransferWizard";
 
 type CircleItem = { id: number; name: string; track: string };
 type Student = { id: number; fullName: string; circleId?: number | null; phone?: string | null };
@@ -51,69 +51,6 @@ function ClockFace({ time }: { time: string }) {
   );
 }
 
-function TransferModal({
-  student,
-  allCircles,
-  currentCircleId,
-  onClose,
-  onTransfer,
-  isLoading,
-}: {
-  student: Student;
-  allCircles: CircleItem[];
-  currentCircleId: number;
-  onClose: () => void;
-  onTransfer: (circleId: number) => void;
-  isLoading: boolean;
-}) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const otherCircles = allCircles.filter(c => c.id !== currentCircleId);
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" dir="rtl">
-        <div className="p-5 border-b border-border">
-          <h3 className="font-bold text-base">نقل الطالبة</h3>
-          <p className="text-sm text-muted-foreground mt-1">{student.fullName}</p>
-        </div>
-        <div className="p-4 max-h-64 overflow-y-auto space-y-2">
-          {otherCircles.map(c => (
-            <button
-              key={c.id}
-              onClick={() => setSelected(c.id)}
-              className={`w-full text-right px-4 py-3 rounded-xl border-2 transition-all ${
-                selected === c.id
-                  ? "border-primary bg-primary/5 font-semibold"
-                  : "border-border hover:border-primary/50"
-              }`}
-              data-testid={`circle-option-${c.id}`}
-            >
-              <span className="text-sm">{c.name}</span>
-              <span className="text-xs text-muted-foreground mr-2">({c.track})</span>
-            </button>
-          ))}
-          {otherCircles.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-4">لا توجد حلقات أخرى</p>
-          )}
-        </div>
-        <div className="p-4 flex gap-2 border-t border-border">
-          <Button
-            onClick={() => selected && onTransfer(selected)}
-            disabled={!selected || isLoading}
-            className="flex-1"
-            size="sm"
-          >
-            {isLoading ? "جاري النقل..." : "نقل"}
-          </Button>
-          <Button variant="outline" onClick={onClose} size="sm" className="flex-1">
-            إلغاء
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function TrackPage() {
   const { data: user } = useGetCurrentUser({ query: { queryKey: ["getCurrentUser"] } });
   const { data: circles } = useListCircles(undefined, { query: { queryKey: ["circles"] } });
@@ -129,6 +66,7 @@ export default function TrackPage() {
 
   const [expandedCircle, setExpandedCircle] = useState<number | null>(null);
   const [transferStudent, setTransferStudent] = useState<{ student: Student; circleId: number } | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [archiveRequest, setArchiveRequest] = useState<{ student: Student; circleId: number } | null>(null);
   const [withdrawalPeriod, setWithdrawalPeriod] = useState("");
@@ -173,7 +111,7 @@ export default function TrackPage() {
   const getCircleStudents = (circleId: number): Student[] =>
     (allStudents ?? [])
       .filter(s => s.circleId === circleId)
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { sensitivity: "base" }));
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar", { numeric: true, sensitivity: "base" }));
 
   const handleArchive = (student: Student, circleId: number) => {
     setArchiveRequest({ student, circleId });
@@ -200,29 +138,6 @@ export default function TrackPage() {
           description: error?.response?.data?.error ?? error?.message ?? "تحققي من بيانات الطالبة والحلقة",
           variant: "destructive",
         }),
-      }
-    );
-  };
-
-  const handleTransfer = (circleId: number) => {
-    if (!transferStudent) return;
-    updateStudent.mutate(
-        { id: transferStudent.student.id, data: { circleId, fromCircleId: transferStudent.circleId } as any },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["allStudents"] });
-          setTransferStudent(null);
-          toast({ title: "تم النقل", description: `تم نقل ${transferStudent.student.fullName} بنجاح` });
-        },
-        onError: async (e: any) => {
-          if (e?.status === 403) {
-            const r = await offerTransferRequest({ studentId: transferStudent.student.id, studentName: transferStudent.student.fullName, fromCircleId: transferStudent.circleId, toCircleId: circleId, reason: e?.message });
-            if (r === "sent") { toast({ title: "أُرسل طلب النقل للقائدة" }); setTransferStudent(null); return; }
-            if (r !== "cancelled") toast({ title: "تعذّر إرسال الطلب", description: r, variant: "destructive" });
-            return;
-          }
-          toast({ title: "تعذّر النقل", description: e?.message ?? "فشلت عملية النقل", variant: "destructive" });
-        },
       }
     );
   };
@@ -401,6 +316,11 @@ export default function TrackPage() {
           <h1 className="text-2xl font-bold text-foreground">مساري · {myTrack}</h1>
           <p className="text-muted-foreground text-sm mt-1">{user?.name}</p>
         </div>
+        <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setWizardOpen(true)}>
+          <ArrowLeftRight className="w-4 h-4" />
+          نقل طالبة
+        </Button>
         <Button
           size="sm"
           className="gap-1.5 text-xs"
@@ -409,6 +329,7 @@ export default function TrackPage() {
           <UserPlus className="w-4 h-4" />
           إضافة طالبة
         </Button>
+        </div>
       </div>
 
       {/* Messages from leader */}
@@ -813,14 +734,12 @@ export default function TrackPage() {
         </CardContent>
       </Card>
 
-      {transferStudent && circleNames && (
-        <TransferModal
-          student={transferStudent.student}
-          allCircles={circleNames}
-          currentCircleId={transferStudent.circleId}
-          onClose={() => setTransferStudent(null)}
-          onTransfer={handleTransfer}
-          isLoading={updateStudent.isPending}
+      {(transferStudent || wizardOpen) && (
+        <TransferWizard
+          student={transferStudent?.student ?? null}
+          fromCircleId={transferStudent?.circleId ?? null}
+          onClose={() => { setTransferStudent(null); setWizardOpen(false); }}
+          onDone={() => { fetchEnrichedCircles(); }}
         />
       )}
 

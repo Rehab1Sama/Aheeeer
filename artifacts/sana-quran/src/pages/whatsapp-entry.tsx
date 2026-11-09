@@ -223,7 +223,7 @@ export default function WhatsappEntryPage() {
     return ((missingData ?? []) as any[])
       .filter((s) => s.circleId === circleId)
       .map((s) => ({ id: s.studentId as number, name: s.studentName as string, hasRecord: !!s.hasRecord, recordId: (s.recordId ?? null) as number | null, onLeave: !!s.onLeave }))
-      .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+      .sort((a, b) => a.name.localeCompare(b.name, "ar", { numeric: true }));
   }, [missingData, circleId]);
 
   const studentRefs: StudentRef[] = useMemo(() => students.map((s) => ({ id: s.id, name: s.name })), [students]);
