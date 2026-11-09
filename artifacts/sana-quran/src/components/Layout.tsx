@@ -305,6 +305,7 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
   );
 }
 
+const REMINDER_ROLES = ["supervisor", "teacher", "track_supervisor", "leader", "deputy"];
 /** تذكير لطيف في كل الصفحات من التاسعة حتى الثانية عشرة ليلًا (موعد انتهاء الإدخال) بتوقيت مكة (يُخفى لليوم بضغطة) */
 function LateReminder({ role, name }: { role: string; name: string }) {
   const [, force] = useState(0);
@@ -312,12 +313,15 @@ function LateReminder({ role, name }: { role: string; name: string }) {
   const evening = makkahHour >= 21;
   const { data } = useQuery({
     queryKey: ["todaySummary"],
-    enabled: ["supervisor", "teacher"].includes(role) && evening,
+    enabled: REMINDER_ROLES.includes(role) && evening,
     staleTime: 30 * 1000,
     queryFn: async () => (await fetchToday()) ?? { items: [] },
   });
   const t = data as { missing?: number; date?: string } | undefined;
-  if (!evening || !t?.missing || readLS("late-reminder-hidden") === t.date) return null;
+  if (!REMINDER_ROLES.includes(role) || !evening || !t?.missing || readLS("late-reminder-hidden") === t.date) return null;
+  const scopeText = role === "track_supervisor" ? " في مساركِ" : role === "leader" || role === "deputy" ? " في المقرأة" : "";
+  const href = role === "track_supervisor" ? "/track-entry-status" : role === "leader" || role === "deputy" ? "/data-entry-status" : "/data-entry";
+  const action = role === "supervisor" || role === "teacher" ? "أدخلي الآن" : "تابعي الإدخال";
   const first = name.trim().split(/\s+/)[0] || "قمرة";
   const hoursLeft = 24 - makkahHour;
   return (
@@ -328,13 +332,13 @@ function LateReminder({ role, name }: { role: string; name: string }) {
           <div className="flex items-start gap-3">
             <p className="flex-1 text-sm leading-7">
               <span className="font-bold text-primary">حبيبتنا {first}!</span>{" "}
-              <span className="text-foreground">باقي <b>{t.missing.toLocaleString("ar-EG")}</b> {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، أعانكِ الله 🌿</span>
+              <span className="text-foreground">باقي <b>{t.missing.toLocaleString("ar-EG")}</b> {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال{scopeText}، أعانكِ الله 🌿</span>
             </p>
             <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-muted-foreground hover:text-foreground text-lg leading-none" aria-label="إخفاء لليوم">×</button>
           </div>
           <div className="flex items-center justify-between gap-3 mt-2">
             <span className="text-xs text-muted-foreground">{hoursLeft <= 1 ? "بقي أقل من ساعة قبل الثانية عشرة" : hoursLeft === 2 ? "بقيت ساعتان قبل الثانية عشرة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات قبل الثانية عشرة`}</span>
-            <Link href="/data-entry" className="rounded-xl bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold whitespace-nowrap hover:opacity-90">أدخلي الآن</Link>
+            <Link href={href} className="rounded-xl bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold whitespace-nowrap hover:opacity-90">{action}</Link>
           </div>
         </div>
       </div>
