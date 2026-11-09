@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserX, RefreshCw, Search, CheckCircle2, Link2, ExternalLink, MessageCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import { searchMatch } from "@/lib/arabicSearch";
 
 interface UnlinkedStudent {
   id: number;
@@ -78,9 +79,9 @@ export default function UnlinkedStudentsPage() {
   const filtered = students.filter(s =>
     !done.has(s.id) &&
     (!search ||
-      s.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      (s.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (s.country ?? "").toLowerCase().includes(search.toLowerCase()))
+      searchMatch(s.fullName, search) ||
+      searchMatch((s.email ?? ""), search) ||
+      searchMatch((s.country ?? ""), search))
   );
 
   return (

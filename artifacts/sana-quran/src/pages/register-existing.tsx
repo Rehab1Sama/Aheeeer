@@ -14,6 +14,7 @@ import logoUrl from "@/assets/logo.jpg";
 import { Link, useLocation } from "wouter";
 import { setToken } from "@/lib/auth";
 import { COUNTRIES } from "@/lib/countries";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const AGE_RANGES = ["أقل من 10 سنوات", "10-15", "16-20", "21-30", "31-40", "41-50", "51+"];
@@ -57,7 +58,7 @@ function MemorizedQuranSelector({ value, onChange }: { value: string; onChange: 
     setSelectedSurahs(next); updateParent(selectedJuz, next, mode);
   };
   const switchMode = (m: "surah" | "juz") => { setMode(m); updateParent(selectedJuz, selectedSurahs, m); };
-  const filteredSurahs = SURAHS.map((name, i) => ({ name, i })).filter(s => !surahSearch || s.name.includes(surahSearch));
+  const filteredSurahs = SURAHS.map((name, i) => ({ name, i })).filter(s => !surahSearch || searchMatch(s.name, surahSearch));
 
   return (
     <div className="space-y-3">
@@ -104,7 +105,7 @@ function MemorizedQuranSelector({ value, onChange }: { value: string; onChange: 
 function CountrySelector({ value, onChange }: { value: string; onChange: (name: string) => void }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const filtered = COUNTRIES.filter(c => c.name.includes(search));
+  const filtered = COUNTRIES.filter(c => searchMatch(c.name, search));
   return (
     <div className="relative">
       <button

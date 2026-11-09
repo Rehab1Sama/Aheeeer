@@ -33,6 +33,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, UserPlus, Search, KeyRound, Ban, CheckCircle2, Archive, CheckSquare, Square, Users, ArrowLeftRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -450,7 +451,7 @@ export default function AccountsPage() {
     : userRows;
   const allPersons = groupByEmail(visibleUsers as UserRow[]);
   const persons = allPersons.filter(p => {
-    if (searchTerm.trim() && !p.name.includes(searchTerm) && !p.email.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (searchTerm.trim() && !searchMatch(p.name, searchTerm) && !searchMatch(p.email, searchTerm)) return false;
     if (roleFilter && !p.accounts.some(a => a.role === roleFilter)) return false;
     return true;
   });

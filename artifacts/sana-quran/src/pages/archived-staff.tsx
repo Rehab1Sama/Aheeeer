@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Archive, RefreshCw, Search, UserCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const getToken = () => localStorage.getItem("sana_auth_token");
@@ -79,9 +80,9 @@ export default function ArchivedStaffPage() {
   }
 
   const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    (u.track ?? "").toLowerCase().includes(search.toLowerCase())
+    searchMatch(u.name, search) ||
+    searchMatch(u.email, search) ||
+    searchMatch((u.track ?? ""), search)
   );
 
   return (

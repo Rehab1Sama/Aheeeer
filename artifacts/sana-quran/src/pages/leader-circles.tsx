@@ -15,6 +15,7 @@ import {
 import { getToken } from "@/lib/auth";
 import { toArabicDigits } from "@/lib/utils";
 import { StudentArchiveDialog } from "@/components/StudentArchiveDialog";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -79,7 +80,7 @@ function TransferModal({
   const [selected, setSelected] = useState<number | null>(null);
   const [step, setStep] = useState<"select" | "confirm">("select");
   const [search, setSearch] = useState("");
-  const options = circles.filter(c => c.id !== currentCircleId && (!search || c.name.includes(search) || c.track.includes(search)));
+  const options = circles.filter(c => c.id !== currentCircleId && (!search || searchMatch(c.name, search) || searchMatch(c.track, search)));
   const fromCircle = circles.find(c => c.id === currentCircleId);
   const toCircle = circles.find(c => c.id === selected);
 
@@ -375,7 +376,7 @@ export default function LeaderCirclesPage() {
   };
 
   const filtered = circles.filter(c =>
-    !search || c.name.includes(search) || (c.teacherName ?? "").includes(search) || (c.supervisorName ?? "").includes(search)
+    !search || searchMatch(c.name, search) || searchMatch((c.teacherName ?? ""), search) || searchMatch((c.supervisorName ?? ""), search)
   );
 
   const naturalSort = (a: string, b: string) => a.localeCompare(b, 'ar', { numeric: true, sensitivity: 'base' });

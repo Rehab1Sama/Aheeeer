@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { StudentArchiveDialog } from "@/components/StudentArchiveDialog";
+import { searchMatch } from "@/lib/arabicSearch";
 
 type LeaveModal = {
   studentId: number;
@@ -422,7 +423,7 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
                 <input type="text" value={transferSearch} onChange={e => setTransferSearch(e.target.value)} placeholder="بحث بالاسم..." className="h-8 text-xs border border-input rounded-md px-3 pe-9 w-full bg-background text-right" />
               </div>
               <div className="max-h-44 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5">
-                {(allCircles ?? []).filter(c => c.id !== circleId && (!transferSearch || c.name.includes(transferSearch))).map(c => (
+                {(allCircles ?? []).filter(c => c.id !== circleId && (!transferSearch || searchMatch(c.name, transferSearch))).map(c => (
                   <button key={c.id} onClick={() => setTransferTargetId(c.id)} className={`w-full text-right text-xs px-2.5 py-1.5 rounded-lg transition-colors ${transferTargetId === c.id ? "bg-indigo-100 text-indigo-700 font-semibold" : "hover:bg-muted text-foreground"}`}>
                     {c.name}{(c as any).track && <span className="text-muted-foreground mr-1">— {(c as any).track}</span>}
                   </button>
@@ -667,7 +668,7 @@ export default function CirclesPage() {
   const tracks: string[] = Array.from(_trackSet).sort();
 
   const filtered = circles?.filter(c => {
-    const matchSearch = !search || c.name.includes(search) || (c as { teacherName?: string }).teacherName?.includes(search);
+    const matchSearch = !search || searchMatch(c.name, search) || searchMatch((c as { teacherName?: string }).teacherName, search);
     const matchTrack = !selectedTrack || c.track === selectedTrack;
     return matchSearch && matchTrack;
   }) ?? [];
@@ -1133,7 +1134,7 @@ export default function CirclesPage() {
                 </div>
                 <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-lg p-1.5">
                   {(circles ?? [])
-                    .filter(c => c.id !== removeStaffModal.circleId && (!transferSearch || c.name.includes(transferSearch)))
+                    .filter(c => c.id !== removeStaffModal.circleId && (!transferSearch || searchMatch(c.name, transferSearch)))
                     .map(c => (
                       <button
                         key={c.id}

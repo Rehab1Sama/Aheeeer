@@ -12,13 +12,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UserPlus, CheckCircle, Search, ChevronDown } from "lucide-react";
 import { useLocation } from "wouter";
 import { COUNTRIES } from "@/lib/countries";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const AGE_RANGES = ["أقل من 10 سنوات", "10-15", "16-20", "21-30", "31-40", "41-50", "51+"];
 
 function CountrySelector({ value, onChange }: { value: string; onChange: (name: string) => void }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const filtered = COUNTRIES.filter(c => c.name.includes(search));
+  const filtered = COUNTRIES.filter(c => searchMatch(c.name, search));
   return (
     <div className="relative">
       <button

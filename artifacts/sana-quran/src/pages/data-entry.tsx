@@ -78,6 +78,7 @@ import {
   type SectionState,
   type FormState,
 } from "@/components/data-entry/parts";
+import { searchMatch } from "@/lib/arabicSearch";
 
 export default function DataEntryPage() {
   const [, navigate] = useLocation();
@@ -370,7 +371,7 @@ export default function DataEntryPage() {
   const filteredStudents = useMemo(() => {
     const search = studentSearch.trim();
     if (!search) return studentsInCircle;
-    return studentsInCircle.filter((s: any) => s.studentName?.includes(search));
+    return studentsInCircle.filter((s: any) => searchMatch(s.studentName, search));
   }, [studentsInCircle, studentSearch]);
 
   const selectedCircle = (circles ?? []).find((c: any) => c.id === selectedCircleId) as any;
@@ -2169,7 +2170,7 @@ export default function DataEntryPage() {
           ) : (
             (() => {
               const filtered = archivedStudents.filter((s: any) =>
-                !archiveSearch.trim() || s.fullName?.includes(archiveSearch.trim()),
+                !archiveSearch.trim() || searchMatch(s.fullName, archiveSearch),
               );
               if (filtered.length === 0) return (
                 <div className="text-center py-8 text-muted-foreground text-sm">لا توجد نتائج</div>

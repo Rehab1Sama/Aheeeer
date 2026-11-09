@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserX, Link2, RefreshCw, Search, CheckCircle2 } from "lucide-react";
+import { searchMatch } from "@/lib/arabicSearch";
 
 interface StaffUser {
   id: number;
@@ -88,7 +89,7 @@ export default function UnlinkedStaffPage() {
 
   const filtered = (data?.unlinked ?? []).filter(u =>
     !done.has(u.id) &&
-    (!search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+    (!search || searchMatch(u.name, search) || searchMatch(u.email, search))
   );
 
   return (

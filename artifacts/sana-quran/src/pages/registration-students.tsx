@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, ArrowLeftRight, Loader2, CheckSquare, Square, Search, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -48,8 +49,8 @@ export default function RegistrationStudentsPage() {
   const activeCircles = (circles ?? []).filter((c: any) => !c.isArchived && c.trackType !== "registration");
 
   const filteredStudents = students.filter(s =>
-    s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.phone ?? "").includes(searchTerm)
+    searchMatch(s.fullName, searchTerm) ||
+    searchMatch((s.phone ?? ""), searchTerm)
   );
 
   const toggleSelect = (id: number) => {

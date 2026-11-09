@@ -15,6 +15,7 @@ import logoUrl from "@/assets/logo.jpg";
 import { Link, useLocation } from "wouter";
 import { setToken } from "@/lib/auth";
 import { COUNTRIES } from "@/lib/countries";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -55,7 +56,7 @@ function CountrySelector({ value, onChange, onDialCode }: {
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const filtered = COUNTRIES.filter(c => c.name.includes(search) || c.dialCode.includes(search));
+  const filtered = COUNTRIES.filter(c => searchMatch(c.name, search) || searchMatch(c.dialCode, search));
   const selected = COUNTRIES.find(c => c.name === value);
   const pick = (c: { name: string; dialCode: string }) => { onChange(c.name); onDialCode(c.dialCode); setOpen(false); setSearch(""); };
   return (
@@ -117,7 +118,7 @@ function MemorizedQuranSelector({ value, onChange }: { value: string; onChange: 
     setSelectedSurahs(next); updateParent(selectedJuz, next, mode);
   };
   const switchMode = (m: "surah" | "juz") => { setMode(m); updateParent(selectedJuz, selectedSurahs, m); };
-  const filteredSurahs = SURAHS.map((name, i) => ({ name, i })).filter(s => !surahSearch || s.name.includes(surahSearch));
+  const filteredSurahs = SURAHS.map((name, i) => ({ name, i })).filter(s => !surahSearch || searchMatch(s.name, surahSearch));
 
   return (
     <div className="space-y-3">
@@ -167,7 +168,7 @@ function JuzSelector({ value, onChange }: { value: string; onChange: (v: string)
 // ── Single Surah Selector (for question type quran_surah) ─────────────────
 function SurahSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [search, setSearch] = useState("");
-  const filtered = SURAHS.map((name, i) => ({ name, i })).filter(s => !search || s.name.includes(search));
+  const filtered = SURAHS.map((name, i) => ({ name, i })).filter(s => !search || searchMatch(s.name, search));
   return (
     <div className="space-y-2">
       <div className="relative">

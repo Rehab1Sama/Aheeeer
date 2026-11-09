@@ -9,6 +9,7 @@ import { BookOpen, CheckCircle2, XCircle, ChevronDown, ChevronUp, Users, Loader2
 import { Switch } from "@/components/ui/switch";
 import { getCurrentPlanDay, getDayDates, formatArDate } from "@/components/ReviewPlanSection";
 import { computeDayRanges, juzListToQuotaRanges, type DayQuotaRange, type DayRangeSegment } from "@/lib/quran";
+import { searchMatch } from "@/lib/arabicSearch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const getToken = () => localStorage.getItem("sana_auth_token");
@@ -1076,7 +1077,7 @@ export default function ReviewPlansOverviewPage({ userRole }: Props) {
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      students = students.filter(s => s.studentName.toLowerCase().includes(q));
+      students = students.filter(s => searchMatch(s.studentName, q));
     }
     return { ...circle, students };
   }

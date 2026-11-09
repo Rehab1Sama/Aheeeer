@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { getToken } from "@/lib/auth";
+import { searchMatch } from "@/lib/arabicSearch";
 
 type CircleItem = { id: number; name: string; track: string };
 type Student = { id: number; fullName: string; circleId?: number | null; phone?: string | null };
@@ -381,7 +382,7 @@ export default function TrackPage() {
   const searchResults = searchTerm.trim()
     ? (allStudents ?? []).filter(s =>
         trackCircles.some(c => c.id === s.circleId) &&
-        s.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+        searchMatch(s.fullName, searchTerm)
       )
     : [];
 

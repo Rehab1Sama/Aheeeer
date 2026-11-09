@@ -6,6 +6,7 @@ import { Archive, RotateCcw, Search, UserCircle, Users, X, Check, RefreshCw } fr
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { searchMatch } from "@/lib/arabicSearch";
 
 interface ArchivedEntry {
   studentId: number;
@@ -63,7 +64,7 @@ export default function ArchivedStudentsPage() {
 
   const filtered = useMemo(() => {
     return archivedEntries.filter(e => {
-      const matchSearch = !search || e.fullName.includes(search) || e.circleName.includes(search);
+      const matchSearch = !search || searchMatch(e.fullName, search) || searchMatch(e.circleName, search);
       const matchTrack = !selectedTrack || e.circleTrack === selectedTrack;
       return matchSearch && matchTrack;
     });
