@@ -52,6 +52,7 @@ function greet(icon: string, what: string): string {
   return `${icon} <b>${name}</b>، إليكِ حبيبة ${what}`;
 }
 
+const firstTwo = (n: string | null | undefined) => String(n ?? "—").trim().split(/\s+/).slice(0, 2).join(" ");
 function trackOrder(a: string, b: string) { return a.localeCompare(b, "ar", { numeric: true }); }
 
 // ── تجميع البيانات ────────────────────────────────────────────────────────
@@ -126,7 +127,9 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const urgentTeachers: string[] = [];
   const urgentTracks: string[] = [];
   const awaySupervisors: string[] = [];
-  const urgentStudents: string[] = [];
+  const urgentStudents = new Map<string, string[]>(); // الحلقة ← أسماء
+  const repeatNoEntry: string[] = [];
+  const highAbsence: string[] = [];
 
   // ── ٣. المشرفات (يُحسب أولًا لأن الملخص يحتاجه) ──
   type CircleIssue = Issue;
@@ -249,7 +252,10 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
     const rows: Row[] = [["الحالة", label]];
     if (nAbs > 1) rows.push(["الغياب", `${ar(nAbs)} أيام خلال ٣٠ يومًا`]);
     if (nLate > 1) rows.push(["التأخر", `${ar(nLate)} أيام خلال ٣٠ يومًا`]);
-    if (tid && label === "غابت" && nAbs >= 3) urgentTeachers.push(`${esc(userName.get(tid) ?? "—")} (${esc(c.name)}) غابت اليوم، وهذا غيابها الـ${ar(nAbs)} خلال شهر`);
+    if (tid && nAbs + nLate >= 3) {
+      const parts = [nAbs ? `غابت ${ar(nAbs)}` : "", nLate ? `تأخرت ${ar(nLate)}` : ""].filter(Boolean).join("، ");
+      urgentTeachers.push(`${esc(firstTwo(userName.get(tid)))} (${esc(c.name)}): ${parts} خلال شهر`);
+    }
     teacherIssues.push({ track: trackNameOf(c), title: `${esc(c.name)} | ${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")}`, rows });
   }
   const noTaskCircles = expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
@@ -289,7 +295,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
     for (const a of accounts) {
       const days = a.lastLoginAt ? Math.floor((Date.now() - new Date(a.lastLoginAt).getTime()) / 86400000) : null;
       if (days === null) problems.push([esc(a.name), "لم تدخل الموقع أبدًا"]);
-      else if (days >= 3) { problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]); awaySupervisors.push(`${esc(a.name)} (${ar(days)} أيام)`); }
+      else if (days >= 3) problems.push([esc(a.name), `لم تدخل منذ ${ar(days)} أيام`]);
+      if (days === null || days >= 2) awaySupervisors.push(`${esc(firstTwo(a.name))} (مسار ${esc(trackName.replace(/^مسار\s+/, ""))}): ${days === null ? "لم تدخل أبدًا" : `لم تدخل منذ ${ar(days)} أيام`}`);
     }
     if (problems.length === 0) continue;
     tsProblems++;
@@ -333,7 +340,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
       if (low) reasons.push(["الحفظ", `منخفض: ${ar(Math.round((low.totalPages ?? 0) * 10) / 10)} صفحة في ${ar(low.periodDays)} يومًا`]);
       if (reasons.length === 0) continue;
       const absent3 = tail.length === 3 && tail.every((r) => r.isAbsent);
-      if (absent3 || delay >= 5) urgentStudents.push(`${esc(s.fullName.split(" ").slice(0, 2).join(" "))} (${esc(c.name)})`);
+      void absent3;
+      if (short14 >= 3 || delay >= 3) urgentStudents.set(c.name, [...(urgentStudents.get(c.name) ?? []), esc(firstTwo(s.fullName))]);
       studentIssues.push({ track: trackNameOf(c), title: `${esc(c.name)} | ${esc(s.fullName)}`, rows: reasons });
     }
   }
@@ -342,6 +350,30 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   // ── ٦. من أتممن خطة المراجعة ──
   const doneIssues: CircleIssue[] = completed.map((x) => ({ track: x.track, title: `${esc(x.circle)} | ${esc(x.name)}`, rows: x.pages ? [["الخطة", `${ar(x.pages)} صفحة`]] : [] }));
   messages.push([...header("✨", "بشرى من أتممن خطة المراجعة"), `العدد: <b>${ar(completed.length)}</b> طالبة`, ...groupByTrack(doneIssues, "لم تُتِمَّ أي طالبة خطتها بعد."), "", "<i>بارك الله فيكِ وفي جهودكِ يا رِحاب</i>"].join("\n"));
+
+  // مشرفة تكرر عدم إدخالها: لم تُدخل اليوم، ولم تُدخل يومين أو أكثر من أيام الدوام في آخر ٧ أيام
+  // حلقة غيابها كثير: ٣٠٪ فأكثر من سجلات آخر ٧ أيام
+  const week = Array.from({ length: 7 }, (_, i) => addDaysStr(D, -i));
+  const recDatesByCircle = new Map<number, Set<string>>();
+  const weekAbs = new Map<number, { abs: number; total: number }>();
+  for (const r of recentRecords) {
+    if (r.date < week[6]!) continue;
+    recDatesByCircle.set(r.circleId, (recDatesByCircle.get(r.circleId) ?? new Set()).add(r.date));
+    const w = weekAbs.get(r.circleId) ?? { abs: 0, total: 0 };
+    w.total++; if (r.isAbsent) w.abs++;
+    weekAbs.set(r.circleId, w);
+  }
+  for (const c of expected) {
+    if ((roster.get(c.id) ?? []).length === 0) continue;
+    const days = week.filter((d) => isEntryExpectedOn(typeOf(c), c.name, d));
+    const missed = days.filter((d) => !recDatesByCircle.get(c.id)?.has(d)).length;
+    if (!recDatesByCircle.get(c.id)?.has(D) && missed >= 2) {
+      const supId = (tasksByCircle.get(c.id) ?? [])[0]?.supervisorId ?? c.supervisorId;
+      repeatNoEntry.push(`${esc(c.name)}${supId ? ` | ${esc(firstTwo(userName.get(supId)))}` : ""}: لم تُدخل ${ar(missed)} أيام من ${ar(days.length)}`);
+    }
+    const w = weekAbs.get(c.id);
+    if (w && w.total >= 10 && w.abs / w.total >= 0.3) highAbsence.push(`${esc(c.name)}: ${ar(Math.round((w.abs / w.total) * 100))}٪ غياب هذا الأسبوع`);
+  }
 
   if (!opts.detail) {
     return { date: D, messages: [buildDigest({ teachers: teacherIssues.length, circles: supIssues.length, students: studentIssues.length }), ...(hasOverview ? [messages[0]!] : [])] };
@@ -366,25 +398,21 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
       `• خطط المراجعة المتأخرة: <b>${ar(behind)}</b> من ${ar(behind + ontrack + ahead)}`,
       "",
     );
-    const list = (xs: string[], max = 4) => xs.slice(0, max).join("، ") + (xs.length > max ? ` و${ar(xs.length - max)} غيرها` : "");
-    const urgent: string[] = [];
-    for (const t of urgentTeachers) urgent.push(t);
-    if (noDataCircles.length) urgent.push(`لم تُدخل بيانات ${noDataCircles.length === 1 ? "حلقة" : "حلقات"}: ${list(noDataCircles.map((n) => esc(n)))}`);
-    if (urgentTracks.length) urgent.push(`لم تُعبَّأ مهام اليوم في: ${list(urgentTracks.map((t) => `مسار ${esc(t)}`))}`);
-    if (awaySupervisors.length) urgent.push(`لم تدخل الموقع منذ أيام: ${list(awaySupervisors)}`);
-    if (urgentStudents.length) urgent.push(`طالبات غبن ٣ أيام متتالية أو تأخرت خطتهن كثيرًا: ${list(urgentStudents, 3)}`);
-    if (urgent.length) {
-      lines.push("<b>يحتاج تدخلكِ</b> 🌧️", `<blockquote>${urgent.slice(0, 6).map((u) => `• ${u}`).join("\n")}</blockquote>`);
-    } else {
-      lines.push("ما شاء الله، لا شيء يستدعي تدخلكِ اليوم 🌿");
-    }
-    if (counts) {
-      const info: string[] = [];
-      if (counts.teachers) info.push(`غياب أو تأخر معلمات: ${ar(counts.teachers)}`);
-      if (counts.circles) info.push(`حلقات عليها ملاحظات: ${ar(counts.circles)}`);
-      if (counts.students) info.push(`طالبات يحتجن متابعة: ${ar(counts.students)}`);
-      if (info.length) lines.push("", `<i>للعلم: ${info.join(" · ")}، وتفاصيلها في الموقع</i>`);
-    }
+    void counts;
+    const section = (title: string, items: string[], max = 8) => {
+      if (items.length === 0) return;
+      const shown = items.slice(0, max).map((x) => `• ${x}`);
+      if (items.length > max) shown.push(`<i>و${ar(items.length - max)} غيرها</i>`);
+      lines.push(`<b>${title}</b>`, `<blockquote>${shown.join("\n")}</blockquote>`);
+    };
+    section("معلمات تكرر غيابهن أو تأخرهن", urgentTeachers);
+    section("مشرفات تكرر عدم إدخالهن", repeatNoEntry);
+    section("طالبات يتكرر تقصيرهن أو تأخر خطتهن", [...urgentStudents.entries()].sort((x, y) => x[0].localeCompare(y[0], "ar", { numeric: true })).map(([circle, names]) => `${esc(circle)}: ${names.join("، ")}`), 10);
+    section("حلقات غيابها كثير", highAbsence);
+    if (urgentTracks.length) section("مسارات لم تُعبَّأ مهامها", urgentTracks.map((t) => `مسار ${esc(t)}`));
+    section("مسؤولات مسار لم يدخلن الموقع", awaySupervisors);
+    const any = urgentTeachers.length + repeatNoEntry.length + urgentStudents.size + highAbsence.length + urgentTracks.length + awaySupervisors.length;
+    if (any === 0) lines.push("ما شاء الله، لا شيء يستدعي تدخلكِ اليوم 🌿");
     if (completed.length) lines.push("", `أتمَّت ${ar(completed.length)} ${completed.length >= 3 && completed.length <= 10 ? "طالبات" : "طالبة"} خطة المراجعة ♥️`);
     if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
     return lines.join("\n");

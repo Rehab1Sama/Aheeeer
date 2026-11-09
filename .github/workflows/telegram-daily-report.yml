@@ -14,6 +14,12 @@ on:
       force:
         description: "إعادة الإرسال حتى لو أُرسل سابقًا (1)"
         required: false
+      detail:
+        description: "التقرير المفصَّل بدل الخلاصة (1)"
+        required: false
+      dry:
+        description: "عرض التقرير هنا بلا إرسال (1)"
+        required: false
 
 jobs:
   send:
@@ -26,6 +32,8 @@ jobs:
           SITE: https://sana-alay-abq5.onrender.com
           DATE: ${{ github.event.inputs.date }}
           FORCE: ${{ github.event.inputs.force }}
+          DETAIL: ${{ github.event.inputs.detail }}
+          DRY: ${{ github.event.inputs.dry }}
         run: |
           if [ -z "$REPORT_KEY" ]; then echo "::notice::لم يُضف سر REPORT_KEY بعد — تخطّي التقرير"; exit 0; fi
           # الخادم المجاني ينام: نوقظه أولًا
@@ -41,6 +49,8 @@ jobs:
           URL="$SITE/api/reports/telegram/run?key=$REPORT_KEY"
           [ -n "$DATE" ] && URL="$URL&date=$DATE"
           [ "$FORCE" = "1" ] && URL="$URL&force=1"
+          [ "$DETAIL" = "1" ] && URL="$URL&detail=1"
+          [ "$DRY" = "1" ] && URL="$URL&dry=1"
           for i in 1 2 3; do
             if curl -fsS --max-time 240 "$URL"; then echo; exit 0; fi
             echo "retry $i"; sleep 30
