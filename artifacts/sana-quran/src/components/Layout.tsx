@@ -359,19 +359,24 @@ function TodayBar({ role }: { role: string }) {
   if (items.length === 0) return null;
   return (
     <div className="mb-4 rounded-2xl border border-primary/15 bg-card shadow-sm overflow-hidden" role="status">
-      <p className="px-4 pt-3 pb-1 text-xs font-bold text-primary">المطلوب اليوم</p>
-      <ul className="divide-y divide-border">
-        {items.map((it, i) => {
-          const body = (
-            <span className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold">
-              <span className={`w-2 h-2 rounded-full flex-none ${it.tone === "ok" ? "bg-emerald-500" : "bg-amber-500"}`} />
-              <span className="flex-1">{it.text}</span>
-              {it.href && <span className="text-muted-foreground text-xs">←</span>}
-            </span>
-          );
-          return <li key={i}>{it.href ? <Link href={it.href} className="block hover:bg-muted/40">{body}</Link> : body}</li>;
-        })}
-      </ul>
+      <div className="flex items-stretch">
+        <span className="w-1.5 flex-none bg-gradient-to-b from-[#1A2260] to-[#2B3784]" />
+        <div className="flex-1 min-w-0">
+          <p className="px-4 pt-3 pb-1 text-xs font-bold text-primary">المطلوب اليوم</p>
+          <ul className="divide-y divide-border/60">
+            {items.map((it, i) => {
+              const body = (
+                <span className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
+                  <span className={`w-2 h-2 rounded-full flex-none ${it.tone === "ok" ? "bg-emerald-500" : "bg-primary/70"}`} />
+                  <span className={`flex-1 ${it.tone === "ok" ? "text-muted-foreground" : "text-foreground font-semibold"}`}>{it.text}</span>
+                  {it.href && <span className="text-xs font-bold text-primary bg-primary/10 rounded-lg px-2 py-0.5 whitespace-nowrap">افتحي</span>}
+                </span>
+              );
+              return <li key={i}>{it.href ? <Link href={it.href} className="block hover:bg-primary/5">{body}</Link> : body}</li>;
+            })}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }

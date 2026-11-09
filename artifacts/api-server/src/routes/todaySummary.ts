@@ -86,13 +86,13 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
   if (role === "leader" || role === "deputy") {
     items.push(missing === 0
       ? { tone: "ok", text: `اكتمل إدخال اليوم في كل الحلقات (${AR(withRoster)})`, href: "/data-entry-status" }
-      : { tone: "warn", text: `الحلقات المكتملة اليوم: ${AR(complete)} من ${AR(withRoster)} · باقي ${count(missing, "طالبة", "طالبات")} بلا إدخال`, href: "/data-entry-status" });
+      : { tone: "warn", text: `الحلقات المكتملة اليوم: ${AR(complete)} من ${AR(withRoster)}، وباقي ${count(missing, "طالبة", "طالبات")} بلا إدخال`, href: "/data-entry-status" });
   } else if (role === "track_supervisor") {
     items.push(missing === 0
-      ? { tone: "ok", text: `اكتمل إدخال اليوم في كل حلقات مسارك (${AR(withRoster)})`, href: "/track-entry-status" }
-      : { tone: "warn", text: `حلقات مسارك المكتملة اليوم: ${AR(complete)} من ${AR(withRoster)} · باقي ${count(missing, "طالبة", "طالبات")}`, href: "/track-entry-status" });
+      ? { tone: "ok", text: `اكتمل إدخال اليوم في كل حلقات مساركِ (${AR(withRoster)})`, href: "/track-entry-status" }
+      : { tone: "warn", text: `حلقات مساركِ المكتملة اليوم: ${AR(complete)} من ${AR(withRoster)}، وباقي ${count(missing, "طالبة", "طالبات")}`, href: "/track-entry-status" });
     const filled = new Set(tasks.map((t) => t.circleId)).size;
-    if (filled < circles.length) items.push({ tone: "warn", text: `مهام اليوم: عُبّئت لـ${AR(filled)} من ${count(circles.length, "حلقة", "حلقات")}`, href: "/daily-tasks" });
+    if (filled < circles.length) items.push({ tone: "warn", text: `مهام اليوم: عُبِّئت لـ${AR(filled)} من ${count(circles.length, "حلقة", "حلقات")}`, href: "/daily-tasks" });
   } else {
     items.push(missing === 0
       ? { tone: "ok", text: "اكتمل إدخال اليوم، بارك الله فيكِ", href: "/data-entry" }
