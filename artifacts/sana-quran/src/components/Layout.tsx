@@ -312,7 +312,7 @@ function LateReminder({ role, name }: { role: string; name: string }) {
   return (
     <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-4 py-3 flex items-center gap-3 text-sm">
       <span className="flex-1 font-semibold text-amber-900 dark:text-amber-200">
-        حبيبة {first} 🌷 باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، والوقت يقرّب ({hoursLeft <= 1 ? "أقل من ساعة" : `نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الواحدة) — الله يعينكِ ✨
+        حبيبتنا {first}! باقي {t.missing.toLocaleString("ar-EG")} {t.missing >= 3 && t.missing <= 10 ? "طالبات" : "طالبة"} بلا إدخال، و{hoursLeft <= 1 ? "بقي أقل من ساعة" : `بقي نحو ${hoursLeft.toLocaleString("ar-EG")} ساعات`} قبل الواحدة، أعانكِ الله 🌿
       </span>
       <Link href="/data-entry" className="rounded-xl bg-amber-600 text-white px-3 py-1.5 text-xs font-bold whitespace-nowrap">أدخلي الآن</Link>
       <button type="button" onClick={() => { writeLS("late-reminder-hidden", t.date ?? ""); force((x) => x + 1); }} className="text-amber-800/70 text-lg leading-none" aria-label="إخفاء لليوم">×</button>
