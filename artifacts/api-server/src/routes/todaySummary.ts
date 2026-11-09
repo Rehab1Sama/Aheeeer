@@ -3,7 +3,7 @@
 import { Router, type IRouter } from "express";
 import {
   db, circlesTable, tracksTable, studentEnrollmentsTable, studentsTable, recordsTable,
-  dailyCircleTasksTable, reviewPlansTable,
+  dailyCircleTasksTable, reviewPlansTable, transferRequestsTable,
 } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -83,6 +83,12 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
     items.push(missing === 0
       ? { tone: "ok", text: "اكتمل إدخال اليوم، بارك الله فيكِ", href: "/data-entry" }
       : { tone: "warn", text: `باقي ${count(missing, "طالبة", "طالبات")} بلا إدخال اليوم`, href: "/data-entry" });
+  }
+
+  // طلبات النقل بانتظار القرار
+  if (role === "leader" || role === "deputy") {
+    const pending = await db.select({ id: transferRequestsTable.id }).from(transferRequestsTable).where(eq(transferRequestsTable.status, "pending"));
+    if (pending.length > 0) items.push({ tone: "warn", text: `طلبات نقل بانتظاركِ: ${AR(pending.length)}`, href: "/transfer-requests" });
   }
 
   // خطط المراجعة المتأخرة (لنطاق الحلقة/المسار فقط — القائدة تراها في صفحة الخطط)

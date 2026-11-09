@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { getToken } from "@/lib/auth";
 import { searchMatch } from "@/lib/arabicSearch";
+import { offerTransferRequest } from "@/lib/transferRequest";
 
 type CircleItem = { id: number; name: string; track: string };
 type Student = { id: number; fullName: string; circleId?: number | null; phone?: string | null };
@@ -213,7 +214,13 @@ export default function TrackPage() {
           setTransferStudent(null);
           toast({ title: "تم النقل", description: `تم نقل ${transferStudent.student.fullName} بنجاح` });
         },
-        onError: (e: any) => {
+        onError: async (e: any) => {
+          if (e?.status === 403) {
+            const r = await offerTransferRequest({ studentId: transferStudent.student.id, studentName: transferStudent.student.fullName, fromCircleId: transferStudent.circleId, toCircleId: circleId, reason: e?.message });
+            if (r === "sent") { toast({ title: "أُرسل طلب النقل للقائدة" }); setTransferStudent(null); return; }
+            if (r !== "cancelled") toast({ title: "تعذّر إرسال الطلب", description: r, variant: "destructive" });
+            return;
+          }
           toast({ title: "تعذّر النقل", description: e?.message ?? "فشلت عملية النقل", variant: "destructive" });
         },
       }

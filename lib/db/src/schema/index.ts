@@ -23,3 +23,4 @@ export * from "./globalSettings";
 export * from "./certificates";
 export * from "./badgeAwardCounts";
 export * from "./auditLogs";
+export * from "./transferRequests";

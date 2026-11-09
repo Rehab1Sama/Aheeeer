@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { StudentArchiveDialog } from "@/components/StudentArchiveDialog";
 import { searchMatch } from "@/lib/arabicSearch";
+import { offerTransferRequest } from "@/lib/transferRequest";
 
 type LeaveModal = {
   studentId: number;
@@ -184,7 +185,15 @@ function CircleStudentsPanel({ circleId, userRole }: { circleId: number; userRol
         queryClient.invalidateQueries({ queryKey: ["circles"] });
         setTransferModal(null);
       },
-      onError: (e: any) => toast({ title: "تعذّر النقل", description: e?.message, variant: "destructive" }),
+      onError: async (e: any) => {
+        if (e?.status === 403 && transferModal && transferTargetId) {
+          const r = await offerTransferRequest({ studentId: transferModal.studentId, studentName: transferModal.studentName, fromCircleId: circleId, toCircleId: transferTargetId, reason: e?.message });
+          if (r === "sent") { toast({ title: "أُرسل طلب النقل للقائدة" }); setTransferModal(null); return; }
+          if (r !== "cancelled") { toast({ title: "تعذّر إرسال الطلب", description: r, variant: "destructive" }); return; }
+          return;
+        }
+        toast({ title: "تعذّر النقل", description: e?.message, variant: "destructive" });
+      },
       onSettled: () => setTransferring(false),
     });
   };

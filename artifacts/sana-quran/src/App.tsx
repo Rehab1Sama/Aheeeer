@@ -66,6 +66,7 @@ import ArchivedStaffPage from "@/pages/archived-staff";
 import DbSettingsPage from "@/pages/db-settings";
 import AuditLogPage from "@/pages/audit-log";
 import DuplicateStudentsPage from "@/pages/duplicate-students";
+import TransferRequestsPage from "@/pages/transfer-requests";
 import RegistrationStudentsPage from "@/pages/registration-students";
 import RegistrationPoolSearchPage from "@/pages/registration-pool-search";
 import CirclesStaffingPage from "@/pages/circles-staffing";
@@ -323,6 +324,9 @@ function AppRoutes() {
         </Route>
         <Route path="/db-settings">
           {isLeader ? <DbSettingsPage /> : <Redirect to="/" />}
+        </Route>
+        <Route path="/transfer-requests">
+          {["leader", "deputy", "track_supervisor", "teacher", "supervisor"].includes(user.role) ? <TransferRequestsPage canDecide={isLeaderOrDeputy} /> : <Redirect to="/" />}
         </Route>
         <Route path="/duplicate-students">
           {isLeaderOrDeputy ? <DuplicateStudentsPage isLeader={isLeader} /> : <Redirect to="/" />}

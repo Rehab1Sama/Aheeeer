@@ -12,7 +12,7 @@ import {
   Calendar, ShoppingBag, Award, Shuffle, GraduationCap, AlertTriangle,
   ArrowLeftRight, Loader2, BookOpen, PlaneTakeoff, Bell, CheckCheck,
   TrendingUp, Globe, Moon, Sun, Database, Award as CertificateIcon,
-  UserSearch, Star, ChevronDown, MoreHorizontal,
+  UserSearch, Star, ChevronDown, MoreHorizontal, MoveRight,
 } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import logoUrl from "@/assets/logo.jpg";
@@ -93,7 +93,7 @@ function NavLink({ href, label, icon: Icon, badge }: { href: string; label: stri
 // ── تجميع القائمة الجانبية تحت عناوين (للأدوار ذات القوائم الطويلة) ──
 const NAV_GROUPS: Array<{ title: string; hrefs: string[] }> = [
   { title: "المتابعة اليومية", hrefs: ["/data-entry", "/whatsapp-entry", "/data-entry-status", "/track-entry-status", "/leader-tasks", "/daily-tasks", "/deputy-board", "/deputy-tasks", "/supervisor-hours"] },
-  { title: "الطالبات والخطط", hrefs: ["/review-plans-overview", "/certificates", "/attendance", "/weekly-absence-groups", "/shortcomings", "/stumbling-stats", "/student-leaves", "/distinguished-students", "/volunteer", "/archived-students", "/unlinked-students", "/duplicate-students"] },
+  { title: "الطالبات والخطط", hrefs: ["/review-plans-overview", "/certificates", "/attendance", "/weekly-absence-groups", "/shortcomings", "/stumbling-stats", "/student-leaves", "/distinguished-students", "/volunteer", "/archived-students", "/unlinked-students", "/duplicate-students", "/transfer-requests"] },
   { title: "الحلقات والفريق", hrefs: ["/circles", "/deputy-circles", "/manage-tracks", "/accounts", "/circles-staffing", "/teacher-rotation", "/onboard", "/unlinked-staff", "/archived-staff"] },
   { title: "التسجيل", hrefs: ["/registration", "/pending-registrations", "/registration-students", "/registration-pool-search"] },
   { title: "التقارير والإحصائيات", hrefs: ["/statistics", "/track-report", "/monthly-report", "/reports"] },
@@ -947,6 +947,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/db-settings", label: "إعدادات قاعدة البيانات", icon: Database },
       { href: "/audit-log", label: "سجل التعديلات", icon: Clock },
       { href: "/duplicate-students", label: "الحسابات المكررة", icon: Users },
+      { href: "/transfer-requests", label: "طلبات النقل", icon: MoveRight },
       { href: "/export", label: "تصدير البيانات", icon: FileDown },
     ]);
   }
@@ -985,6 +986,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/unlinked-staff", label: "موظفات غير مرتبطات", icon: UserX },
       { href: "/unlinked-students", label: "طالبات بدون حلقة", icon: UserX },
       { href: "/duplicate-students", label: "الحسابات المكررة", icon: Users },
+      { href: "/transfer-requests", label: "طلبات النقل", icon: MoveRight },
       { href: "/archived-staff", label: "الموظفات المؤرشفات", icon: Archive },
     ]);
   }
@@ -1037,6 +1039,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/circles", label: "الحلقات", icon: BookOpen },
       { href: "/accounts", label: "الحسابات", icon: UserCheck },
       { href: "/circles-staffing", label: "توزيع المعلمات والمشرفات", icon: UserX },
+      { href: "/transfer-requests", label: "طلبات النقل", icon: MoveRight },
       { href: "/track-report", label: "ملخص المسار", icon: BarChart2 },
       { href: "/distinguished-students", label: "المتميزات", icon: Star },
       { href: "/track-entry-status", label: "حالة إدخال البيانات", icon: CheckCheck },
