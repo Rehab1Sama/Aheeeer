@@ -473,27 +473,34 @@ router.patch("/students/:id", authenticate, async (req, res): Promise<void> => {
 
   const [before] = await db.select().from(studentsTable).where(eq(studentsTable.id, id));
   if (!before) { res.status(404).json({ error: "Student not found" }); return; }
-  // مسؤولة المسار تنقل أي طالبة إلى أي مسار وأي حلقة مباشرة (بطلب القائدة)،
-  // فلا قيد على نطاق الطالبة ولا على الحلقة الهدف سوى أن تكون متاحة.
-  // أما تعديل بيانات الطالبة نفسها (الاسم، الجوال…) فيبقى لطالبات مسارها فقط.
+  // مسؤولة المسار: تنقل طالبات مسارها (من حلقة في مسارها) إلى أي حلقة في أي مسار بالمقرأة،
+  // وتسحب طالبة من قائمة التسجيل (أو بلا حلقة) إلى حلقة في مسارها هي فقط.
+  // تعديل بيانات الطالبة نفسها (الاسم، الجوال…) لطالبات مسارها فقط.
+  let claimingFromRegistrationPool = false;
   if (req.userRole === "track_supervisor") {
-    const editsOtherFields = Object.keys(parsed.data).some(k => k !== "circleId");
-    if (editsOtherFields) {
-      const inMyTrack = await db
-        .select({ id: studentEnrollmentsTable.id })
-        .from(studentEnrollmentsTable)
-        .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
-        .where(and(
-          eq(studentEnrollmentsTable.studentId, id),
-          eq(studentEnrollmentsTable.isArchived, false),
-          eq(circlesTable.track, req.userTrack!),
-        ));
-      if (inMyTrack.length === 0) {
-        res.status(403).json({ error: "تعديل بيانات الطالبة لمسؤولة مسارها، والنقل متاح لكِ" });
+    const active = await db
+      .select({ circleId: studentEnrollmentsTable.circleId, track: circlesTable.track, trackType: circlesTable.trackType })
+      .from(studentEnrollmentsTable)
+      .innerJoin(circlesTable, eq(circlesTable.id, studentEnrollmentsTable.circleId))
+      .where(and(eq(studentEnrollmentsTable.studentId, id), eq(studentEnrollmentsTable.isArchived, false)));
+    const mine = active.filter(e => e.track === req.userTrack);
+    if (mine.length === 0) {
+      const onlyInRegistrationOrNone = active.length === 0 || active.every(e => e.trackType === "registration");
+      if (!onlyInRegistrationOrNone || Object.keys(parsed.data).some(k => k !== "circleId")) {
+        res.status(403).json({ error: "الطالبة خارج مسارك: النقل لطالبات مسارك فقط" });
+        return;
+      }
+      claimingFromRegistrationPool = true;
+    } else if (parsed.data.circleId !== undefined) {
+      // تُنقل من حلقة في مسارها، لا من حلقة لها في مسار آخر
+      const source = requestedFromCircleId ?? (mine.some(e => e.circleId === before.circleId) ? before.circleId : mine[0]!.circleId);
+      if (!mine.some(e => e.circleId === source)) {
+        res.status(403).json({ error: "تنقلين الطالبة من حلقة في مسارك فقط" });
         return;
       }
     }
   }
+
   const requestedCircleId = parsed.data.circleId;
   if (typeof requestedCircleId === "number") {
     const [targetCircle] = await db
@@ -502,6 +509,10 @@ router.patch("/students/:id", authenticate, async (req, res): Promise<void> => {
       .where(eq(circlesTable.id, requestedCircleId));
     if (!targetCircle || targetCircle.isArchived) {
       res.status(400).json({ error: "الحلقة الهدف غير متاحة" });
+      return;
+    }
+    if (claimingFromRegistrationPool && targetCircle.track !== req.userTrack) {
+      res.status(403).json({ error: "لا يمكن نقل طالبة من قائمة التسجيل إلا إلى حلقة ضمن مسارك" });
       return;
     }
   }

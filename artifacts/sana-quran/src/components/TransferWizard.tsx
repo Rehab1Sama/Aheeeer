@@ -1,5 +1,5 @@
 // نقل طالبة بثلاث خطوات: الطالبة ← المسار ← الحلقة.
-// مسؤولة المسار تنقل أي طالبة إلى أي مسار مباشرة، بلا طلب موافقة.
+// مسؤولة المسار تنقل طالبات مسارها (pool) من حلقات مسارها (sourceTrack) إلى أي مسار مباشرة.
 import { useEffect, useMemo, useState } from "react";
 import { useListCircleNames, useListStudents } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,14 +22,20 @@ export default function TransferWizard({
   fromCircleId: initialFrom,
   onClose,
   onDone,
+  pool,
+  sourceTrack,
 }: {
+  /** الطالبات المتاح نقلهن (طالبات مسارها). بدونه: كل الطالبات */
+  pool?: Picked[];
+  /** تُنقل الطالبة من حلقات هذا المسار فقط */
+  sourceTrack?: string | null;
   student?: Picked | null;
   fromCircleId?: number | null;
   onClose: () => void;
   onDone?: () => void;
 }) {
   const { data: circleNames } = useListCircleNames({ query: { queryKey: ["circleNames"] } });
-  const { data: allStudents } = useListStudents(undefined, { query: { queryKey: ["allStudents"], enabled: !initialStudent } });
+  const { data: allStudents } = useListStudents(undefined, { query: { queryKey: ["allStudents"], enabled: !initialStudent && !pool } });
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -52,19 +58,21 @@ export default function TransferWizard({
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: Enrollment[]) => {
         if (!alive) return;
-        const active = rows.filter((e) => !e.isArchived);
+        const active = rows.filter((e) => !e.isArchived && (!sourceTrack || e.circleTrack === sourceTrack));
         setEnrollments(active);
         setFromCircleId((cur) => cur ?? (active.length === 1 ? active[0]!.circleId : student.circleId ?? null));
       })
       .catch(() => alive && setEnrollments([]));
     return () => { alive = false; };
-  }, [student]);
+  }, [student, sourceTrack]);
 
   const results = useMemo(() => {
     const q = search.trim();
     if (q.length < 2) return [];
-    return (allStudents ?? []).filter((s) => searchMatch(s.fullName, q)).slice(0, 30);
-  }, [allStudents, search]);
+    const src: Picked[] = pool ?? (allStudents ?? []);
+    const seen = new Set<number>();
+    return src.filter((s) => searchMatch(s.fullName, q) && !seen.has(s.id) && seen.add(s.id)).slice(0, 30);
+  }, [allStudents, pool, search]);
 
   const tracks = useMemo(() => {
     const m = new Map<string, number>();
@@ -159,7 +167,7 @@ export default function TransferWizard({
             <>
               <div className="relative">
                 <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اكتبي اسم الطالبة…" className="pr-9" />
+                <Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder={pool ? "اكتبي اسم الطالبة من مسارك…" : "اكتبي اسم الطالبة…"} className="pr-9" />
               </div>
               {search.trim().length >= 2 && results.length === 0 && (
                 <p className="text-center text-sm text-muted-foreground py-4">لا توجد طالبة بهذا الاسم</p>

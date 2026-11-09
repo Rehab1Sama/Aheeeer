@@ -27,6 +27,9 @@ type EnrichedCircle = {
   students: { id: number; fullName: string; email: string | null }[];
 };
 
+/** أول اسمين فقط في سطر الحلقة المختصر */
+const shortName = (n?: string | null) => (n ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
+
 function ClockFace({ time }: { time: string }) {
   const [h, m] = time ? time.split(":").map(Number) : [0, 0];
   const hourAngle = ((h % 12) / 12) * 360 + (m / 60) * 30;
@@ -531,60 +534,50 @@ export default function TrackPage() {
 
                 return (
                   <div key={circle.id} data-testid={`row-circle-${circle.id}`} className="border-b border-border/30 last:border-0">
-                    <div className="flex items-center gap-2 px-4 py-3">
-                      <button
-                        className="flex-1 text-right"
-                        onClick={() => setExpandedCircle(isExpanded ? null : circle.id)}
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-sm">{circle.name}</p>
-                            {displayTime && (
-                              <span className={`text-xs flex items-center gap-1 px-1.5 py-0.5 rounded-full ${isPm ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"}`}>
-                                {isPm ? <Moon className="w-2.5 h-2.5" /> : <Sun className="w-2.5 h-2.5" />}
-                                {displayTime}
-                              </span>
-                            )}
-                            {whatsappLink && (
-                              <a
-                                href={whatsappLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-green-600 hover:text-green-700 flex items-center gap-1 text-xs bg-green-50 px-1.5 py-0.5 rounded-full"
-                                onClick={e => e.stopPropagation()}
-                              >
-                                <Link2 className="w-2.5 h-2.5" />
-                                واتساب
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                            {enriched?.teacherName && <span>معلمة: {enriched.teacherName}</span>}
-                            {enriched?.supervisorName && <span>مشرفة: {enriched.supervisorName}</span>}
-                            <span className="text-primary font-medium">{displayStudents.length} طالبة</span>
-                          </div>
-                        </div>
-                      </button>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={e => { e.stopPropagation(); navigate(`/circle/${circle.id}`); }}
-                          className="p-1.5 rounded-lg hover:bg-muted transition-colors text-primary"
-                          title="عرض صفحة الحلقة الموحّدة"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); isEditingThis ? setEditingCircle(null) : startEditCircle(enriched ?? { id: circle.id, name: circle.name, track: circle.track, meetingTime, whatsappLink, teacherName: null, supervisorName: null, students: [] }); }}
-                          className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
-                          title="ضبط وقت الحلقة ورابط الواتس"
-                        >
-                          {isEditingThis ? <X className="w-3.5 h-3.5" /> : <Settings2 className="w-3.5 h-3.5" />}
-                        </button>
-                        <button onClick={() => setExpandedCircle(isExpanded ? null : circle.id)} className="p-1.5">
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                        </button>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-muted/30 transition-colors"
+                      onClick={() => setExpandedCircle(isExpanded ? null : circle.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{circle.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate flex items-center gap-1">
+                          {displayTime && (
+                            <span className={`inline-flex items-center gap-0.5 ${isPm ? "text-indigo-600" : "text-amber-600"}`}>
+                              {isPm ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}{displayTime}
+                            </span>
+                          )}
+                          {displayTime && (enriched?.teacherName || enriched?.supervisorName) && <span>·</span>}
+                          <span className="truncate">{shortName(enriched?.teacherName ?? enriched?.supervisorName)}</span>
+                        </p>
                       </div>
-                    </div>
+                      <span className="text-xs font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5 flex-shrink-0">{displayStudents.length}</span>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-2 space-y-2">
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {enriched?.teacherName && <p>المعلمة: <span className="text-foreground">{enriched.teacherName}</span></p>}
+                          {enriched?.supervisorName && <p>المشرفة: <span className="text-foreground">{enriched.supervisorName}</span></p>}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button onClick={() => navigate(`/circle/${circle.id}`)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary font-medium">
+                            <ExternalLink className="w-3 h-3" />صفحة الحلقة
+                          </button>
+                          {whatsappLink && (
+                            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-green-50 text-green-700 font-medium">
+                              <Link2 className="w-3 h-3" />مجموعة الواتساب
+                            </a>
+                          )}
+                          <button
+                            onClick={() => (isEditingThis ? setEditingCircle(null) : startEditCircle(enriched ?? { id: circle.id, name: circle.name, track: circle.track, meetingTime, whatsappLink, teacherName: null, supervisorName: null, students: [] }))}
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-muted text-muted-foreground font-medium"
+                          >
+                            {isEditingThis ? <X className="w-3 h-3" /> : <Settings2 className="w-3 h-3" />}الوقت والرابط
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {isEditingThis && (
                       <div className="bg-slate-50 border-t border-border/30 px-4 py-3 space-y-3" dir="rtl">
@@ -683,7 +676,7 @@ export default function TrackPage() {
                                     <UserCircle className="w-3 h-3" />
                                   </button>
                                   <button
-                                    onClick={() => { const s = circleStudents.find(x => x.id === student.id); if (s) setTransferStudent({ student: s, circleId: circle.id }); }}
+                                    onClick={() => setTransferStudent({ student: { id: student.id, fullName: student.fullName, circleId: circle.id }, circleId: circle.id })}
                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-semibold"
                                     title="نقل لحلقة أخرى"
                                   >
@@ -740,6 +733,8 @@ export default function TrackPage() {
           fromCircleId={transferStudent?.circleId ?? null}
           onClose={() => { setTransferStudent(null); setWizardOpen(false); }}
           onDone={() => { fetchEnrichedCircles(); }}
+          sourceTrack={myTrack ?? null}
+          pool={enrichedCircles.flatMap(c => c.students.map(st => ({ id: st.id, fullName: st.fullName, circleId: c.id })))}
         />
       )}
 
