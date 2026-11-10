@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+import { BadgeFrame } from "@/components/badges/BadgeFrame";
+import QuranJourney from "@/components/QuranJourney";
 import { useLocation } from "wouter";
 import {
   useGetCurrentUser, useListRecords, useListCircles, useListStudents,
@@ -331,7 +333,7 @@ export default function MyProgressPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
-                التقدم في الحفظ
+                رحلتي مع الحفظ
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -339,15 +341,7 @@ export default function MyProgressPage() {
                 <span>{formatPages(totalMemorize)} وجه من أصل {TOTAL_QURAN_PAGES}</span>
                 <span className="font-bold text-primary">{progressPct}%</span>
               </div>
-              <div className="bg-muted rounded-full h-5 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${progressPct}%`,
-                    background: "linear-gradient(90deg, #1A2260 0%, #2B3784 100%)",
-                  }}
-                />
-              </div>
+              <QuranJourney pages={totalMemorize} />
               {latestRecord?.memorizeSurahStart && (
                 <p className="text-xs text-muted-foreground">
                   آخر حفظ: من {latestRecord.memorizeSurahStart} إلى {latestRecord.memorizeSurahEnd}
@@ -378,18 +372,22 @@ export default function MyProgressPage() {
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-bold flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2">🌟 {newLive.length + newPersonal.length > 0 ? "وسام جديد" : "أوسمتي"}</span>
+                    <span className="flex items-center gap-2">🌸 {newLive.length + newPersonal.length > 0 ? "وسام جديد" : "أوسمتي"}</span>
                     <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/badges`} className="text-xs font-normal text-primary">كل أوسمتي ({total}) ←</a>
                   </CardTitle>
                 </CardHeader>
                 {newLive.length + newPersonal.length > 0 && (
                   <CardContent className="pt-0">
-                    <div className="flex flex-wrap gap-4 items-center">
-                      {newLive.map((b: any) => <BadgeChip key={b.badgeId} badge={b} size={400} compact />)}
+                    <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
+                      {newLive.map((b: any) => (
+                        <BadgeFrame key={b.badgeId} name={b.name} subtitle={b.subtitle} color={b.color} isNew>
+                          <BadgeChip badge={b} size={95} />
+                        </BadgeFrame>
+                      ))}
                       {newPersonal.map((b: any) => (
-                        <span key={b.id} className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-white" style={{ backgroundColor: b.badgeColor ?? "#f59e0b" }}>
-                          {b.badgeEmoji} {b.badgeName}
-                        </span>
+                        <BadgeFrame key={b.id} name={b.badgeName} color={b.badgeColor} isNew size={112}>
+                          <span className="text-4xl leading-none">{b.badgeEmoji}</span>
+                        </BadgeFrame>
                       ))}
                     </div>
                   </CardContent>

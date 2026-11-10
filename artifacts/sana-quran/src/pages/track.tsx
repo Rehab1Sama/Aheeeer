@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { CountUp } from "@/components/Decor";
 import { useListCircles, useListCircleNames, useGetCurrentUser, useListStudents, useUpdateStudent, useArchiveStudent, useGetMonthlyAttendanceReport, useCreateUser, useListTracks, useListSupervisorNames } from "@workspace/api-client-react";
 import MessagesSection from "@/components/MessagesSection";
 import MonthlyLeaderboardCard from "@/components/MonthlyLeaderboardCard";
@@ -354,13 +355,13 @@ export default function TrackPage() {
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-teal-50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-teal-700">
-                  {trackReport.reduce((s, c) => s + c.totalStudents, 0)}
+                  <CountUp value={trackReport.reduce((s, c) => s + c.totalStudents, 0)} />
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">طالبة</p>
               </div>
               <div className="bg-rose-50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-rose-600">
-                  {trackReport.reduce((s, c) => s + c.totalAbsences, 0)}
+                  <CountUp value={trackReport.reduce((s, c) => s + c.totalAbsences, 0)} />
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">إجمالي الغياب</p>
               </div>
@@ -372,7 +373,7 @@ export default function TrackPage() {
                   return (
                     <>
                       <p className={`text-xl font-bold ${rate == null ? "text-muted-foreground" : rate >= 80 ? "text-emerald-600" : rate >= 60 ? "text-amber-600" : "text-rose-600"}`}>
-                        {rate != null ? `${rate}%` : "—"}
+                        {rate != null ? <CountUp value={rate} suffix="%" /> : "—"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">معدل الحضور</p>
                     </>

@@ -1,4 +1,5 @@
 import { useGetStatsSummary, useGetCirclesStats, useGetCurrentUser, useGetRepeatedAbsences, useGetMonthlyComparison, useGetDailySnapshot, useListStudentsNearCompletion } from "@workspace/api-client-react";
+import { CountUp } from "@/components/Decor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Users, Calendar, Star, TrendingUp, TrendingDown, Minus, Award, CheckCircle2, AlertTriangle, Plane, ClipboardCheck, AlertCircle, GraduationCap, ShieldCheck, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { formatPages } from "@/lib/quran";
@@ -477,7 +478,7 @@ export default function DashboardPage() {
                 <div className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
                   <stat.icon className={`w-4 h-4 ${stat.textColor}`} />
                 </div>
-                <p className="text-2xl font-bold text-foreground truncate">{stat.value}</p>
+                <p className="text-2xl font-bold text-foreground truncate">{/^\d+$/.test(String(stat.value)) ? <CountUp value={Number(stat.value)} /> : stat.value}</p>
                 {stat.sub && <p className="text-xs text-muted-foreground">{stat.sub}</p>}
                 <p className="text-xs text-muted-foreground mt-1 font-medium">{stat.label}</p>
               </CardContent>

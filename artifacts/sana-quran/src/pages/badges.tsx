@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { BadgeFrame, isNewBadge } from "@/components/badges/BadgeFrame";
+import { SoftCircles } from "@/components/Decor";
 import {
   useListBadgeEvents, useCreateBadgeEvent, useUpdateBadgeEvent, useDeleteBadgeEvent,
   useListBadgeAssignments, useCreateBadgeAssignment, useDeleteBadgeAssignment,
@@ -129,10 +131,15 @@ export default function BadgesPage({ userRole, userId }: BadgesPageProps) {
       </div>
 
       {!isLeader && liveBadges.length > 0 && (
-        <div className="mb-6 p-4 rounded-xl border bg-gradient-to-r from-indigo-50 to-violet-50">
-          <h2 className="text-lg font-semibold mb-3">أوسمة إنجازي 🌟</h2>
-          <div className="flex flex-wrap gap-4">
-            {liveBadges.map((b: any) => <BadgeChip key={b.badgeId} badge={b} size={400} compact />)}
+        <div className="relative mb-6 overflow-hidden rounded-2xl border border-primary/10 bg-card p-4 shadow-sm">
+          <SoftCircles size={160} className="-left-12 -top-14" />
+          <h2 className="relative text-lg font-semibold mb-4 text-primary">أوسمة إنجازي 🌸</h2>
+          <div className="relative flex flex-wrap justify-center gap-5 sm:justify-start">
+            {liveBadges.map((b: any) => (
+              <BadgeFrame key={`${b.badgeId}:${b.tier ?? ""}`} name={b.name} subtitle={b.subtitle} color={b.color} isNew={isNewBadge(b.awardedAt)}>
+                <BadgeChip badge={b} size={95} />
+              </BadgeFrame>
+            ))}
           </div>
         </div>
       )}
@@ -142,25 +149,26 @@ export default function BadgesPage({ userRole, userId }: BadgesPageProps) {
         const thisWeek = myBadges.filter(b => (b as any).createdAt && new Date((b as any).createdAt) >= oneWeekAgo);
         const older = myBadges.filter(b => !(b as any).createdAt || new Date((b as any).createdAt) < oneWeekAgo);
         const BadgePill = ({ b }: { b: typeof myBadges[0] }) => (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-full text-white text-sm font-medium shadow-sm" style={{ backgroundColor: b.badgeColor }}>
-            <span>{b.badgeEmoji}</span><span>{b.badgeName}</span>
-          </div>
+          <BadgeFrame name={b.badgeName ?? ""} color={b.badgeColor} isNew={isNewBadge((b as any).createdAt)} size={112}>
+            <span className="text-4xl leading-none">{b.badgeEmoji}</span>
+          </BadgeFrame>
         );
         return (
-          <div className="mb-8 p-4 rounded-xl border bg-gradient-to-r from-amber-50 to-yellow-50">
-            <h2 className="text-lg font-semibold mb-3">أوسمتي 🏅</h2>
+          <div className="relative mb-8 overflow-hidden rounded-2xl border border-primary/10 bg-card p-4 shadow-sm">
+            <SoftCircles size={150} className="-right-12 -bottom-14" />
+            <h2 className="relative text-lg font-semibold mb-4 text-primary">أوسمتي ♥️</h2>
             {thisWeek.length > 0 && (
               <div className="mb-4">
-                <p className="text-xs font-bold text-amber-700 mb-2 flex items-center gap-1">✨ هذا الأسبوع</p>
-                <div className="flex flex-wrap gap-3">
+                <p className="relative text-xs font-bold text-[#C4A76A] mb-3">هذا الأسبوع</p>
+                <div className="relative flex flex-wrap justify-center gap-4 sm:justify-start">
                   {thisWeek.map(b => <BadgePill key={b.id} b={b} />)}
                 </div>
               </div>
             )}
             {older.length > 0 && (
               <div>
-                {thisWeek.length > 0 && <p className="text-xs font-semibold text-amber-600 mb-2 mt-2">أوسمة سابقة</p>}
-                <div className="flex flex-wrap gap-3">
+                {thisWeek.length > 0 && <p className="relative text-xs font-semibold text-muted-foreground mb-3 mt-2">أوسمة سابقة</p>}
+                <div className="relative flex flex-wrap justify-center gap-4 sm:justify-start">
                   {older.map(b => <BadgePill key={b.id} b={b} />)}
                 </div>
               </div>

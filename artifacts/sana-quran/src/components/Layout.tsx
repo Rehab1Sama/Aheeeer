@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { SeasonStrip, HomeGreeting, Celebration } from "./Decor";
 import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
 import { clearAuth, getToken, setToken } from "@/lib/auth";
@@ -259,6 +260,7 @@ async function fetchToday(): Promise<{ missing?: number; date?: string; holiday?
 function EntryMotivation({ role, name }: { role: string; name: string }) {
   const qc = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
   useEffect(() => {
     if (!ENTRY_ROLES.includes(role)) return;
     let timer = 0;
@@ -281,6 +283,7 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
       if (t.missing === 0) {
         if (readLS("motivation-complete") === t.date) return;
         writeLS("motivation-complete", t.date ?? "");
+        setCelebrate(true); // اكتملت الحلقة: نجوم وأهلّة
       } else {
         const last = Number(readLS("motivation-partial") ?? 0);
         if (now - last < 15 * 60 * 1000) return;
@@ -293,8 +296,10 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
     window.addEventListener("sana:entry-saved", onSaved);
     return () => { window.removeEventListener("sana:entry-saved", onSaved); window.clearTimeout(timer); };
   }, [role, name, qc]);
-  if (!msg) return null;
+  if (!msg) return celebrate ? <Celebration onDone={() => setCelebrate(false)} /> : null;
   return (
+    <>
+    {celebrate && <Celebration onDone={() => setCelebrate(false)} />}
     <div className="fixed z-50 inset-x-3 bottom-20 md:bottom-6 md:left-6 md:right-auto md:max-w-sm" role="status" aria-live="polite">
       <div className="rounded-2xl shadow-xl border border-primary/15 bg-card p-4 pr-5 flex gap-3 items-start animate-in fade-in slide-in-from-bottom-4">
         <span className="w-1.5 self-stretch rounded-full bg-gradient-to-b from-[#1A2260] to-[#2B3784]" />
@@ -302,6 +307,7 @@ function EntryMotivation({ role, name }: { role: string; name: string }) {
         <button type="button" onClick={() => setMsg(null)} className="text-muted-foreground text-lg leading-none" aria-label="إغلاق">×</button>
       </div>
     </div>
+    </>
   );
 }
 
@@ -829,6 +835,7 @@ export default function Layout({ user, children }: LayoutProps) {
 
       {/* News Ticker */}
       <NewsTicker />
+      <SeasonStrip />
 
       <div className="flex flex-1">
         {/* Sidebar */}
@@ -962,8 +969,9 @@ export default function Layout({ user, children }: LayoutProps) {
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             <LateReminder role={user.role} name={user.name ?? ""} />
+            {isHome && <HomeGreeting name={user.name ?? ""} />}
             {isHome && <TodayBar role={user.role} />}
-            {children}
+            <div key={location} className="page-enter">{children}</div>
           </div>
           <footer className="text-center py-3 px-4 pb-24 md:pb-3 text-xs text-muted-foreground border-t border-border bg-background/50">
             جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
