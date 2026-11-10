@@ -106,19 +106,19 @@ export function SeasonStrip() {
   );
 }
 
-/** احتفال قصير: نجوم وأهلّة ذهبية وكحلية تتساقط ثانيتين ونصف */
+/** احتفال اكتمال الحلقة: نجوم وأهلّة ذهبية وكحلية تتساقط على ثلاث دفعات نحو ست ثوانٍ */
 export function Celebration({ onDone }: { onDone: () => void }) {
-  const pieces = useMemo(() => Array.from({ length: 34 }, (_, i) => ({
+  const pieces = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
     ch: i % 3 === 0 ? "☾" : i % 3 === 1 ? "★" : "✦",
     left: Math.random() * 100,
     size: 12 + Math.random() * 14,
     color: i % 2 === 0 ? "#C4A76A" : i % 5 === 0 ? "#9EA8CC" : "#2B3784",
-    delay: Math.random() * 0.6,
-    dur: 2 + Math.random() * 1.2,
+    delay: (i % 3) * 1.2 + Math.random() * 0.8,
+    dur: 3 + Math.random() * 1.5,
     drift: (Math.random() - 0.5) * 120,
     spin: (Math.random() - 0.5) * 540,
   })), []);
-  useEffect(() => { const t = window.setTimeout(onDone, 3600); return () => window.clearTimeout(t); }, [onDone]);
+  useEffect(() => { const t = window.setTimeout(onDone, 7000); return () => window.clearTimeout(t); }, [onDone]);
   return (
     <div className="sana-celebrate" aria-hidden="true">
       {pieces.map((p, i) => (

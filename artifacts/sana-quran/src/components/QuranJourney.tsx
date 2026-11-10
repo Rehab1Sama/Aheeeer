@@ -44,7 +44,8 @@ function lengthAt(v: number): number {
   return len;
 }
 
-export default function QuranJourney({ pages }: { pages: number }) {
+/** reverse: الحفظ العكسي (من الناس إلى الفاتحة)، فأول محطة الجزء ٣٠ وآخرها الجزء ١ */
+export default function QuranJourney({ pages, reverse = false }: { pages: number; reverse?: boolean }) {
   const juz = Math.max(0, Math.min(30, (pages / TOTAL_PAGES) * 30));
   const total = lengthAt(30);
   const done = lengthAt(Math.max(1, juz));
@@ -80,7 +81,7 @@ export default function QuranJourney({ pages }: { pages: number }) {
               <circle cx={p.x} cy={p.y} r={milestone ? 7 : 5} fill={reached ? "#C4A76A" : "hsl(var(--card))"} stroke={reached ? "#fff" : "#C8CDE8"} strokeWidth={1.5} />
               {(milestone || i === current) && (
                 <text x={p.x} y={p.y + 21} textAnchor="middle" fontSize={9} fontWeight={700} fill={reached ? "#2B3784" : "#9EA8CC"} className="dark:fill-[#E4E7F4]">
-                  {toAr(i)}
+                  {toAr(reverse ? 31 - i : i)}
                 </text>
               )}
             </g>
@@ -91,11 +92,11 @@ export default function QuranJourney({ pages }: { pages: number }) {
         <circle cx={here.x} cy={here.y} r={4} fill="#1A2260" stroke="#fff" strokeWidth={1.5} />
       </svg>
       <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-        <span>البداية</span>
+        <span>{reverse ? "البداية · الناس" : "البداية"}</span>
         <span className="font-bold text-primary">
           {juz < 1 ? "في الطريق إلى الجزء الأول 🌸" : `قطعتِ ${juzText(Math.floor(juz))} من ٣٠ 🌿`}
         </span>
-        <span>الختمة</span>
+        <span>{reverse ? "الفاتحة · الختمة" : "الختمة"}</span>
       </div>
     </div>
   );

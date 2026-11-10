@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { getSurahByName } from "@/lib/quran";
 import { BadgeFrame } from "@/components/badges/BadgeFrame";
 import QuranJourney from "@/components/QuranJourney";
 import { useLocation } from "wouter";
@@ -181,6 +182,16 @@ export default function MyProgressPage() {
   const totalMemorize = Math.round(visibleRecords.reduce((s, r) => s + (r.memorizePages ?? 0), 0) * 2) / 2;
   const latestRecord = visibleRecords.find(r => !r.isAbsent);
   const TOTAL_QURAN_PAGES = 604;
+  // الحفظ العكسي (من الناس نحو الفاتحة): أول سورة حفظتها بعد آخر سورة حفظتها في ترتيب المصحف
+  const isReverseMemorization = (() => {
+    const nums = sortedRecords
+      .slice().reverse()
+      .map((r: any) => getSurahByName(r.memorizeSurahStart ?? "")?.number)
+      .filter((n): n is number => typeof n === "number");
+    if (nums.length === 0) return false;
+    const first = nums[0]!, last = nums[nums.length - 1]!;
+    return first > last || (first === last && first >= 78);
+  })();
   const progressPct = Math.min(100, Math.round((totalMemorize / TOTAL_QURAN_PAGES) * 1000) / 10);
 
   // Shortcomings (التقصير) — mirrors logic in shortcomings.ts on the server
@@ -341,7 +352,7 @@ export default function MyProgressPage() {
                 <span>{formatPages(totalMemorize)} وجه من أصل {TOTAL_QURAN_PAGES}</span>
                 <span className="font-bold text-primary">{progressPct}%</span>
               </div>
-              <QuranJourney pages={totalMemorize} />
+              <QuranJourney pages={totalMemorize} reverse={isReverseMemorization} />
               {latestRecord?.memorizeSurahStart && (
                 <p className="text-xs text-muted-foreground">
                   آخر حفظ: من {latestRecord.memorizeSurahStart} إلى {latestRecord.memorizeSurahEnd}
