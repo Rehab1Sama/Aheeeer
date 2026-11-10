@@ -27,7 +27,7 @@ export function HomeGreeting({ name }: { name: string }) {
   const now = makkahNow();
   const h = now.getUTCHours();
   const morning = h >= 4 && h < 12;
-  const greeting = morning ? "صباح الخير" : "مساء النور";
+  const greeting = morning ? "صباح الخير" : "مساء الخير";
   const date = new Date();
   const greg = date.toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Riyadh" });
   let hijri = "";
@@ -37,8 +37,8 @@ export function HomeGreeting({ name }: { name: string }) {
       <SoftCircles size={150} className="-left-10 -top-12" />
       <SoftCircles size={90} className="left-24 -bottom-12 opacity-70" />
       <div className="relative">
-        <p className="font-heading text-lg text-primary">
-          {greeting} يا قمرتنا{first ? ` ${first}` : ""} {morning ? "🌸" : "🌿"}
+        <p className="text-lg font-bold text-primary">
+          {greeting} قمرتنا{first ? ` ${first}` : ""} {morning ? "🌸" : "🌧️"}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{greg}{hijri ? ` · ${hijri}` : ""}</p>
       </div>
