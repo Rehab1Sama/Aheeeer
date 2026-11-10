@@ -25,10 +25,10 @@ export function BadgeFrame({
       <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
         <div
           className={`absolute rounded-full ${isNew ? "badge-shine" : ""}`}
-          style={{ width: size, height: size, background: `radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in oklab, ${c} 16%, #F1F2F8) 70%)`, boxShadow: `0 6px 22px color-mix(in oklab, ${c} 22%, transparent)` }}
+          style={{ width: size, height: size, background: `radial-gradient(circle at 35% 30%, hsl(var(--card)) 0%, color-mix(in oklab, ${c} 18%, hsl(var(--muted))) 72%)`, boxShadow: `0 6px 22px color-mix(in oklab, ${c} 22%, transparent)` }}
         />
         <div className="absolute rounded-full border-2 border-dashed" style={{ width: ring, height: ring, borderColor: `color-mix(in oklab, ${c} 45%, #C8CDE8)` }} />
-        <span className="absolute h-2.5 w-2.5 rounded-full bg-[#C4A76A] ring-2 ring-white" style={{ left: size * 0.1, top: size * 0.12 }} />
+        <span className="absolute h-2.5 w-2.5 rounded-full bg-[#C4A76A] ring-2 ring-card" style={{ left: size * 0.1, top: size * 0.12 }} />
         <span className="absolute h-1.5 w-1.5 rounded-full bg-[#9EA8CC]" style={{ right: size * 0.12, bottom: size * 0.14 }} />
         <div className="relative flex items-center justify-center overflow-hidden rounded-full" style={{ width: size * 0.72, height: size * 0.72 }}>
           {children}

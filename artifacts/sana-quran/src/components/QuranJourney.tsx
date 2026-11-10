@@ -61,7 +61,7 @@ export default function QuranJourney({ pages }: { pages: number }) {
         <path d={path} fill="none" stroke="#C8CDE8" strokeWidth={1.2} strokeDasharray="3 5" strokeLinecap="round" />
         {/* المقطوع منه */}
         {juz >= 1 && (
-          <path d={path} fill="none" stroke="url(#journeyGrad)" strokeWidth={10} strokeLinecap="round" strokeDasharray={`${done} ${total + 20}`} />
+          <path d={path} fill="none" stroke="url(#journeyGrad)" strokeWidth={10} strokeLinecap="round" strokeDasharray={`${done} ${total + 20}`} className="journey-done" />
         )}
         <defs>
           <linearGradient id="journeyGrad" x1="1" y1="0" x2="0" y2="1">
@@ -77,7 +77,7 @@ export default function QuranJourney({ pages }: { pages: number }) {
           const milestone = i % 5 === 0 || i === 1;
           return (
             <g key={i}>
-              <circle cx={p.x} cy={p.y} r={milestone ? 7 : 5} fill={reached ? "#C4A76A" : "#fff"} stroke={reached ? "#fff" : "#C8CDE8"} strokeWidth={1.5} />
+              <circle cx={p.x} cy={p.y} r={milestone ? 7 : 5} fill={reached ? "#C4A76A" : "hsl(var(--card))"} stroke={reached ? "#fff" : "#C8CDE8"} strokeWidth={1.5} />
               {(milestone || i === current) && (
                 <text x={p.x} y={p.y + 21} textAnchor="middle" fontSize={9} fontWeight={700} fill={reached ? "#2B3784" : "#9EA8CC"} className="dark:fill-[#E4E7F4]">
                   {toAr(i)}

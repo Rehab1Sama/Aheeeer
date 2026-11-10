@@ -527,16 +527,18 @@ h1, h2, .font-heading { font-family: 'Reem Kufi', 'Cairo', sans-serif; letter-sp
 
 /* ── لمعة الوسام الجديد ── */
 @keyframes sana-shine { 0% { transform: translateX(120%) rotate(25deg); } 60%, 100% { transform: translateX(-220%) rotate(25deg); } }
-.badge-shine { position: relative; overflow: hidden; }
+.badge-shine { overflow: hidden; }
 .badge-shine::after {
-  content: ""; position: absolute; top: -30%; bottom: -30%; width: 35%; right: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent);
+  content: ""; position: absolute; top: -30%; bottom: -30%; width: 18%; right: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
   animation: sana-shine 3.2s ease-in-out infinite; pointer-events: none; border-radius: 9999px;
 }
 
 /* ── نقطة الرحلة المضيئة ── */
 @keyframes sana-glow { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .45; transform: scale(1.5); } }
 .journey-glow { transform-box: fill-box; transform-origin: center; animation: sana-glow 2s ease-in-out infinite; }
+
+.dark .journey-done { stroke: #C4A76A; opacity: .55; }
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter > *, .sana-celebrate span, .badge-shine::after, .journey-glow { animation: none !important; }
