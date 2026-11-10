@@ -75,13 +75,14 @@ export default function QuranJourney({ pages, reverse = false }: { pages: number
           const i = k + 1;
           const p = station(i);
           const reached = juz >= i;
-          const milestone = i % 5 === 0 || i === 1;
+          const n = reverse ? 31 - i : i; // رقم الجزء الظاهر
+          const milestone = n % 5 === 0 || n === 1 || i === 1;
           return (
             <g key={i}>
               <circle cx={p.x} cy={p.y} r={milestone ? 7 : 5} fill={reached ? "#C4A76A" : "hsl(var(--card))"} stroke={reached ? "#fff" : "#C8CDE8"} strokeWidth={1.5} />
               {(milestone || i === current) && (
                 <text x={p.x} y={p.y + 21} textAnchor="middle" fontSize={9} fontWeight={700} fill={reached ? "#2B3784" : "#9EA8CC"} className="dark:fill-[#E4E7F4]">
-                  {toAr(reverse ? 31 - i : i)}
+                  {toAr(n)}
                 </text>
               )}
             </g>
