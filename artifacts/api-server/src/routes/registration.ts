@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { normalizeName } from "../lib/nameMatch";
 import { db, registrationSettingsTable, usersTable, studentsTable, circlesTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, sql, desc, gt, and } from "drizzle-orm";
 import { findExistingStudent, existingAccountInCircle, maskEmail } from "../lib/studentIdentity";
@@ -375,10 +376,11 @@ router.post("/registration/submit", submitRateLimit, async (req, res): Promise<v
 
   // منع التسجيل المتكرر بنفس البريد خلال أقل من 5 دقائق (يمنع الإرسال بالغلط)
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  // (لنفس الاسم فقط: المشرفة قد تسجِّل أكثر من طالبة ببريدها)
   const [recentReg] = await db
     .select({ createdAt: usersTable.createdAt })
     .from(usersTable)
-    .where(eq(usersTable.email, email.toLowerCase()))
+    .where(and(eq(usersTable.email, email.toLowerCase()), eq(usersTable.name, fullName)))
     .orderBy(desc(usersTable.createdAt))
     .limit(1);
   if (recentReg && recentReg.createdAt > fiveMinutesAgo) {
@@ -391,21 +393,29 @@ router.post("/registration/submit", submitRateLimit, async (req, res): Promise<v
   }
 
   // ── منع الحسابات المكررة ──
-  // ١) البريد مستخدم في حساب نشط: لا ننشئ حسابًا ثانيًا (ولا نغيّر كلمة سر الحساب القائم)
-  const [emailOwner] = await db.select({ id: usersTable.id }).from(usersTable)
-    .where(and(sql`lower(${usersTable.email}) = ${email}`, eq(usersTable.isArchived, false))).limit(1);
-  if (emailOwner) {
-    res.status(409).json({ error: "لديكِ حساب بهذا البريد مسبقًا — سجّلي الدخول، أو استخدمي «نسيت كلمة المرور» إن لم تتذكريها" });
+  // البريد الواحد يحمل أكثر من حساب (مشرفة وطالبة، أو طالبة في حلقتين، ويختار الدخول بينها)،
+  // فالمكرر هو: حساب نشط بنفس البريد ونفس الدور في نفس الحلقة. وإلا يُسمح بالتسجيل.
+  const newRole = role ?? "student";
+  let regCircleId: number | null = null;
+  if (newRole === "student" && !circleId) {
+    const [regCircle] = await db.select({ id: circlesTable.id }).from(circlesTable).where(eq(circlesTable.trackType, "registration"));
+    regCircleId = regCircle?.id ?? null;
+  }
+  const targetForRole = circleId ?? regCircleId;
+  const sameEmail = await db.select({ id: usersTable.id, role: usersTable.role, circleId: usersTable.circleId, name: usersTable.name })
+    .from(usersTable)
+    .where(and(sql`lower(${usersTable.email}) = ${email}`, eq(usersTable.isArchived, false)));
+  const dup = sameEmail.find((u) => u.role === newRole && (u.circleId ?? null) === (targetForRole ?? null)
+    && (newRole !== "student" || normalizeName(u.name ?? "") === normalizeName(fullName)));
+  if (dup) {
+    res.status(409).json({ error: "لديكِ حساب بهذا البريد في هذه الحلقة مسبقًا — سجّلي الدخول، أو استخدمي «نسيت كلمة المرور» إن لم تتذكريها" });
     return;
   }
   // ٢) الطالبة نفسها موجودة (الاسم + الجوال أو الحلقة): نربط الحساب بسجلها بدل إنشاء نسخة
   let studentTargetCircleId: number | null | undefined = circleId;
   let existingStudent: Awaited<ReturnType<typeof findExistingStudent>> = null;
   if (!role || role === "student") {
-    if (!studentTargetCircleId) {
-      const [regCircle] = await db.select({ id: circlesTable.id }).from(circlesTable).where(eq(circlesTable.trackType, "registration"));
-      studentTargetCircleId = regCircle?.id;
-    }
+    if (!studentTargetCircleId) studentTargetCircleId = regCircleId ?? undefined;
     existingStudent = await findExistingStudent({ fullName, phone, circleId: circleId ?? null });
     if (existingStudent) {
       const account = await existingAccountInCircle(existingStudent.id, studentTargetCircleId);
