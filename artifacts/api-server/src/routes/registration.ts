@@ -432,7 +432,8 @@ router.post("/registration/submit", submitRateLimit, async (req, res): Promise<v
     passwordHash: hashPassword(password),
     role: role ?? "student",
     track: track ?? null,
-    circleId: circleId ?? null,
+    // حساب الطالبة يشير إلى حلقتها (أو قائمة التسجيل) — لا يبقى «بلا حلقة»
+    circleId: circleId ?? ((!role || role === "student") ? (regCircleId ?? null) : null),
     phone: phone ?? null,
     country: country ?? null,
     ageRange: ageRange ?? null,

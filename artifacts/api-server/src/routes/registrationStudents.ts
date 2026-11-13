@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { performTransfer } from "../lib/studentTransfer";
 import { db, studentsTable, circlesTable, usersTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -45,46 +46,11 @@ router.post("/registration-students/bulk-transfer", authenticate, async (req, re
     res.status(400).json({ error: "transfers is required" }); return;
   }
 
+  // نفس النقل الكامل في كل الموقع: تخرج من قائمة التسجيل نهائيًا، ويُنقل حساب دخولها إلى حلقتها
   for (const t of transfers) {
-    const [studentBefore] = await db.select().from(studentsTable).where(eq(studentsTable.id, t.studentId));
-    const oldCircleId = studentBefore?.circleId ?? null;
-
-    await db.update(studentsTable).set({ circleId: t.circleId }).where(eq(studentsTable.id, t.studentId));
-
-    // أرشفة تسجيل حلقة التسجيل القديمة — حتى لا تبقى الطالبة مرتبطة بحلقتين بنفس الوقت
-    // (هذا كان السبب في ظهور طالبات منقولات وكأنهن ما زلن بحلقة "التسجيل")
-    if (oldCircleId && oldCircleId !== t.circleId) {
-      await db.update(studentEnrollmentsTable)
-        .set({ isArchived: true, archivedAt: new Date() })
-        .where(and(
-          eq(studentEnrollmentsTable.studentId, t.studentId),
-          eq(studentEnrollmentsTable.circleId, oldCircleId),
-          eq(studentEnrollmentsTable.isArchived, false),
-        ));
-    }
-
-    await db.insert(studentEnrollmentsTable)
-      .values({ studentId: t.studentId, circleId: t.circleId, isArchived: false })
-      .onConflictDoUpdate({
-        target: [studentEnrollmentsTable.studentId, studentEnrollmentsTable.circleId],
-        set: { isArchived: false, archivedAt: null },
-      });
-
-    // مزامنة circle_id في حساب المستخدمة — أولاً بالرابط المباشر student_id
-    await db.update(usersTable)
-      .set({ circleId: t.circleId })
-      .where(and(eq(usersTable.studentId, t.studentId), eq(usersTable.role, "student")));
-    // ثم بالاسم + الحلقة القديمة للحسابات غير المربوطة بعد
-    const [student] = await db.select().from(studentsTable).where(eq(studentsTable.id, t.studentId));
-    if (student) {
-      await db.execute(
-        sql`UPDATE users SET circle_id = ${t.circleId}
-            WHERE role = 'student'
-              AND student_id IS NULL
-              AND TRIM(name) = TRIM(${student.fullName})
-              AND circle_id IS DISTINCT FROM ${t.circleId}`
-      );
-    }
+    const [studentBefore] = await db.select({ circleId: studentsTable.circleId }).from(studentsTable).where(eq(studentsTable.id, t.studentId));
+    if (!studentBefore) continue;
+    await performTransfer({ studentId: t.studentId, fromCircleId: studentBefore.circleId ?? null, toCircleId: t.circleId, byUserId: req.userId! });
   }
 
   res.json({ ok: true, transferred: transfers.length });

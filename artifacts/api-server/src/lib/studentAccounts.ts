@@ -2,7 +2,7 @@
 // - عند النقل يُنقل الحساب مع الطالبة، ولا يبقى حساب يشير إلى الحلقة القديمة.
 // - إن كان لها حساب في الحلقة الهدف أصلًا، يُوقف حساب الحلقة القديمة بدل أن يتكرر.
 // - قائمة «تبديل الحساب» واختيار الحساب عند الدخول لا تعرض إلا حسابات حلقاتها الحالية، بلا تكرار.
-import { db, usersTable, studentsTable, studentEnrollmentsTable } from "@workspace/db";
+import { db, usersTable, studentsTable, studentEnrollmentsTable, circlesTable } from "@workspace/db";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { normalizeName } from "./nameMatch";
 
@@ -24,7 +24,11 @@ export async function moveStudentAccounts(
     or(eq(usersTable.studentId, studentId), isNull(usersTable.studentId)),
   ));
   const mine = candidates.filter((u) => u.studentId === studentId || (u.studentId == null && normalizeName(u.name ?? "") === nm));
-  const inSource = mine.filter((u) => fromCircleId == null ? u.circleId == null || u.circleId !== toCircleId : u.circleId === fromCircleId);
+  // المصدر: حساب الحلقة القديمة، وأي حساب بلا حلقة أو على قائمة التسجيل (حساب استمارة التسجيل)
+  const regIds = (await ex.select({ id: circlesTable.id }).from(circlesTable).where(eq(circlesTable.trackType, "registration"))).map((c) => c.id);
+  const inSource = mine.filter((u) => u.circleId !== toCircleId && (
+    u.circleId == null || regIds.includes(u.circleId) || (fromCircleId != null && u.circleId === fromCircleId)
+  ));
   if (inSource.length === 0) return;
   const inTarget = mine.filter((u) => u.circleId === toCircleId);
 
