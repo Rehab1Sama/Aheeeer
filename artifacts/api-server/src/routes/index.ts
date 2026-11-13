@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import telegramLinkRouter from "./telegramLink";
 import healthRouter from "./health";
 import reportsRouter from "./reports";
 import verificationRouter from "./verification";
@@ -104,5 +105,6 @@ router.use(circleOverviewRouter);
 router.use(trackSupervisorSessionsRouter);
 router.use(distinguishedStudentsRouter);
 router.use(telegramReportRouter);
+router.use(telegramLinkRouter);
 
 export default router;

@@ -1,4 +1,5 @@
 import app from "./app";
+import { ensureTelegramWebhook } from "./routes/telegramLink";
 import { logger } from "./lib/logger";
 import { db, usersTable, studentsTable, studentMemorizationsTable, circlesTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
@@ -625,6 +626,7 @@ void Promise.all([migrateStudentMemorizations(), migrateReviewPlansTable()]).the
   void migrateRecordsUniqueConstraint();
   void ensureRegistrationCircle();
   void seedLeader();
+  void ensureTelegramWebhook(); // استقبال ربط مسؤولات المسارات بالبوت
   // مهام إصلاح الربط (الحسابات↔الطالبات↔الحلقات): كانت تعمل مع كل تشغيل وتربط بالاسم أحيانًا.
   // اشتغلت مرات كثيرة فاكتمل الربط؛ أُوقفت بقرار القائدة. لتشغيلها مرة عند الحاجة: RUN_STARTUP_REPAIRS=1 في Render.
   if (process.env.RUN_STARTUP_REPAIRS === "1") {

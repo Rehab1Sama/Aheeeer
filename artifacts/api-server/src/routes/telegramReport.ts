@@ -10,6 +10,7 @@ import { timingSafeEqual } from "crypto";
 import { authenticate } from "../middlewares/authenticate";
 import { buildDailyReport, sendDailyReportToTelegram } from "../lib/dailyReport";
 import { logger } from "../lib/logger";
+import { buildTrackStudentDigests } from "../lib/trackStudentReport";
 import { runWeeklyMoonBadgeAward } from "../lib/weeklyMoonBadge";
 
 const router: IRouter = Router();
@@ -78,6 +79,15 @@ router.get("/reports/fixation-plans-check", async (req, res): Promise<void> => {
     since, total: plans.length,
     plans: plans.map((p) => ({ id: p.id, circle: cName.get(p.circleId) ?? null, status: p.status, approval: p.approvalStatus, startDate: p.startDate, createdAt: p.createdAt, days: dayCount.get(p.id) ?? 0 })),
   });
+});
+
+// فحص خلاصة طالبات المسارات (أعداد فقط، بلا أسماء) — للتحقق من عمل التقرير
+router.get("/reports/track-students/counts", async (req, res): Promise<void> => {
+  if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
+  if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const D = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : "2026-10-20";
+  const m = await buildTrackStudentDigests(D, { weekly: true });
+  res.json(Object.fromEntries([...m.values()].map((d) => [d.track, { lazy: d.lazy.length, follow: d.follow.length, excellent: d.excellent.length, hadData: d.hadData }])));
 });
 
 export default router;

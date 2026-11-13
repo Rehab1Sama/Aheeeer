@@ -32,6 +32,7 @@ import {
 } from "./badgeOverview";
 import { logger } from "./logger";
 import { splitForTelegram } from "./telegramFormat";
+import { buildTrackStudentDigests, trackStudentMessage } from "./trackStudentReport";
 export { splitForTelegram };
 
 // ── أدوات عرض ─────────────────────────────────────────────────────────────
@@ -527,5 +528,32 @@ export async function sendDailyReportToTelegram(opts: { date?: string; force?: b
     }
   }
   await setSetting("telegram_last_report_date", report.date);
+  // خلاصة الطالبات لمسؤولات المسارات المربوطات (كل وحدة باسمها، لمسارها)
+  sent += await sendTrackStudentReports(report.date).catch((err) => { logger.warn({ err }, "track student reports failed"); return 0; });
   return { sent, date: report.date };
+}
+
+/** يرسل لكل مسؤولة مسار مربوطة خلاصة طالبات مسارها. المتميِّزات يوم الخميس فقط. لا شيء في الإجازة أو يوم بلا إدخال. */
+export async function sendTrackStudentReports(D: string, onlyUserId?: number): Promise<number> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || (await holidayOn(D))) return 0;
+  const sups = (await db.select({ id: usersTable.id, name: usersTable.name, track: usersTable.track, chat: usersTable.telegramChatId, role: usersTable.role, isArchived: usersTable.isArchived })
+    .from(usersTable).where(eq(usersTable.role, "track_supervisor")))
+    .filter((u) => !u.isArchived && u.chat && u.track && (onlyUserId == null || u.id === onlyUserId));
+  if (sups.length === 0) return 0;
+  const weekly = new Date(getMakkahDay() + "T12:00:00Z").getUTCDay() === 4; // الخميس
+  const digests = await buildTrackStudentDigests(D, { weekly });
+  let sent = 0;
+  for (const u of sups) {
+    const dg = digests.get(u.track!);
+    if (!dg || (!dg.hadData && onlyUserId == null)) continue; // يوم بلا إدخال في المسار
+    for (const part of splitForTelegram(trackStudentMessage(dg, u.name ?? "", D, weekly))) {
+      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: u.chat, text: part, parse_mode: "HTML", disable_web_page_preview: true }),
+      });
+      if (r.ok) sent++;
+    }
+  }
+  return sent;
 }

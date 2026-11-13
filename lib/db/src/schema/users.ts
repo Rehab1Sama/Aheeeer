@@ -21,6 +21,9 @@ export const usersTable = pgTable("users", {
   passwordResetToken: text("password_reset_token"),
   passwordResetTokenExpiry: timestamp("password_reset_token_expiry", { withTimezone: true }),
   extraData: text("extra_data"),
+  // تقرير الطالبات على تيليجرام (لمسؤولة المسار): معرّف محادثتها، ورمز الربط المؤقت
+  telegramChatId: text("telegram_chat_id"),
+  telegramLinkToken: text("telegram_link_token"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

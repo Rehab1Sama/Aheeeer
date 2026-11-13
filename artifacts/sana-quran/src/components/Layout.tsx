@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { SeasonStrip, HomeGreeting, Celebration } from "./Decor";
+import TelegramLinkCard from "./TelegramLinkCard";
 import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
 import { clearAuth, getToken, setToken } from "@/lib/auth";
@@ -971,6 +972,7 @@ export default function Layout({ user, children }: LayoutProps) {
             <LateReminder role={user.role} name={user.name ?? ""} />
             {isHome && <HomeGreeting name={user.name ?? ""} />}
             {isHome && <TodayBar role={user.role} />}
+            {isHome && user.role === "track_supervisor" && <TelegramLinkCard />}
             <div key={location} className="page-enter">{children}</div>
           </div>
           <footer className="text-center py-3 px-4 pb-24 md:pb-3 text-xs text-muted-foreground border-t border-border bg-background/50">
