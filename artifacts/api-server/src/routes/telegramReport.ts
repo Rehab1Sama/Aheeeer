@@ -87,7 +87,13 @@ router.get("/reports/track-students/counts", async (req, res): Promise<void> => 
   if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
   const D = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : "2026-10-20";
   const m = await buildTrackStudentDigests(D, { weekly: true });
-  res.json(Object.fromEntries([...m.values()].map((d) => [d.track, { lazy: d.lazy.length, follow: d.follow.length, excellent: d.excellent.length, hadData: d.hadData }])));
+  let webhook: unknown = null;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+    const w = (await r.json()) as { result?: { url?: string; pending_update_count?: number; last_error_message?: string } };
+    webhook = { set: !!w.result?.url, pending: w.result?.pending_update_count ?? 0, lastError: w.result?.last_error_message ?? null };
+  } catch { /* */ }
+  res.json({ webhook, tracks: Object.fromEntries([...m.values()].map((d) => [d.track, { lazy: d.lazy.length, follow: d.follow.length, excellent: d.excellent.length, hadData: d.hadData }])) });
 });
 
 export default router;

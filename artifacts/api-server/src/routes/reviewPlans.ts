@@ -504,8 +504,11 @@ async function autoRenewPlan(
 
       let savedDays: typeof reviewPlanDaysTable.$inferSelect[] = [];
       if (oldDays.length > 0) {
+        // خطة قديمة بأيام أقل من مدة التثبيت الحالية (٢٤ قبل التحويل إلى ٣٢): تُكمَّل بتكرار نمطها من أولها
+        const full = PLAN_TOTAL_DAYS.fixation;
+        const filled = oldDays.length >= full ? oldDays : Array.from({ length: full }, (_, i) => ({ ...oldDays[i % oldDays.length]!, dayNumber: i + 1 }));
         savedDays = await tx.insert(reviewPlanDaysTable).values(
-          oldDays.map(d => ({
+          filled.map(d => ({
             planId: newPlan.id,
             dayNumber: d.dayNumber,
             surahStart: d.surahStart,

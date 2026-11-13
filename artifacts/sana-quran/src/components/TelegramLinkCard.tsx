@@ -29,7 +29,6 @@ export default function TelegramLinkCard() {
     return () => window.removeEventListener("focus", onFocus);
   }, [nameId]);
   if (!st?.available) return null;
-  if (!identity) return null; // تظهر بعد اختيار «مين أنتِ؟»
 
   const link = async () => {
     setBusy(true);
@@ -63,7 +62,7 @@ export default function TelegramLinkCard() {
             </>
           ) : (
             <>
-              <p className="text-sm font-bold text-primary">قمرتنا {identity.name.split(/\s+/)[0]}، اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
+              <p className="text-sm font-bold text-primary">{identity ? `قمرتنا ${identity.name.split(/\s+/)[0]}، ` : ""}اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
               <p className="mt-0.5 text-xs text-muted-foreground">اضغطي الزر، ثم «Start» في البوت، وتصلكِ كل صباح باسمكِ.</p>
               <button type="button" disabled={busy} onClick={link} className="mt-2 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50">اربطي تيليجرام</button>
             </>

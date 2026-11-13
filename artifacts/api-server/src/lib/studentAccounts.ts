@@ -99,7 +99,13 @@ export async function activeSiblingAccount(u: { role: string; studentId: number 
  * (نفس البريد وكلمة المرور، من أحدث حساباتها)، فتظهر الحلقة في «تبديل الحساب» وترى رفيقاتها.
  * لا يُنشأ لقائمة التسجيل، ولا إن وُجد لها حساب نشط في تلك الحلقة بأي بريد.
  */
+const ensuring = new Set<string>(); // يمنع إنشاء حسابين لنفس الحلقة عند طلبين متزامنين
 export async function ensureEnrollmentAccounts(email: string): Promise<void> {
+  if (ensuring.has(email)) return;
+  ensuring.add(email);
+  try { await ensureEnrollmentAccountsInner(email); } finally { ensuring.delete(email); }
+}
+async function ensureEnrollmentAccountsInner(email: string): Promise<void> {
   const mine = await db.select().from(usersTable).where(and(
     eq(usersTable.email, email), eq(usersTable.role, "student"), eq(usersTable.isArchived, false),
   ));
