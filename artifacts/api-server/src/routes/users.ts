@@ -2,7 +2,7 @@ import { findExistingStudent } from "../lib/studentIdentity";
 import { Router, type IRouter } from "express";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, recordsTable, studentGoalsTable, studentNotesTable, studentTransfersTable, examRecordsTable, studentEnrollmentsTable } from "@workspace/db";
-import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { eq, and, sql, isNotNull, inArray } from "drizzle-orm";
 import { hashPassword } from "../lib/auth";
 import { authenticate, requireRole } from "../middlewares/authenticate";
 import { CreateUserBody, UpdateUserBody, ResetUserPasswordBody } from "@workspace/api-zod";
@@ -137,6 +137,15 @@ router.get("/users", authenticate, async (req, res): Promise<void> => {
     res.json(withMeta(filtered).map(user => user.role === "student" && !user.studentId
       ? { ...user, studentId: studentIdByName.get(user.name.trim().replace(/\s+/g, " ").toLowerCase()) ?? null }
       : user));
+    return;
+  }
+  // الطالبة: معلمة حلقتها ومشرفتها فقط (لعرض اسميهما في صفحتها) — بدل رفض الطلب برسالة خطأ
+  if (req.userRole === "student") {
+    if (!req.userCircleId) { res.json([]); return; }
+    const [c] = await db.select({ t: circlesTable.teacherId, s: circlesTable.supervisorId }).from(circlesTable).where(eq(circlesTable.id, req.userCircleId));
+    const ids = [c?.t, c?.s].filter((x): x is number => x != null);
+    const staff = ids.length ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role, circleId: usersTable.circleId }).from(usersTable).where(inArray(usersTable.id, ids)) : [];
+    res.json(staff.map((u) => ({ ...u, circleId: req.userCircleId, circleName: circleMap.get(req.userCircleId!) ?? null })));
     return;
   }
   if (req.userRole !== "leader" && req.userRole !== "deputy") {

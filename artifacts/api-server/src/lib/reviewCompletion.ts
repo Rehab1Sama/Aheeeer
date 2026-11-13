@@ -10,7 +10,7 @@
 // أي خطة تُحسب: آخر خطة انتهت دورتها خلال ضعف مدتها — نشطة، أو أُغلقت بالتجديد التلقائي للدورة.
 // (كانت تُحسب النشطة فقط، فإذا جُدّدت الخطة مع بداية الدورة الجديدة اختفى الوسام قبل أن تراه الطالبة.)
 // الخطة الملغاة بطلب إلغاء لا تُحسب.
-import { db, reviewPlansTable, reviewPlanDaysTable, recordsTable } from "@workspace/db";
+import { db, reviewPlansTable, reviewPlanDaysTable, recordsTable, globalSettingsTable } from "@workspace/db";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { getPlanCycleDates, getEffectiveEndDate, loadGirlsCoverage, PLAN_TOTAL_DAYS, type PlanType } from "../routes/reviewPlans";
 
@@ -22,6 +22,14 @@ export async function reviewCompletions(asOf: string, studentId?: number): Promi
     or(eq(reviewPlansTable.status, "active"), and(eq(reviewPlansTable.status, "cancelled"), isNull(reviewPlansTable.cancellationRequestedAt))),
     ...(studentId != null ? [eq(reviewPlansTable.studentId, studentId)] : []),
   ))).filter((p) => (p.planType === "girls_review" || p.planType === "fixation") && p.startDate);
+  if (plans.length === 0) return [];
+
+  // خطط أُلغي وسامها بقرار القائدة (مثل أوسمة ١٣ نوفمبر التي ظهرت خطأً بعد تحويل التثبيت إلى ٣٢ يومًا)
+  const [sup] = await db.select({ v: globalSettingsTable.value }).from(globalSettingsTable).where(eq(globalSettingsTable.key, "suppressed_review_badge_plans"));
+  let suppressed = new Set<number>();
+  try { suppressed = new Set((JSON.parse(sup?.v ?? "[]") as number[]).map(Number)); } catch { /* */ }
+  const plansAll = plans;
+  plans.splice(0, plans.length, ...plansAll.filter((p) => !suppressed.has(p.id)));
   if (plans.length === 0) return [];
 
   // خطة واحدة لكل (طالبة، نوع، تاريخ بداية): الأحدث إنشاءً (الخطة المُستبدلة لا تُحسب)
@@ -54,10 +62,12 @@ export async function reviewCompletions(asOf: string, studentId?: number): Promi
       continue;
     }
     // التثبيت: مجموع الصفحات التراكمي
-    const dates = getPlanCycleDates(plan.startDate!, "fixation").filter((d) => d <= end);
+    // أيام الخطة نفسها (خطط ٢٤ يومًا القديمة تُحسب على ٢٤، لا على مدة التثبيت الحالية ٣٢)
+    const dayRows = await db.select().from(reviewPlanDaysTable).where(eq(reviewPlanDaysTable.planId, plan.id));
+    const ownLen = dayRows.length || PLAN_TOTAL_DAYS.fixation;
+    const dates = getPlanCycleDates(plan.startDate!, "fixation").slice(0, ownLen).filter((d) => d <= end);
     if (dates.length === 0) continue;
-    const [dayRows, records] = await Promise.all([
-      db.select().from(reviewPlanDaysTable).where(eq(reviewPlanDaysTable.planId, plan.id)),
+    const [records] = await Promise.all([
       db.select().from(recordsTable).where(and(eq(recordsTable.studentId, plan.studentId), eq(recordsTable.circleId, plan.circleId), inArray(recordsTable.date, dates))),
     ]);
     const quota = new Map(dayRows.map((d) => [d.dayNumber, d.pages ?? 0]));
