@@ -1583,7 +1583,7 @@ export default function DataEntryPage() {
                   let planBadge: React.ReactNode = null;
                   if (studentPlan && studentPlan.days?.length > 0) {
                     const pMode: "girls" | "fixation" = studentPlan.planType === "fixation" ? "fixation" : "girls";
-                    const totalDays = studentPlan.planType === "fixation" ? 24 : 21;
+                    const totalDays = studentPlan.planType === "fixation" ? 32 : 21;
                     const todayDay = getCurrentPlanDay(studentPlan.startDate, totalDays, pMode);
                     const dayEntry = studentPlan.days.find((d: any) => d.dayNumber === todayDay);
                     const planned = dayEntry?.pages ?? 0;

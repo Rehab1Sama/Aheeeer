@@ -131,7 +131,7 @@ function getPlanMode(trackType: string): "girls" | "fixation" {
 }
 
 function getTotalDays(trackType: string): number {
-  return trackType === "fixation" ? 24 : 21;
+  return trackType === "fixation" ? 32 : 21;
 }
 
 function getPlanTypeLabel(planType: string) {

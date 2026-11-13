@@ -58,7 +58,7 @@ function authHeader(): Record<string, string> {
 function CirclePlansCard({ circlePlans, trackType }: { circlePlans: ReviewPlan[]; trackType: string }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const isFixation = trackType === "fixation";
-  const totalDays = isFixation ? 24 : 21;
+  const totalDays = isFixation ? 32 : 21;
   const planMode: "girls" | "fixation" = isFixation ? "fixation" : "girls";
   const today = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
@@ -468,7 +468,7 @@ export default function MyCirclePage() {
                     let planBadge: React.ReactNode = null;
                     if (studentPlan) {
                       const pMode: "girls" | "fixation" = studentPlan.planType === "fixation" ? "fixation" : "girls";
-                      const totalDays = studentPlan.planType === "fixation" ? 24 : 21;
+                      const totalDays = studentPlan.planType === "fixation" ? 32 : 21;
                       const todayDay = getCurrentPlanDay(studentPlan.startDate, totalDays, pMode);
                       if (todayDay > 0 && todayDay <= totalDays) {
                         planBadge = <Badge className="bg-violet-100 text-violet-700 border-0 text-[11px] px-1.5 py-0">يوم {todayDay}</Badge>;

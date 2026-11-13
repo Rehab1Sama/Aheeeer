@@ -66,7 +66,7 @@ function getPlanTypeForTrack(trackType: string): PlanType | null {
 // Each plan type has its own independent cycle length and its own independent
 // global-settings keys for start/end date. Girls (مراجعة) and fixation (تثبيت)
 // counters must NEVER share a key — a leader setting one must not move the other.
-export const PLAN_TOTAL_DAYS: Record<PlanType, number> = { girls_review: 21, fixation: 24 };
+export const PLAN_TOTAL_DAYS: Record<PlanType, number> = { girls_review: 21, fixation: 32 };
 const CYCLE_SETTING_KEYS: Record<PlanType, { start: string; end: string }> = {
   girls_review: { start: "girls_cycle_start_date", end: "girls_cycle_end_date" },
   fixation: { start: "fixation_cycle_start_date", end: "fixation_cycle_end_date" },
@@ -115,7 +115,7 @@ function getFixationCycleDates(startDate: string, totalDays: number): string[] {
 }
 
 // Dispatches to the correct weekly cadence for a plan type: girls_review skips only
-// Friday (21 days), fixation only counts Sun–Wed (24 days). Never mix the two up.
+// Friday (21 days), fixation only counts Sun–Wed (32 days). Never mix the two up.
 export function getPlanCycleDates(startDate: string, planType: PlanType): string[] {
   const totalDays = PLAN_TOTAL_DAYS[planType];
   return planType === "fixation" ? getFixationCycleDates(startDate, totalDays) : getCycleDates(startDate, totalDays);
@@ -861,11 +861,11 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
         res.status(400).json({ error: "نطاق بداية خطة التثبيت غير صالح" }); return;
       }
       if (!Array.isArray(days) || days.length !== PLAN_TOTAL_DAYS.fixation) {
-        res.status(400).json({ error: "يجب أن تحتوي خطة التثبيت على ٢٤ يومًا" }); return;
+        res.status(400).json({ error: "يجب أن تحتوي خطة التثبيت على ٣٢ يومًا" }); return;
       }
       const dayNumbers = new Set<number>();
       for (const day of days) {
-        if (!day || !Number.isInteger(day.dayNumber) || day.dayNumber < 1 || day.dayNumber > 24 || dayNumbers.has(day.dayNumber)) {
+        if (!day || !Number.isInteger(day.dayNumber) || day.dayNumber < 1 || day.dayNumber > PLAN_TOTAL_DAYS.fixation || dayNumbers.has(day.dayNumber)) {
           res.status(400).json({ error: "أيام خطة التثبيت غير صالحة" }); return;
         }
         dayNumbers.add(day.dayNumber);
@@ -879,7 +879,7 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
         }
       }
       if (dayNumbers.size !== PLAN_TOTAL_DAYS.fixation) {
-        res.status(400).json({ error: "أرقام أيام خطة التثبيت يجب أن تكون من ١ إلى ٢٤ دون تكرار" }); return;
+        res.status(400).json({ error: "أرقام أيام خطة التثبيت يجب أن تكون من ١ إلى ٣٢ دون تكرار" }); return;
       }
     }
 
@@ -1044,7 +1044,7 @@ router.post("/students/:id/review-plan", authenticate, async (req, res): Promise
       : days;
 
     const fixationTotalPages = planType === "fixation"
-      ? (typeof totalPages === "number" ? totalPages : getFixationPagesPerDay(quantity) * 24)
+      ? (typeof totalPages === "number" ? totalPages : getFixationPagesPerDay(quantity) * PLAN_TOTAL_DAYS.fixation)
       : undefined;
 
     // إصلاح: لف إلغاء الخطة القديمة وإنشاء الجديدة بمعاملة واحدة — سابقاً
@@ -1679,7 +1679,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
   }
 
   // Compute per-student overall status (behind / ontrack / ahead) for BOTH
-  // girls_review AND fixation plans — each on its own cadence (21 vs 24 days).
+  // girls_review AND fixation plans — each on its own cadence (21 vs 32 days).
   const statusPlans = activePlans.filter((p: typeof activePlans[0]) =>
     (p.planType === "girls_review" || p.planType === "fixation") && p.startDate);
   const cycleDatesByPlan = new Map<number, string[]>();

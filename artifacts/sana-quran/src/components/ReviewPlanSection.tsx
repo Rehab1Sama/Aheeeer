@@ -261,7 +261,7 @@ export default function ReviewPlanSection({ studentId, circleId, trackType, canC
   const isGirls = trackType === "girls";
   const isFixation = trackType === "fixation";
   const planTitle = isFixation ? "خطة التثبيت" : "خطة المراجعة";
-  const totalDays = isFixation ? 24 : 21;
+  const totalDays = isFixation ? 32 : 21;
   const planMode: "girls" | "fixation" = isFixation ? "fixation" : "girls";
 
   const fetchPlan = useCallback(async () => {
@@ -1073,7 +1073,7 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
     return 1;
   }, []);
 
-  const buildFixationDays = useCallback((value: "half" | "full" | "double", count = 24): DayEntry[] =>
+  const buildFixationDays = useCallback((value: "half" | "full" | "double", count = 32): DayEntry[] =>
     computeSurahAlignedDays(fixationStart.surah, count, getFixationDailyPages(value), fixationDirection)
       .map((day, idx) => ({
         dayNumber: idx + 1,
@@ -1314,8 +1314,8 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
               {!fixationHasEnoughContent && (
                 <p className="text-xs text-destructive bg-destructive/10 rounded-lg p-2">
                   {fixationDirection === "forward"
-                    ? "نقطة البداية لا تحتوي على صفحات كافية لإكمال ٢٤ يومًا بهذه الكمية للأمام. اختاري نقطة أسبق أو كمية أقل."
-                    : "نقطة البداية لا تحتوي على صفحات كافية للرجوع للخلف ٢٤ يومًا بهذه الكمية. اختاري نقطة لاحقة أو كمية أقل."}
+                    ? "نقطة البداية لا تحتوي على صفحات كافية لإكمال ٣٢ يومًا بهذه الكمية للأمام. اختاري نقطة أسبق أو كمية أقل."
+                    : "نقطة البداية لا تحتوي على صفحات كافية للرجوع للخلف ٣٢ يومًا بهذه الكمية. اختاري نقطة لاحقة أو كمية أقل."}
                 </p>
               )}
               <p className="text-sm text-muted-foreground">اختاري الكمية اليومية لخطة التثبيت (٦ أسابيع × ٤ أيام)</p>
@@ -1679,7 +1679,7 @@ function StepFixationWeeks({ days, updateDay, quantity, startDate, isAuto }: {
     const cur = new Date(startDate + "T12:00:00Z");
     const firstDow = cur.getUTCDay();
     if (firstDow <= 3) dates.push(cur.toISOString().slice(0, 10));
-    while (dates.length < 24) {
+    while (dates.length < 32) {
       cur.setDate(cur.getDate() + 1);
       const dow = cur.getUTCDay();
       if (dow <= 3) dates.push(cur.toISOString().slice(0, 10));
