@@ -9,6 +9,7 @@ import {
   globalSettingsTable,
   recordsTable,
   studentMemorizationsTable,
+  studentEnrollmentsTable,
 } from "@workspace/db";
 import { eq, and, desc, inArray, isNotNull, gt, gte, lte, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -1574,14 +1575,17 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
 
   const circleIds = circles.map(c => c.id);
 
+  // طالبات الحلقة بعضويتها الفعلية (لا بالحلقة الأساسية فقط): الطالبة في حلقتين تظهر في كلتيهما بخطتها
   const allStudents = await db.select({
     id: studentsTable.id,
     fullName: studentsTable.fullName,
-    circleId: studentsTable.circleId,
+    circleId: studentEnrollmentsTable.circleId,
     isNewcomer: studentsTable.isNewcomer,
-  }).from(studentsTable)
+  }).from(studentEnrollmentsTable)
+    .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
     .where(and(
-      inArray(studentsTable.circleId, circleIds),
+      inArray(studentEnrollmentsTable.circleId, circleIds),
+      eq(studentEnrollmentsTable.isArchived, false),
       eq(studentsTable.isArchived, false)
     ))
     .orderBy(studentsTable.fullName);
@@ -1627,9 +1631,9 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
         .orderBy(reviewPlanDaysTable.dayNumber)
     : [];
 
-  const planByStudent = new Map<number, typeof activePlans[0]>();
+  const planByStudent = new Map<string, typeof activePlans[0]>(); // `${studentId}:${circleId}`
   for (const plan of activePlans) {
-    planByStudent.set(plan.studentId, plan);
+    planByStudent.set(`${plan.studentId}:${plan.circleId}`, plan);
   }
 
   const daysByPlan = new Map<number, typeof allDays>();
@@ -2022,7 +2026,7 @@ router.get("/review-plans/overview", authenticate, async (req, res): Promise<voi
       trackName: circle.track,
       trackType: circle.trackType,
       students: students.map(s => {
-        const plan = planByStudent.get(s.id);
+        const plan = planByStudent.get(`${s.id}:${circle.id}`);
         const planDays = plan ? (daysByPlan.get(plan.id) ?? []) : [];
         const statusResult = plan ? computePlanStatus(plan, planDays) : null;
         if (plan && statusResult && statusResult.unresolvedDelayDays >= DELAY_ALERT_THRESHOLD) {
