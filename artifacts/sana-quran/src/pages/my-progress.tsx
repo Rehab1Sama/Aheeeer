@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { getToken, setToken } from "@/lib/auth";
 import { getSurahByName } from "@/lib/quran";
 import { BadgeFrame } from "@/components/badges/BadgeFrame";
 import QuranJourney from "@/components/QuranJourney";
@@ -32,6 +33,24 @@ function authHdr(): Record<string, string> {
 }
 
 type Tab = "progress" | "plan" | "audio" | "circle";
+
+// اختيار حلقة من أزرار الحلقات: ينتقل إلى حساب الطالبة في تلك الحلقة (فتظهر رفيقاتها وخطتها هناك)،
+// وإن لم يكن لها حساب فيها يُعرض تقدُّمها في تلك الحلقة كما كان.
+async function switchToCircle(circleId: number) {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  try {
+    const list = await fetch("/api/auth/my-accounts", { headers }).then((r) => (r.ok ? r.json() : []));
+    const target = (list as any[]).find((a) => a.role === "student" && a.circleId === circleId);
+    if (target && !target.isCurrent) {
+      const res = await fetch("/api/auth/switch-account", { method: "POST", headers, body: JSON.stringify({ targetUserId: target.id }) });
+      const data = res.ok ? await res.json() : null;
+      if (data?.token) { setToken(data.token); window.location.assign("/"); return; }
+    }
+    if (target?.isCurrent) { const u = new URL(window.location.href); u.searchParams.delete("circleId"); window.location.assign(u.toString()); return; }
+  } catch { /* نكمل بالطريقة القديمة */ }
+  const url = new URL(window.location.href); url.searchParams.set("circleId", String(circleId)); window.location.assign(url.toString());
+}
 
 export default function MyProgressPage() {
   const [, navigate] = useLocation();
@@ -253,7 +272,7 @@ export default function MyProgressPage() {
           {circleChoices.length > 1 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {circleChoices.map((c: any) => (
-                <button key={c.id} onClick={() => { const url = new URL(window.location.href); url.searchParams.set("circleId", String(c.id)); window.location.assign(url.toString()); }}
+                <button key={c.id} onClick={() => switchToCircle(c.id)}
                   className={`text-xs px-2.5 py-1 rounded-full border ${c.id === effectiveCircleId ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border"}`}>
                   {c.name}
                 </button>
