@@ -1,0 +1,18 @@
+# فحص خطط التثبيت المنشأة منذ تاريخ (أعداد وأسماء حلقات فقط)
+name: فحص خطط التثبيت
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "منذ تاريخ (YYYY-MM-DD)"
+        required: false
+        default: "2026-11-09"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+          SINCE: ${{ github.event.inputs.since }}
+        run: |
+          curl -sS --max-time 120 "https://sana-alay-abq5.onrender.com/api/reports/fixation-plans-check?key=${REPORT_KEY}&since=${SINCE:-2026-11-09}"

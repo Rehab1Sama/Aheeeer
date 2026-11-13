@@ -57,4 +57,27 @@ router.get("/reports/daily-preview", authenticate, async (req, res): Promise<voi
   }
 });
 
+// فحص خطط التثبيت المنشأة منذ تاريخ (للقائدة عبر GitHub بالمفتاح السري) — أعداد وأسماء حلقات فقط، بلا أسماء طالبات
+router.get("/reports/fixation-plans-check", async (req, res): Promise<void> => {
+  if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
+  if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const since = typeof req.query.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.since) ? req.query.since : "2026-11-09";
+  const { db, reviewPlansTable, reviewPlanDaysTable, circlesTable } = await import("@workspace/db");
+  const { and, eq, gte, inArray } = await import("drizzle-orm");
+  const plans = await db.select({
+    id: reviewPlansTable.id, circleId: reviewPlansTable.circleId, status: reviewPlansTable.status,
+    approvalStatus: reviewPlansTable.approvalStatus, startDate: reviewPlansTable.startDate, createdAt: reviewPlansTable.createdAt,
+  }).from(reviewPlansTable).where(and(eq(reviewPlansTable.planType, "fixation"), gte(reviewPlansTable.createdAt, new Date(since + "T00:00:00+03:00"))));
+  const ids = plans.map((p) => p.id);
+  const days = ids.length ? await db.select({ planId: reviewPlanDaysTable.planId }).from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, ids)) : [];
+  const circles = await db.select({ id: circlesTable.id, name: circlesTable.name }).from(circlesTable);
+  const cName = new Map(circles.map((c) => [c.id, c.name]));
+  const dayCount = new Map<number, number>();
+  for (const d of days) dayCount.set(d.planId, (dayCount.get(d.planId) ?? 0) + 1);
+  res.json({
+    since, total: plans.length,
+    plans: plans.map((p) => ({ id: p.id, circle: cName.get(p.circleId) ?? null, status: p.status, approval: p.approvalStatus, startDate: p.startDate, createdAt: p.createdAt, days: dayCount.get(p.id) ?? 0 })),
+  });
+});
+
 export default router;
