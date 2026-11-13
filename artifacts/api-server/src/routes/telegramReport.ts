@@ -4,6 +4,8 @@
 //     dry=1 يرجع الرسائل دون إرسال.
 //   GET /api/reports/daily-preview?date=YYYY-MM-DD   (للقائدة من داخل الموقع)
 import { Router, type IRouter } from "express";
+import { db, reviewPlansTable, reviewPlanDaysTable, circlesTable } from "@workspace/db";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
 import { authenticate } from "../middlewares/authenticate";
 import { buildDailyReport, sendDailyReportToTelegram } from "../lib/dailyReport";
@@ -62,8 +64,6 @@ router.get("/reports/fixation-plans-check", async (req, res): Promise<void> => {
   if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
   if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
   const since = typeof req.query.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.since) ? req.query.since : "2026-11-09";
-  const { db, reviewPlansTable, reviewPlanDaysTable, circlesTable } = await import("@workspace/db");
-  const { and, eq, gte, inArray } = await import("drizzle-orm");
   const plans = await db.select({
     id: reviewPlansTable.id, circleId: reviewPlansTable.circleId, status: reviewPlansTable.status,
     approvalStatus: reviewPlansTable.approvalStatus, startDate: reviewPlansTable.startDate, createdAt: reviewPlansTable.createdAt,

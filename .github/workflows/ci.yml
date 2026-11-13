@@ -37,3 +37,13 @@ jobs:
         run: pnpm run typecheck
       - name: بناء الموقع
         run: BASE_PATH=/ pnpm --filter @workspace/sana-quran run build && pnpm --filter @workspace/api-server run build
+      - name: فحص إقلاع الخادم (أخطاء التحميل تُكتشف قبل النشر)
+        run: |
+          set +e
+          PORT=18080 NODE_ENV=production DATABASE_URL=postgres://u:p@127.0.0.1:1/x SUPABASE_DATABASE_URL=postgres://u:p@127.0.0.1:1/x SESSION_SECRET=ci \
+            timeout 20 node artifacts/api-server/dist/index.mjs > boot.log 2>&1
+          cat boot.log | tail -40
+          if grep -Eq "is not a constructor|is not a function|SyntaxError|ReferenceError|Cannot find (module|package)|ERR_MODULE_NOT_FOUND" boot.log; then
+            echo "::error::الخادم يتعطل عند الإقلاع — لن ينجح النشر على Render"; exit 1
+          fi
+          exit 0
