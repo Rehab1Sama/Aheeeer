@@ -32,15 +32,14 @@ export async function moveStudentAccounts(
   if (inSource.length === 0) return;
   const inTarget = mine.filter((u) => u.circleId === toCircleId);
 
-  // حساب واحد لكل بريد في الحلقة الهدف
-  const targetEmails = new Set(inTarget.map((u) => u.email.toLowerCase()));
+  // حساب واحد فقط للطالبة في الحلقة الهدف (ولو اختلف البريد): إن كان لها حساب هناك تُوقف حسابات المصدر،
+  // وإلا يُنقل أحدثها دخولًا ويُوقف الباقي. من يدخل بحساب موقوف يُحوَّل لحسابها النشط (انظري auth.ts).
   const toArchive: number[] = [];
   const toMove: number[] = [];
-  const movedEmails = new Set<string>();
-  for (const u of [...inSource].sort((a, b) => (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0))) {
-    const e = u.email.toLowerCase();
-    if (targetEmails.has(e) || movedEmails.has(e)) toArchive.push(u.id);
-    else { toMove.push(u.id); movedEmails.add(e); }
+  const sorted = [...inSource].sort((a, b) => (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0));
+  for (const u of sorted) {
+    if (inTarget.length > 0 || toMove.length > 0) toArchive.push(u.id);
+    else toMove.push(u.id);
   }
   if (toMove.length) await ex.update(usersTable).set({ circleId: toCircleId, studentId }).where(inArray(usersTable.id, toMove));
   if (toArchive.length) await ex.update(usersTable).set({ isArchived: true }).where(inArray(usersTable.id, toArchive));
@@ -81,4 +80,16 @@ export async function currentAccountsOnly<T extends AccountRow>(accounts: T[], k
     if (!prev || score(a) > score(prev) || (score(a) === score(prev) && (a.lastLoginAt?.getTime() ?? 0) > (prev.lastLoginAt?.getTime() ?? 0))) best.set(k, a);
   }
   return accounts.filter((a) => [...best.values()].includes(a));
+}
+
+/**
+ * حساب طالبة موقوف لأنه مكرر: يُعاد حسابها النشط (نفس سجل الطالبة)، فلا تنقفل عليها إن دخلت بالبريد القديم.
+ */
+export async function activeSiblingAccount(u: { role: string; studentId: number | null; isArchived: boolean; circleId: number | null }) {
+  if (u.role !== "student" || !u.isArchived || u.studentId == null) return null;
+  const rows = await db.select().from(usersTable).where(and(
+    eq(usersTable.studentId, u.studentId), eq(usersTable.role, "student"), eq(usersTable.isArchived, false),
+  ));
+  if (rows.length === 0) return null;
+  return rows.find((r) => r.circleId === u.circleId) ?? rows.sort((a, b) => (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0))[0]!;
 }

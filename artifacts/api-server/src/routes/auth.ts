@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { currentAccountsOnly } from "../lib/studentAccounts";
+import { currentAccountsOnly, activeSiblingAccount } from "../lib/studentAccounts";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
@@ -42,10 +42,17 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
-  const verified = users.filter(u => verifyPassword(password, u.passwordHash));
-  if (verified.length === 0) {
+  const verifiedRaw = users.filter(u => verifyPassword(password, u.passwordHash));
+  if (verifiedRaw.length === 0) {
     res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
     return;
+  }
+  // حساب طالبة موقوف لأنه مكرر/منقول: يدخل بها إلى حسابها النشط (نفس سجل الطالبة)
+  const verified: typeof verifiedRaw = [];
+  for (const u of verifiedRaw) {
+    const sib = await activeSiblingAccount(u);
+    const pick = sib ?? u;
+    if (!verified.some(v => v.id === pick.id)) verified.push(pick);
   }
 
   if (verified.length === 1) {
