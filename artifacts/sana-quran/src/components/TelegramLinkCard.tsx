@@ -2,11 +2,15 @@
 import { useEffect, useState } from "react";
 import { getToken } from "@/lib/auth";
 import { SoftCircles } from "@/components/Decor";
+import { useSupervisorIdentity } from "@/lib/supervisorIdentity";
 
 type Status = { linked: boolean; available: boolean };
 
-async function api(path: string, method = "GET") {
-  const r = await fetch(`/api${path}`, { method, headers: { Authorization: `Bearer ${getToken()}` } });
+async function api(path: string, method = "GET", body?: unknown) {
+  const r = await fetch(`/api${path}`, {
+    method, headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
   return r.ok ? r.json() : null;
 }
 
@@ -14,25 +18,29 @@ export default function TelegramLinkCard() {
   const [st, setSt] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const load = () => api("/telegram/status").then((d) => d && setSt(d));
+  // الحساب مشترك: كل مسؤولة تربط باسمها (هويتها المختارة بهذا الجهاز)
+  const identity = useSupervisorIdentity();
+  const nameId = identity?.id;
+  const load = () => api(`/telegram/status${nameId ? `?nameId=${nameId}` : ""}`).then((d) => d && setSt(d));
   useEffect(() => {
     load();
     const onFocus = () => load(); // بعد الرجوع من تيليجرام
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, []);
+  }, [nameId]);
   if (!st?.available) return null;
+  if (!identity) return null; // تظهر بعد اختيار «مين أنتِ؟»
 
   const link = async () => {
     setBusy(true);
-    const d = await api("/telegram/link", "POST");
+    const d = await api("/telegram/link", "POST", { nameId });
     setBusy(false);
     if (d?.url) window.location.href = d.url; // يفتح تطبيق تيليجرام مباشرة (النافذة المنبثقة تُحجب في الجوال)
   };
-  const unlink = async () => { await api("/telegram/unlink", "POST"); setNote(null); load(); };
+  const unlink = async () => { await api("/telegram/unlink", "POST", { nameId }); setNote(null); load(); };
   const test = async () => {
     setBusy(true);
-    const d = await api("/telegram/test", "POST");
+    const d = await api("/telegram/test", "POST", { nameId });
     setBusy(false);
     setNote(d?.sent ? "أرسلنا لكِ نموذجًا على تيليجرام 🌸" : "لا يوجد يوم دوام سابق لإرسال نموذج منه الآن 🌿");
   };
@@ -55,7 +63,7 @@ export default function TelegramLinkCard() {
             </>
           ) : (
             <>
-              <p className="text-sm font-bold text-primary">اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
+              <p className="text-sm font-bold text-primary">قمرتنا {identity.name.split(/\s+/)[0]}، اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
               <p className="mt-0.5 text-xs text-muted-foreground">اضغطي الزر، ثم «Start» في البوت، وتصلكِ كل صباح باسمكِ.</p>
               <button type="button" disabled={busy} onClick={link} className="mt-2 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50">اربطي تيليجرام</button>
             </>

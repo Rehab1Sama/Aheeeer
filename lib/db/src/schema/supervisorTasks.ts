@@ -6,6 +6,9 @@ export const trackSupervisorNamesTable = pgTable("track_supervisor_names", {
   id: serial("id").primaryKey(),
   trackId: integer("track_id").notNull(),
   name: text("name").notNull(),
+  // تقرير الطالبات على تيليجرام لكل مسؤولة باسمها (الحساب مشترك بين مسؤولتي المسار)
+  telegramChatId: text("telegram_chat_id"),
+  telegramLinkToken: text("telegram_link_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

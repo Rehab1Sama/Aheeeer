@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSupervisorIdentity } from "@/lib/supervisorIdentity";
 import { SeasonStrip, HomeGreeting, Celebration } from "./Decor";
 import TelegramLinkCard from "./TelegramLinkCard";
 import { Link, useLocation } from "wouter";
@@ -791,6 +792,9 @@ export default function Layout({ user, children }: LayoutProps) {
   const otherAccounts = allAccounts.filter(a => !a.isCurrent);
 
   const isHome = location === "/";
+  // الحساب المشترك لمسؤولتي المسار: الاسم المعروض هو هوية الجهاز («مين أنتِ؟»)
+  const supIdentity = useSupervisorIdentity();
+  const displayName = (user?.role === "track_supervisor" && supIdentity?.name) ? supIdentity.name : (user?.name ?? "");
   const isMessagesPage = location === "/my-messages" || (user.role === "track_supervisor" && location === "/messages");
   const unreadCount = useUnreadMessageCount(user.id, user.role, isHome, isMessagesPage);
 
@@ -863,7 +867,7 @@ export default function Layout({ user, children }: LayoutProps) {
           <div className="px-4 py-4 border-b border-white/10">
             {/* Current account card */}
             <div className="bg-white/10 rounded-xl p-3">
-              <p className="text-white font-semibold text-sm truncate">{user.name}</p>
+              <p className="text-white font-semibold text-sm truncate">{displayName}</p>
               <p className="text-white/60 text-xs mt-0.5">{getRoleLabel(user.role)}</p>
               {currentAccount?.circleName && (
                 <p className="text-white/50 text-[12px] mt-0.5 truncate">{currentAccount.circleName}</p>
@@ -969,8 +973,8 @@ export default function Layout({ user, children }: LayoutProps) {
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <LateReminder role={user.role} name={user.name ?? ""} />
-            {isHome && <HomeGreeting name={user.name ?? ""} />}
+            <LateReminder role={user.role} name={displayName} />
+            {isHome && <HomeGreeting name={displayName} />}
             {isHome && <TodayBar role={user.role} />}
             {isHome && user.role === "track_supervisor" && <TelegramLinkCard />}
             <div key={location} className="page-enter">{children}</div>
@@ -979,7 +983,7 @@ export default function Layout({ user, children }: LayoutProps) {
             جميع الحقوق محفوظة لـ{BRAND} &copy; {new Date().getFullYear()}
           </footer>
           <BottomNav role={user.role} items={navItems} onMore={() => setSidebarOpen(true)} />
-          <EntryMotivation role={user.role} name={user.name ?? ""} />
+          <EntryMotivation role={user.role} name={displayName} />
         </main>
       </div>
     </div>

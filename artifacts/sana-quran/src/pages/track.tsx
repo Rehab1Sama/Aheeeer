@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getSupervisorIdentity, setSupervisorIdentity } from "@/lib/supervisorIdentity";
 import { CountUp } from "@/components/Decor";
 import { useListCircles, useListCircleNames, useGetCurrentUser, useListStudents, useUpdateStudent, useArchiveStudent, useGetMonthlyAttendanceReport, useCreateUser, useListTracks, useListSupervisorNames } from "@workspace/api-client-react";
 import MessagesSection from "@/components/MessagesSection";
@@ -1073,6 +1074,8 @@ function SupervisorHoursTracker({ trackId }: { trackId: number | null }) {
   function choose(id: number) {
     if (!trackId) return;
     localStorage.setItem(`sana_supervisor_identity_${trackId}`, String(id));
+    const nm = names?.find(n => n.id === id)?.name;
+    if (nm) setSupervisorIdentity({ trackId, id, name: nm }); // للترحيب والقائمة وتيليجرام
     setSupervisorNameId(id);
     setShowPicker(false);
   }
@@ -1080,9 +1083,18 @@ function SupervisorHoursTracker({ trackId }: { trackId: number | null }) {
   function resetIdentity() {
     if (!trackId) return;
     localStorage.removeItem(`sana_supervisor_identity_${trackId}`);
+    setSupervisorIdentity(null);
     setSupervisorNameId(null);
     setShowPicker(true);
   }
+
+  // أجهزة اختارت هويتها قبل هذا التحديث: نحفظ الاسم أيضًا
+  useEffect(() => {
+    if (!trackId || !supervisorNameId || !names) return;
+    const nm = names.find(n => n.id === supervisorNameId)?.name;
+    const cur = getSupervisorIdentity();
+    if (nm && (!cur || cur.id !== supervisorNameId || cur.name !== nm)) setSupervisorIdentity({ trackId, id: supervisorNameId, name: nm });
+  }, [trackId, supervisorNameId, names]);
 
   const currentName = names?.find(n => n.id === supervisorNameId)?.name;
 

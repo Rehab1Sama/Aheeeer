@@ -5,7 +5,7 @@
 //   POST /api/telegram/webhook → رسائل البوت (يضبطه الخادم عند الإقلاع، ويُتحقَّق بالرمز السري)
 import { Router, type IRouter } from "express";
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, trackSupervisorNamesTable, tracksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { logger } from "../lib/logger";
@@ -57,9 +57,23 @@ export async function ensureTelegramWebhook(): Promise<void> {
   }
 }
 
+// الحساب مشترك بين مسؤولتي المسار: الربط لكل مسؤولة باسمها (track_supervisor_names) بحسب هويتها المختارة بالجهاز.
+// بلا هوية مختارة يُربط الحساب نفسه (للحسابات غير المشتركة).
+async function ownName(req: { userTrack?: string | null }, raw: unknown) {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [n] = await db.select({ id: trackSupervisorNamesTable.id, name: trackSupervisorNamesTable.name, chat: trackSupervisorNamesTable.telegramChatId, track: tracksTable.name })
+    .from(trackSupervisorNamesTable).innerJoin(tracksTable, eq(tracksTable.id, trackSupervisorNamesTable.trackId))
+    .where(eq(trackSupervisorNamesTable.id, id));
+  return n && n.track === req.userTrack ? n : null;
+}
+
 router.get("/telegram/status", authenticate, async (req, res): Promise<void> => {
+  const available = !!botToken() && LINK_ROLES.includes(req.userRole ?? "");
+  const n = await ownName(req, req.query.nameId);
+  if (n) { res.json({ linked: !!n.chat, available, name: n.name }); return; }
   const [u] = await db.select({ chat: usersTable.telegramChatId }).from(usersTable).where(eq(usersTable.id, req.userId!));
-  res.json({ linked: !!u?.chat, available: !!botToken() && LINK_ROLES.includes(req.userRole ?? "") });
+  res.json({ linked: !!u?.chat, available });
 });
 
 router.post("/telegram/link", authenticate, async (req, res): Promise<void> => {
@@ -67,20 +81,25 @@ router.post("/telegram/link", authenticate, async (req, res): Promise<void> => {
   const username = await getBotUsername();
   if (!username) { res.status(503).json({ error: "البوت غير مضبوط حاليًا" }); return; }
   const token = randomBytes(12).toString("hex");
-  await db.update(usersTable).set({ telegramLinkToken: token }).where(eq(usersTable.id, req.userId!));
+  const n = await ownName(req, req.body?.nameId);
+  if (n) await db.update(trackSupervisorNamesTable).set({ telegramLinkToken: token }).where(eq(trackSupervisorNamesTable.id, n.id));
+  else await db.update(usersTable).set({ telegramLinkToken: token }).where(eq(usersTable.id, req.userId!));
   res.json({ url: `https://t.me/${username}?start=${token}` });
 });
 
 router.post("/telegram/unlink", authenticate, async (req, res): Promise<void> => {
-  await db.update(usersTable).set({ telegramChatId: null, telegramLinkToken: null }).where(eq(usersTable.id, req.userId!));
+  const n = await ownName(req, req.body?.nameId);
+  if (n) await db.update(trackSupervisorNamesTable).set({ telegramChatId: null, telegramLinkToken: null }).where(eq(trackSupervisorNamesTable.id, n.id));
+  else await db.update(usersTable).set({ telegramChatId: null, telegramLinkToken: null }).where(eq(usersTable.id, req.userId!));
   res.json({ ok: true });
 });
 
 // نموذج فوري لمسؤولة المسار المربوطة: خلاصة طالبات مسارها عن آخر يوم
 router.post("/telegram/test", authenticate, async (req, res): Promise<void> => {
   if (!LINK_ROLES.includes(req.userRole ?? "")) { res.status(403).json({ error: "لمسؤولات المسارات" }); return; }
-  const n = await sendTrackStudentReports(addDaysStr(getMakkahDay(), -1), req.userId!).catch(() => 0);
-  res.json({ sent: n });
+  const n = await ownName(req, req.body?.nameId);
+  const sent = await sendTrackStudentReports(addDaysStr(getMakkahDay(), -1), n ? { nameId: n.id } : { userId: req.userId! }).catch(() => 0);
+  res.json({ sent });
 });
 
 router.post("/telegram/webhook", async (req, res): Promise<void> => {
@@ -102,6 +121,15 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
         await telegramSend(chatId, "أهلًا بكِ 🌸\nلربط حسابكِ اضغطي زر «اربطي تيليجرام» في صفحتكِ بموقع المقرأة.");
         return;
       }
+      const [nm] = await db.select({ id: trackSupervisorNamesTable.id, name: trackSupervisorNamesTable.name, track: tracksTable.name })
+        .from(trackSupervisorNamesTable).innerJoin(tracksTable, eq(tracksTable.id, trackSupervisorNamesTable.trackId))
+        .where(eq(trackSupervisorNamesTable.telegramLinkToken, tok));
+      if (nm) {
+        await db.update(trackSupervisorNamesTable).set({ telegramChatId: chatId, telegramLinkToken: null }).where(eq(trackSupervisorNamesTable.id, nm.id));
+        const f = (nm.name ?? "").trim().split(/\s+/)[0] ?? "";
+        await telegramSend(chatId, `تم ربطكِ يا قمرتنا ${f} 🌸\nستصلكِ كل صباح خلاصة طالبات مسار ${nm.track ?? ""}، أعانكِ الله ♥️\n\nلإيقافها اكتبي: إيقاف`);
+        return;
+      }
       const [u] = await db.select({ id: usersTable.id, name: usersTable.name, track: usersTable.track }).from(usersTable).where(eq(usersTable.telegramLinkToken, tok));
       if (!u) { await telegramSend(chatId, "انتهت صلاحية رابط الربط، اضغطي الزر في الموقع مرة أخرى 🌿"); return; }
       await db.update(usersTable).set({ telegramChatId: chatId, telegramLinkToken: null }).where(eq(usersTable.id, u.id));
@@ -111,6 +139,7 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
     }
     if (/^(\/stop|إيقاف|ايقاف)$/.test(text)) {
       await db.update(usersTable).set({ telegramChatId: null }).where(eq(usersTable.telegramChatId, chatId));
+      await db.update(trackSupervisorNamesTable).set({ telegramChatId: null }).where(eq(trackSupervisorNamesTable.telegramChatId, chatId));
       await telegramSend(chatId, "أوقفنا الرسائل 🌿 ولإعادتها اضغطي «اربطي تيليجرام» في الموقع.");
     }
   } catch (err) {

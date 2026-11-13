@@ -533,26 +533,38 @@ export async function sendDailyReportToTelegram(opts: { date?: string; force?: b
   return { sent, date: report.date };
 }
 
-/** يرسل لكل مسؤولة مسار مربوطة خلاصة طالبات مسارها. المتميِّزات يوم الخميس فقط. لا شيء في الإجازة أو يوم بلا إدخال. */
-export async function sendTrackStudentReports(D: string, onlyUserId?: number): Promise<number> {
+/** يرسل لكل مسؤولة مسار مربوطة (باسمها في الحساب المشترك، أو حسابها) خلاصة طالبات مسارها.
+ * المتميِّزات يوم الخميس فقط. لا شيء في الإجازة أو يوم بلا إدخال في المسار. */
+export async function sendTrackStudentReports(D: string, only?: { userId?: number; nameId?: number }): Promise<number> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || (await holidayOn(D))) return 0;
-  const sups = (await db.select({ id: usersTable.id, name: usersTable.name, track: usersTable.track, chat: usersTable.telegramChatId, role: usersTable.role, isArchived: usersTable.isArchived })
-    .from(usersTable).where(eq(usersTable.role, "track_supervisor")))
-    .filter((u) => !u.isArchived && u.chat && u.track && (onlyUserId == null || u.id === onlyUserId));
-  if (sups.length === 0) return 0;
+  const recipients: Array<{ name: string; track: string; chat: string }> = [];
+  if (!only || only.nameId != null) {
+    const rows = await db.select({ id: trackSupervisorNamesTable.id, name: trackSupervisorNamesTable.name, chat: trackSupervisorNamesTable.telegramChatId, track: tracksTable.name })
+      .from(trackSupervisorNamesTable).innerJoin(tracksTable, eq(tracksTable.id, trackSupervisorNamesTable.trackId));
+    for (const r of rows) if (r.chat && r.track && (only?.nameId == null || r.id === only.nameId)) recipients.push({ name: r.name, track: r.track, chat: r.chat });
+  }
+  if (!only || only.userId != null) {
+    const users = await db.select({ id: usersTable.id, name: usersTable.name, track: usersTable.track, chat: usersTable.telegramChatId, isArchived: usersTable.isArchived })
+      .from(usersTable).where(eq(usersTable.role, "track_supervisor"));
+    for (const u of users) if (!u.isArchived && u.chat && u.track && (only?.userId == null || u.id === only.userId)) recipients.push({ name: u.name ?? "", track: u.track, chat: u.chat });
+  }
+  if (recipients.length === 0) return 0;
   const weekly = new Date(getMakkahDay() + "T12:00:00Z").getUTCDay() === 4; // الخميس
   const digests = await buildTrackStudentDigests(D, { weekly });
   let sent = 0;
-  for (const u of sups) {
-    const dg = digests.get(u.track!);
-    if (!dg || (!dg.hadData && onlyUserId == null)) continue; // يوم بلا إدخال في المسار
-    for (const part of splitForTelegram(trackStudentMessage(dg, u.name ?? "", D, weekly))) {
-      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const seen = new Set<string>();
+  for (const r of recipients) {
+    if (seen.has(`${r.chat}:${r.track}`)) continue; // نفس المحادثة لا تُكرَّر لها الرسالة
+    seen.add(`${r.chat}:${r.track}`);
+    const dg = digests.get(r.track);
+    if (!dg || (!dg.hadData && !only)) continue;
+    for (const part of splitForTelegram(trackStudentMessage(dg, r.name, D, weekly))) {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: u.chat, text: part, parse_mode: "HTML", disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: r.chat, text: part, parse_mode: "HTML", disable_web_page_preview: true }),
       });
-      if (r.ok) sent++;
+      if (res.ok) sent++;
     }
   }
   return sent;
