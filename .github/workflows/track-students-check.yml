@@ -1,0 +1,17 @@
+# فحص خلاصة طالبات المسارات (أعداد فقط، بلا أسماء)
+name: فحص خلاصة طالبات المسارات
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "يوم التقرير (YYYY-MM-DD)"
+        required: false
+        default: "2026-10-20"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+          D: ${{ github.event.inputs.date }}
+        run: curl -sS --max-time 180 "https://sana-alay-abq5.onrender.com/api/reports/track-students/counts?key=${REPORT_KEY}&date=${D:-2026-10-20}"
