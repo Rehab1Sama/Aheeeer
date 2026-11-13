@@ -1,5 +1,5 @@
 // خلاصة طالبات المسار لمسؤولتيه على تيليجرام — عن الطالبات فقط:
-//   متكاسلات 🌧️ : خطة متأخرة ٣ أيام فأكثر، أو ٣ أيام فأكثر بلا حفظ في أسبوعين، أو تقصير مرتين فأكثر في أسبوعين
+//   متكاسلات 🌧️ : خطة متأخرة ٣ أيام فأكثر، أو ٥ أيام فأكثر بلا حفظ في أسبوعين، أو تقصير مرتين فأكثر في أسبوعين
 //   يحتجن متابعة 🌿 : غياب ٣ أيام متتالية أو ٣ مرات في أسبوعين، أو نزول الإنجاز إلى النصف
 //   متميِّزات ♥️ (الخميس فقط): أسبوع بلا غياب ولا تقصير، مع تقدُّم في الخطة أو حفظ فوق معدَّلها
 // مسارات الفتيات (خطة المراجعة) وسُنى (خطة التثبيت؛ «الحفظ» فيها = التثبيت الجديد).
@@ -107,7 +107,7 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     const ps = planState.get(k);
     if (ps && ps.delay >= 3) lazy.push(`متأخرة عن خطتها ${days(ps.delay)}`);
     const noMemo = present14.filter((r) => (r.memorizePages ?? 0) === 0).length;
-    if (noMemo >= 3) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
+    if (noMemo >= 5) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
     const short = last14.filter((r) => isShortcomingRecord(r, t)).length;
     if (short >= 2) lazy.push(`تقصير ${times(short)}`);
     const tail = rs.slice(-3);
