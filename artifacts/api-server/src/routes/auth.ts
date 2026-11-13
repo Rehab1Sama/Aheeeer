@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { currentAccountsOnly } from "../lib/studentAccounts";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
@@ -69,9 +70,9 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
-  const approvedVerified = verified.filter(
+  const approvedVerified = await currentAccountsOnly(verified.filter(
     u => !u.isArchived && u.registrationStatus !== "pending" && u.registrationStatus !== "rejected",
-  );
+  ));
   if (approvedVerified.length === 0) {
     if (verified.some(u => u.isArchived)) {
       res.status(403).json({ error: "تم تعطيل حسابك، تواصلي مع الإدارة لإعادة التفعيل" });
@@ -157,7 +158,8 @@ router.get("/auth/my-accounts", authenticate, async (req, res): Promise<void> =>
   if (!currentUser) { res.status(404).json({ error: "Not found" }); return; }
 
   const all = await db.select().from(usersTable).where(eq(usersTable.email, currentUser.email));
-  const active = all.filter(u => !u.isArchived);
+  // حسابات الحلقات الحالية فقط، بلا تكرار (لا تظهر حلقة نُقلت منها)
+  const active = await currentAccountsOnly(all.filter(u => !u.isArchived), req.userId!);
 
   // جلب أسماء الحلقات دفعة واحدة
   const circleIds = [...new Set(active.map(u => u.circleId).filter(Boolean))] as number[];

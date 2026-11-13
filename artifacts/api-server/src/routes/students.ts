@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { performTransfer } from "../lib/studentTransfer";
+import { moveStudentAccounts } from "../lib/studentAccounts";
 import { db, studentsTable, circlesTable, studentTransfersTable, studentNotesTable, studentMemorizationsTable, messagesTable, recordsTable, usersTable, studentArchiveEventsTable, studentLeaveHistoryTable, studentEnrollmentsTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
 import { eq, and, gte, desc, sql, ne, isNull, inArray } from "drizzle-orm";
 import { isShortcomingRecord } from "../lib/shortcoming";
@@ -541,71 +543,9 @@ router.patch("/students/:id", authenticate, async (req, res): Promise<void> => {
         eq(studentEnrollmentsTable.studentId, id),
         eq(studentEnrollmentsTable.isArchived, false),
       ));
-    const sourceCircleId = requestedFromCircleId ?? before.circleId ?? activeEnrollments[0]?.circleId;
-    const sourceIsActive = sourceCircleId != null &&
-      activeEnrollments.some(enrollment => enrollment.circleId === sourceCircleId);
-    const affectedCircleIds = sourceIsActive ? [sourceCircleId!] : [];
-    await db.insert(studentTransfersTable).values({
-      studentId: id,
-      fromCircleId: sourceCircleId ?? undefined,
-      toCircleId: parsed.data.circleId!,
-      transferredById: req.userId!,
-    });
-    // Keep history, but close only the selected source membership.
-    if (affectedCircleIds.length > 0) {
-      await db.update(studentEnrollmentsTable)
-        .set({ isArchived: true, archivedAt: new Date() })
-        .where(
-          and(
-            eq(studentEnrollmentsTable.studentId, id),
-            eq(studentEnrollmentsTable.circleId, affectedCircleIds[0]),
-            eq(studentEnrollmentsTable.isArchived, false),
-          )
-        );
-    }
-    // Move only records belonging to the selected source circle.
-    if (parsed.data.circleId) {
-      if (affectedCircleIds.length > 0) {
-        await db.update(recordsTable)
-          .set({ circleId: parsed.data.circleId })
-          .where(and(
-            eq(recordsTable.studentId, id),
-            eq(recordsTable.circleId, affectedCircleIds[0]),
-          ));
-      }
-      await db.insert(studentEnrollmentsTable)
-        .values({ studentId: id, circleId: parsed.data.circleId, isArchived: false })
-        .onConflictDoUpdate({
-          target: [studentEnrollmentsTable.studentId, studentEnrollmentsTable.circleId],
-          set: { isArchived: false, archivedAt: null },
-        });
-    }
-    // Sync the student's user account circleId to match the new circle
-    // أولاً: بالرابط المباشر student_id (أدق وأأمن)
-    if (sourceCircleId != null) {
-      await db.update(usersTable)
-        .set({ circleId: parsed.data.circleId ?? null })
-        .where(and(
-          eq(usersTable.studentId, id),
-          eq(usersTable.role, "student"),
-          eq(usersTable.circleId, sourceCircleId),
-        ));
-    } else {
-      await db.update(usersTable)
-        .set({ circleId: parsed.data.circleId ?? null })
-        .where(and(eq(usersTable.studentId, id), eq(usersTable.role, "student")));
-    }
-    // ثانياً: بالاسم + الحلقة القديمة فقط للحسابات غير المربوطة (لتجنب تحديث طالبات بنفس الاسم في حلقات أخرى)
-    if (sourceCircleId != null) {
-      await db.update(usersTable)
-        .set({ circleId: parsed.data.circleId ?? null })
-        .where(and(
-          eq(usersTable.role, "student"),
-          isNull(usersTable.studentId),
-          eq(usersTable.name, before.fullName),
-          eq(usersTable.circleId, sourceCircleId),
-        ));
-    }
+    const sourceCircleId = requestedFromCircleId ?? before.circleId ?? activeEnrollments[0]?.circleId ?? null;
+    // النقل الفعلي من مصدر واحد (lib/studentTransfer): لا تبقى نسخة في الحلقة القديمة ولا أرشيفها، ويُنقل حسابها
+    await performTransfer({ studentId: id, fromCircleId: sourceCircleId, toCircleId: parsed.data.circleId!, byUserId: req.userId!, primaryAlreadySet: true });
   }
 
   res.json(student);
@@ -1115,12 +1055,11 @@ router.post("/students/:id/enroll", authenticate, async (req, res): Promise<void
   const [regCircleForEnroll] = await db.select({ id: circlesTable.id })
     .from(circlesTable).where(eq(circlesTable.trackType, "registration"));
   if (regCircleForEnroll) {
-    await db.update(studentEnrollmentsTable)
-      .set({ isArchived: true, archivedAt: new Date() })
+    // تخرج من قائمة التسجيل نهائيًا (لا نسخة مؤرشفة فيها)
+    await db.delete(studentEnrollmentsTable)
       .where(and(
         eq(studentEnrollmentsTable.studentId, id),
         eq(studentEnrollmentsTable.circleId, regCircleForEnroll.id),
-        eq(studentEnrollmentsTable.isArchived, false),
       ));
   }
 
@@ -1134,9 +1073,8 @@ router.post("/students/:id/enroll", authenticate, async (req, res): Promise<void
 
   // Always update primary circle to the new real circle
   await db.update(studentsTable).set({ circleId }).where(eq(studentsTable.id, id));
-  // Sync user account
-  await db.update(usersTable).set({ circleId })
-    .where(and(eq(usersTable.name, student.fullName), eq(usersTable.role, "student")));
+  // حساب الدخول: يُنقل حساب قائمة التسجيل (أو بلا حلقة) إلى الحلقة الجديدة — لا كل الحسابات بنفس الاسم
+  await moveStudentAccounts(db, { studentId: id, fullName: student.fullName, fromCircleId: regCircleForEnroll?.id ?? null, toCircleId: circleId });
 
   res.status(201).json(enrollment);
 });
