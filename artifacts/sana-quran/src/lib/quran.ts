@@ -406,9 +406,13 @@ export function computeSurahAlignedDays(
   totalDays: number,
   dailyTargetPages: number,
   direction: "forward" | "backward" = "forward",
+  /** آية الانطلاق: تصاعدي = أول آية تُراجَع، تنازلي = آخر آية (يُرجع منها للخلف). بدونها: أول السورة / آخرها */
+  anchorAyah?: number,
 ): SurahAlignedDay[] {
   const anchor = getSurahByName(anchorSurahName);
   if (!anchor) return [];
+  const startAyahFwd = anchorAyah && anchorAyah >= 1 && anchorAyah <= anchor.ayahs ? anchorAyah : 1;
+  const startAyahBack = anchorAyah && anchorAyah > 1 && anchorAyah <= anchor.ayahs ? anchorAyah : anchor.ayahs;
 
   const pagesOfSurah = (n: number) =>
     calculatePages(SURAHS[n - 1]!.name, 1, SURAHS[n - 1]!.name, SURAHS[n - 1]!.ayahs);
@@ -418,7 +422,7 @@ export function computeSurahAlignedDays(
 
   if (direction === "forward") {
     let curSurah = anchor.number;
-    let curAyah = 1;
+    let curAyah = startAyahFwd;
     for (let day = 0; day < totalDays && curSurah <= 114; day++) {
       const bucket: Array<{ n: number; start: number; end: number }> = [];
       let cum = 0;
@@ -455,7 +459,7 @@ export function computeSurahAlignedDays(
     }
   } else {
     let curSurah = anchor.number;
-    let curAyah = anchor.ayahs; // نبدأ من آخر آية بسورة المرساة ونرجع للخلف
+    let curAyah = startAyahBack; // نبدأ من آية الانطلاق (أو آخر السورة) ونرجع للخلف
     for (let day = 0; day < totalDays && curSurah >= 1; day++) {
       const bucket: Array<{ n: number; start: number; end: number }> = [];
       let cum = 0;

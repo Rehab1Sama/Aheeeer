@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { currentAccountsOnly, activeSiblingAccount } from "../lib/studentAccounts";
+import { currentAccountsOnly, activeSiblingAccount, ensureEnrollmentAccounts } from "../lib/studentAccounts";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
@@ -48,11 +48,18 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     return;
   }
   // حساب طالبة موقوف لأنه مكرر/منقول: يدخل بها إلى حسابها النشط (نفس سجل الطالبة)
-  const verified: typeof verifiedRaw = [];
+  let verified: typeof verifiedRaw = [];
   for (const u of verifiedRaw) {
     const sib = await activeSiblingAccount(u);
     const pick = sib ?? u;
     if (!verified.some(v => v.id === pick.id)) verified.push(pick);
+  }
+  // حلقات بلا حساب لها: تُنشأ حساباتها الآن فتظهر في اختيار الحساب
+  await ensureEnrollmentAccounts(email.toLowerCase().trim()).catch(() => {});
+  {
+    const again = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase().trim()));
+    const ids = new Set(verified.map(v => v.id));
+    for (const u of again) if (!ids.has(u.id) && !u.isArchived && u.role === "student" && verifyPassword(password, u.passwordHash)) verified.push(u);
   }
 
   if (verified.length === 1) {
@@ -164,6 +171,8 @@ router.get("/auth/my-accounts", authenticate, async (req, res): Promise<void> =>
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!currentUser) { res.status(404).json({ error: "Not found" }); return; }
 
+  // حلقة مسجَّلة فيها الطالبة بلا حساب: يُنشأ حسابها (نفس البريد وكلمة المرور)
+  await ensureEnrollmentAccounts(currentUser.email).catch(() => {});
   const all = await db.select().from(usersTable).where(eq(usersTable.email, currentUser.email));
   // حسابات الحلقات الحالية فقط، بلا تكرار (لا تظهر حلقة نُقلت منها)
   const active = await currentAccountsOnly(all.filter(u => !u.isArchived), req.userId!);

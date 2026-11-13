@@ -1074,7 +1074,7 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
   }, []);
 
   const buildFixationDays = useCallback((value: "half" | "full" | "double", count = 32): DayEntry[] =>
-    computeSurahAlignedDays(fixationStart.surah, count, getFixationDailyPages(value), fixationDirection)
+    computeSurahAlignedDays(fixationStart.surah, count, getFixationDailyPages(value), fixationDirection, fixationStart.ayah)
       .map((day, idx) => ({
         dayNumber: idx + 1,
         pages: day.pages,
@@ -1103,8 +1103,8 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
   const fixationDailyPages = getFixationDailyPages(quantity);
   const fixationAvailablePages = isFixation
     ? (fixationDirection === "forward"
-        ? calculatePages(fixationStart.surah, 1, "الناس", 6)
-        : calculatePages("الفاتحة", 1, fixationStart.surah, getSurahByName(fixationStart.surah)?.ayahs ?? 1))
+        ? calculatePages(fixationStart.surah, fixationStart.ayah || 1, "الناس", 6)
+        : calculatePages("الفاتحة", 1, fixationStart.surah, fixationStart.ayah > 1 ? fixationStart.ayah : (getSurahByName(fixationStart.surah)?.ayahs ?? 1)))
     : 0;
   const fixationHasEnoughContent = !isFixation || fixationAvailablePages >= fixationDailyPages * totalDays;
 
@@ -1308,7 +1308,9 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  كل يوم بيبدأ من أول آية بالسورة تلقائياً (بدون تقسيم سورة)، فآية البداية هنا للتوجيه فقط.
+                  {fixationDirection === "forward"
+                    ? "تبدأ الخطة من هذه الآية وتتقدَّم نحو الناس."
+                    : "تبدأ الخطة من هذه الآية وترجع للخلف نحو الفاتحة (اتركيها على ١ لتبدأ من آخر السورة)."}
                 </p>
               </div>
               {!fixationHasEnoughContent && (
@@ -1318,7 +1320,7 @@ function PlanWizard({ open, onClose, onSaved, studentId, circleId, isFixation, t
                     : "نقطة البداية لا تحتوي على صفحات كافية للرجوع للخلف ٣٢ يومًا بهذه الكمية. اختاري نقطة لاحقة أو كمية أقل."}
                 </p>
               )}
-              <p className="text-sm text-muted-foreground">اختاري الكمية اليومية لخطة التثبيت (٦ أسابيع × ٤ أيام)</p>
+              <p className="text-sm text-muted-foreground">اختاري الكمية اليومية لخطة التثبيت (٨ أسابيع × ٤ أيام)</p>
               <div className="grid grid-cols-2 gap-3">
                 {(["half", "full", "double"] as const).map(q => (
                   <button key={q} onClick={() => setQuantity(q)}

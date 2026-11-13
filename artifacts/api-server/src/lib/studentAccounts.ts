@@ -93,3 +93,40 @@ export async function activeSiblingAccount(u: { role: string; studentId: number 
   if (rows.length === 0) return null;
   return rows.find((r) => r.circleId === u.circleId) ?? rows.sort((a, b) => (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0))[0]!;
 }
+
+/**
+ * طالبة مسجَّلة في أكثر من حلقة ولها حساب في بعضها فقط: يُنشأ لها حساب للحلقة الناقصة
+ * (نفس البريد وكلمة المرور، من أحدث حساباتها)، فتظهر الحلقة في «تبديل الحساب» وترى رفيقاتها.
+ * لا يُنشأ لقائمة التسجيل، ولا إن وُجد لها حساب نشط في تلك الحلقة بأي بريد.
+ */
+export async function ensureEnrollmentAccounts(email: string): Promise<void> {
+  const mine = await db.select().from(usersTable).where(and(
+    eq(usersTable.email, email), eq(usersTable.role, "student"), eq(usersTable.isArchived, false),
+  ));
+  const studentIds = [...new Set(mine.map((u) => u.studentId).filter((x): x is number => x != null))];
+  if (studentIds.length === 0) return;
+  const [enrolls, regCircles, existing] = await Promise.all([
+    db.select({ studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId })
+      .from(studentEnrollmentsTable)
+      .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
+      .where(and(inArray(studentEnrollmentsTable.studentId, studentIds), eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false))),
+    db.select({ id: circlesTable.id }).from(circlesTable).where(eq(circlesTable.trackType, "registration")),
+    db.select({ studentId: usersTable.studentId, circleId: usersTable.circleId }).from(usersTable).where(and(
+      inArray(usersTable.studentId, studentIds), eq(usersTable.role, "student"), eq(usersTable.isArchived, false),
+    )),
+  ]);
+  const reg = new Set(regCircles.map((c) => c.id));
+  const has = new Set(existing.map((u) => `${u.studentId}:${u.circleId}`));
+  for (const e of enrolls) {
+    if (reg.has(e.circleId) || has.has(`${e.studentId}:${e.circleId}`)) continue;
+    const base = mine.filter((u) => u.studentId === e.studentId)
+      .sort((a, b) => (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0))[0];
+    if (!base) continue;
+    await db.insert(usersTable).values({
+      email: base.email, name: base.name, passwordHash: base.passwordHash, role: "student",
+      track: base.track, circleId: e.circleId, studentId: e.studentId, phone: base.phone, country: base.country,
+      ageRange: base.ageRange, educationLevel: base.educationLevel, registrationStatus: "approved",
+    });
+    has.add(`${e.studentId}:${e.circleId}`);
+  }
+}
