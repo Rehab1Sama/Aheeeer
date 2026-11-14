@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSupervisorIdentity } from "@/lib/supervisorIdentity";
-import { SeasonStrip, HomeGreeting, Celebration, TermCountdown } from "./Decor";
+import { SeasonStrip, HomeGreeting, Celebration, TermCountdown, useCountdownActive } from "./Decor";
 import TelegramLinkCard from "./TelegramLinkCard";
 import { Link, useLocation } from "wouter";
 import { useGetTodayBanner, useLogout, useGetMyMessages, useListStudents } from "@workspace/api-client-react";
@@ -794,6 +794,7 @@ export default function Layout({ user, children }: LayoutProps) {
   const isHome = location === "/";
   // الحساب المشترك لمسؤولتي المسار: الاسم المعروض هو هوية الجهاز («مين أنتِ؟»)
   const supIdentity = useSupervisorIdentity();
+  const countdownActive = useCountdownActive();
   const displayName = (user?.role === "track_supervisor" && supIdentity?.name) ? supIdentity.name : (user?.name ?? "");
   const isMessagesPage = location === "/my-messages" || (user.role === "track_supervisor" && location === "/messages");
   const unreadCount = useUnreadMessageCount(user.id, user.role, isHome, isMessagesPage);
@@ -839,8 +840,9 @@ export default function Layout({ user, children }: LayoutProps) {
       <NewMessagesModal userId={user.id} role={user.role} navigate={(p) => { setLocation(p); setSidebarOpen(false); }} />
 
       {/* News Ticker */}
-      <NewsTicker />
-      <SeasonStrip />
+      {/* أثناء عدّاد بداية الفصل: تُخفى الأشرطة مؤقتًا، وتعود تلقائيًا عند بدايته */}
+      {!countdownActive && <NewsTicker />}
+      {!countdownActive && <SeasonStrip />}
 
       <div className="flex flex-1">
         {/* Sidebar */}
@@ -973,7 +975,7 @@ export default function Layout({ user, children }: LayoutProps) {
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <LateReminder role={user.role} name={displayName} />
+            {!countdownActive && <LateReminder role={user.role} name={displayName} />}
             {isHome && <HomeGreeting name={displayName} />}
             {isHome && <TermCountdown />}
             {isHome && <TodayBar role={user.role} />}

@@ -217,3 +217,13 @@ export function TermCountdown() {
     </div>
   );
 }
+
+/** هل العدّاد ظاهر الآن (الأسبوعان السابقان لبداية الفصل)؟ — تُخفى معه الأشرطة العلوية مؤقتًا */
+export function useCountdownActive(): boolean {
+  const start = useNextTermStart();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(t); }, []);
+  if (!start) return false;
+  const left = start.target - now;
+  return left > 0 && left <= 14 * 86400000;
+}
