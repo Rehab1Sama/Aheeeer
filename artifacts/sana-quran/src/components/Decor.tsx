@@ -158,3 +158,62 @@ export function CountUp({ value, decimals = 0, suffix = "" }: { value: number; d
   const factor = Math.pow(10, decimals);
   return <>{(Math.round(shown * factor) / factor).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}{suffix}</>;
 }
+
+/** أقرب «بداية الفصل…» في التقويم، وموعدها الخامسة فجرًا بتوقيت مكة (٠٢:٠٠ UTC) */
+function useNextTermStart(): { term: string; target: number; dateIso: string } | null {
+  const y = makkahNow().getUTCFullYear();
+  const opts = (yr: number) => ({ query: { queryKey: ["calendarEvents", yr], staleTime: 30 * 60 * 1000 } });
+  const { data: cur = [] } = useListCalendarEvents({ year: y }, opts(y) as any);
+  const { data: next = [] } = useListCalendarEvents({ year: y + 1 }, opts(y + 1) as any);
+  return useMemo(() => {
+    const today = makkahIso();
+    const s = [...(cur as CalEvent[]), ...(next as CalEvent[])]
+      .filter((e) => /بداية/.test(e.title) && e.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))[0];
+    if (!s) return null;
+    const [yy, mm, dd] = s.date.split("-").map(Number);
+    return { term: (/بداية\s+(.+)$/.exec(s.title)?.[1] ?? "الفصل الجديد").trim(), target: Date.UTC(yy!, mm! - 1, dd!, 2, 0, 0), dateIso: s.date };
+  }, [cur, next]);
+}
+
+const arNum = (n: number) => n.toLocaleString("ar-EG", { minimumIntegerDigits: 2 });
+
+/** عدّاد تنازلي لبداية الفصل: يظهر في الأسبوعين السابقين لها، ويختفي عند بدايتها */
+export function TermCountdown() {
+  const start = useNextTermStart();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t); }, []);
+  if (!start) return null;
+  const left = start.target - now;
+  if (left <= 0 || left > 14 * 86400000) return null;
+  const d = Math.floor(left / 86400000);
+  const h = Math.floor((left % 86400000) / 3600000);
+  const m = Math.floor((left % 3600000) / 60000);
+  const s = Math.floor((left % 60000) / 1000);
+  const when = new Date(start.dateIso + "T12:00:00Z").toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  const units: Array<[number, string]> = [[d, "يوم"], [h, "ساعة"], [m, "دقيقة"], [s, "ثانية"]];
+  return (
+    <div className="relative mb-4 overflow-hidden rounded-2xl px-5 py-5 text-white shadow-md" style={{ background: "linear-gradient(135deg, #1A2260 0%, #2B3784 100%)" }}>
+      <div aria-hidden="true" className="absolute -left-10 -top-12 h-40 w-40 rounded-full bg-white/[0.06]" />
+      <div aria-hidden="true" className="absolute -left-4 -top-6 h-28 w-28 rounded-full border border-dashed border-white/20" />
+      <div aria-hidden="true" className="absolute left-6 top-4 h-2 w-2 rounded-full bg-[#C4A76A]" />
+      <div aria-hidden="true" className="absolute -bottom-14 right-10 h-32 w-32 rounded-full bg-white/[0.05]" />
+      <div aria-hidden="true" className="absolute bottom-5 right-6 h-1.5 w-1.5 rounded-full bg-[#9EA8CC]" />
+      <div className="relative text-center">
+        <p className="text-sm font-bold text-[#E4E7F4]">باقي على بداية {start.term} 🌸</p>
+        <div className="mt-3 flex items-stretch justify-center gap-2 sm:gap-3" dir="rtl">
+          {units.map(([v, label], i) => (
+            <div key={label} className="flex items-center gap-2 sm:gap-3">
+              <div className="min-w-[3.6rem] rounded-xl border border-white/15 bg-white/10 px-2 py-2 backdrop-blur-sm">
+                <p className="text-2xl font-bold leading-none tabular-nums text-white sm:text-3xl">{arNum(v)}</p>
+                <p className="mt-1 text-[11px] text-[#C8CDE8]">{label}</p>
+              </div>
+              {i < units.length - 1 && <span className="text-xl font-bold text-[#C4A76A]">:</span>}
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-[#C8CDE8]">{when} · الخامسة فجرًا بتوقيت مكة</p>
+      </div>
+    </div>
+  );
+}
