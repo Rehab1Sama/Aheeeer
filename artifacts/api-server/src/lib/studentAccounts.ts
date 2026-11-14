@@ -75,7 +75,8 @@ export async function currentAccountsOnly<T extends AccountRow>(accounts: T[], k
   const score = (a: T) => (a.id === keepId ? 4 : 0) + (a.studentId != null ? 2 : 0) + (a.lastLoginAt ? 1 : 0);
   for (const a of accounts) {
     if (!valid.has(a.id)) continue;
-    const k = `${a.role}:${a.circleId ?? ""}`;
+    // التوحيد لحسابات الطالبات فقط؛ حسابات الكادر تبقى كلها (قد يشترك بريد واحد بين مسؤولتين بلا حلقة)
+    const k = a.role === "student" ? `student:${a.circleId ?? ""}` : `staff:${a.id}`;
     const prev = best.get(k);
     if (!prev || score(a) > score(prev) || (score(a) === score(prev) && (a.lastLoginAt?.getTime() ?? 0) > (prev.lastLoginAt?.getTime() ?? 0))) best.set(k, a);
   }
