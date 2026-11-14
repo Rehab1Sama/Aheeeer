@@ -163,6 +163,7 @@ export default function AccountsPage() {
   const { data: currentUser } = useGetCurrentUser({ query: { queryKey: ["getCurrentUser"] } });
   const isLeader = currentUser?.role === "leader";
   const isTrackSupervisor = currentUser?.role === "track_supervisor";
+  const myTrack = ((currentUser as any)?.track as string | undefined) ?? "";
   const canManageAssignments = currentUser?.role === "leader" || (currentUser?.role as string) === "deputy";
   const { data: users, isLoading } = useListUsers(undefined, {
     query: { queryKey: ["users", currentUser?.id, currentUser?.role, currentUser?.track] },
@@ -203,6 +204,8 @@ export default function AccountsPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  // تعديل حساب قائم: مسؤولة المسار تغيِّر دوره وحلقته داخل مسارها فقط
+  const lockToMyTrack = isTrackSupervisor && !!editingUser && !!myTrack;
   const [isAddRoleMode, setIsAddRoleMode] = useState(false);
   const [emailConfirmedDuplicate, setEmailConfirmedDuplicate] = useState(false);
   const [resetPwdOpen, setResetPwdOpen] = useState(false);
@@ -588,7 +591,7 @@ export default function AccountsPage() {
                                   <ArrowLeftRight className="w-3 h-3" />
                                 </button>
                               )}
-                              {(isLeader || (isTrackSupervisor && ["student", "volunteer"].includes(acc.role))) && <button
+                              {(isLeader || (isTrackSupervisor && ["student", "teacher", "supervisor", "volunteer"].includes(acc.role))) && <button
                                 onClick={() => { setResetPwdUserId(acc.id); setNewPassword(""); setResetPwdOpen(true); }}
                                 className="text-muted-foreground hover:text-blue-600 transition-colors"
                                 title="إعادة تعيين كلمة المرور"
@@ -771,7 +774,7 @@ export default function AccountsPage() {
             <div className="space-y-2">
               <Label>الدور</Label>
               <Select value={form.role} onValueChange={v => {
-                setForm(f => ({ ...f, role: v, track: "", circleId: "" }));
+                setForm(f => ({ ...f, role: v, track: lockToMyTrack ? myTrack : "", circleId: "" }));
                 setDeFormCircles([]);
               }}>
                 <SelectTrigger>
@@ -864,7 +867,7 @@ export default function AccountsPage() {
                     ) : !tracks?.length ? (
                       <SelectItem value="__empty__" disabled>لا توجد مسارات — أضيفيها من "إدارة المسارات"</SelectItem>
                     ) : (
-                      tracks.map(t => (
+                      tracks.filter(t => !lockToMyTrack || t.name === myTrack).map(t => (
                         <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
                       ))
                     )}
