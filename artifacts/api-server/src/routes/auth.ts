@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { currentAccountsOnly, activeSiblingAccount, ensureEnrollmentAccounts } from "../lib/studentAccounts";
 import { toSafeUser } from "../lib/safeUser";
-import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable } from "@workspace/db";
+import { db, usersTable, studentsTable, circlesTable, tracksTable, studentEnrollmentsTable, registrationSettingsTable, globalSettingsTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { hashPassword, verifyPassword, generateToken, needsRehash } from "../lib/auth";
 import { authenticate } from "../middlewares/authenticate";
@@ -12,6 +12,18 @@ import { sendPasswordResetEmail } from "../lib/email";
 import { randomBytes } from "crypto";
 
 const router: IRouter = Router();
+
+// الحساب الأساسي لبريد له أكثر من حساب: يُدخَل عليه مباشرة بدل نافذة الاختيار (والتبديل متاح من داخل الموقع).
+// يُضبط من global_settings بالمفتاح primary_accounts = {"<البريد>": <رقم الحساب>}
+async function primaryAccountId(email: string): Promise<number | null> {
+  try {
+    const [row] = await db.select().from(globalSettingsTable).where(eq(globalSettingsTable.key, "primary_accounts"));
+    if (!row?.value) return null;
+    const map = JSON.parse(row.value) as Record<string, number>;
+    const id = map[email.toLowerCase().trim()];
+    return typeof id === "number" ? id : null;
+  } catch { return null; }
+}
 
 // Opportunistically upgrade a still-legacy password hash to the new scrypt
 // format now that we have the plaintext password in hand. Best-effort —
@@ -102,6 +114,15 @@ router.post("/auth/login", loginRateLimit, async (req, res): Promise<void> => {
     const safeUser = toSafeUser(user);
     await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
     res.json({ user: safeUser, token });
+    return;
+  }
+  const primaryId = await primaryAccountId(approvedVerified[0]!.email);
+  const primary = primaryId != null ? approvedVerified.find(u => u.id === primaryId) : undefined;
+  if (primary) {
+    const token = generateToken(primary.id, primary.role);
+    rehashIfNeeded(primary.id, primary.passwordHash, password);
+    await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, primary.id));
+    res.json({ user: toSafeUser(primary), token });
     return;
   }
   const _unused_verified = verified;
