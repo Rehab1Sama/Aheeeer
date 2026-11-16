@@ -358,6 +358,8 @@ export default function WhatsappEntryPage() {
     put("far", "reviewFar");
     put("review", "review");
     if (useListen) payload.listenedToReciter = c.listened;
+    // سُنى: «التكرار الذاتي : خمس مرات» من البطاقة
+    if (inputFields.includes("repetitions") && c.parsed.repetitions != null) payload.repetitions = c.parsed.repetitions;
     return payload;
   };
 
@@ -458,7 +460,7 @@ export default function WhatsappEntryPage() {
       {cards !== null && cards.length === 0 && (
         <Card><CardContent className="pt-4 text-sm text-muted-foreground">{isChildren
           ? "لم أجد أطفالًا في الرسالة. تأكدي أن كل طفل مكتوب برقمه واسمه ثم «الحفظ :» و«المراجعة :»، أو بالشكل «الاسم: مراجعة …»."
-          : "لم أجد أي بطاقة تحضير في النص الملصوق. تأكدي أنها تحتوي على \"النصاب الجديد\" و\"اسم الحبيبة\"."}</CardContent></Card>
+          : "لم أجد أي بطاقة في النص الملصوق. بطاقة البنات فيها \"اسم الحبيبة\" و\"النصاب الجديد\"، وبطاقة سُنى فيها \"الطالبة المتقنة\" و\"التثبيت الجديد\"."}</CardContent></Card>
       )}
 
       {cards !== null && cards.length > 0 && (

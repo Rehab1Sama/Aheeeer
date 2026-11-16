@@ -34,6 +34,8 @@ export interface ParsedCard {
   /** مكتوب في الرسالة أنها/أنه غائب */
   absent?: boolean;
   listened: boolean | null;
+  /** عدد مرات التكرار الذاتي (بطاقات سُنى للتثبيت) */
+  repetitions?: number | null;
   /** تاريخ إرسال الرسالة كما في واتساب (يوم/شهر) إن وُجد */
   sentDay: number | null;
   sentMonth: number | null;
@@ -349,15 +351,21 @@ function cleanSender(s: string): string | null {
   return part || null;
 }
 
+/** بداية بطاقة: «تحضير بُنيّة…» (البنات) أو «بطاقة الإنجاز» (سُنى للتثبيت) */
+function isCardHeader(line: string): boolean {
+  const n = norm(line);
+  return n.includes("تحضير") || /بطاقه\s*الانجاز/.test(n);
+}
+
 export function splitCards(text: string): RawCard[] {
   const cards: RawCard[] = [];
   let cur: RawCard | null = null;
   for (const line of text.split(/\r?\n/)) {
     const m = PREFIX_RE.exec(line);
-    const isHeader = norm(line).includes("تحضير");
+    const isHeader = isCardHeader(line);
     if (m) {
       const sd = parseSentDate(m[1] ?? "");
-      cur = { sender: cleanSender(m[2]!), lines: [m[3] ?? ""], hasHeader: norm(m[3] ?? "").includes("تحضير"), sentDay: sd.d, sentMonth: sd.m };
+      cur = { sender: cleanSender(m[2]!), lines: [m[3] ?? ""], hasHeader: isCardHeader(m[3] ?? ""), sentDay: sd.d, sentMonth: sd.m };
       cards.push(cur);
       continue;
     }
@@ -371,36 +379,66 @@ export function splitCards(text: string): RawCard[] {
   }
   return cards.filter((c) => {
     const f = fold(clean(c.lines.join("\n")));
-    return /النصاب/.test(f) || /اسم\s*الحبيب/.test(f);
+    return /النصاب/.test(f) || /اسم\s*الحبيب/.test(f) || /التثبيت/.test(f) || /الطالبه\s*المتقن/.test(f);
   });
 }
 
 // ─── استخراج الحقول ──────────────────────────────────────────────
 
-const LABELS: Array<{ key: "name" | "memorize" | "listen" | "near" | "far"; re: RegExp }> = [
+type FieldName = "name" | "memorize" | "listen" | "near" | "far" | "repeat" | "other";
+const LABELS: Array<{ key: FieldName; re: RegExp }> = [
   { key: "name", re: /اسم\s*الحبيب\S*\s*:?/ },
+  { key: "name", re: /الطالبه\s*المتقن\S*\s*:?/ },          // سُنى
   { key: "memorize", re: /النصاب\s*الجديد\s*:?/ },
+  { key: "memorize", re: /التثبيت\s*الجديد[^:\n]*:/ },        // سُنى: «التثبيت الجديد 📜:»
+  { key: "other", re: /سماع\s*و\s*الترديد[^:\n]*:/ },         // سُنى (يُفصل عن سماع الشيخ)
   { key: "listen", re: /سماع[^:\n]*?(?:مرات|مره)\s*:?/ },
+  { key: "listen", re: /سماع\s*الشيخ\s*:/ },                   // سُنى: «سماع الشيخ : مرتين ✅»
+  { key: "repeat", re: /التكرار\s*الذاتي\s*:?/ },              // سُنى
+  { key: "other", re: /سرد\s*الرفيق\S*\s*:?/ },               // سُنى
   { key: "near", re: /المراجعه\s*القريب\S*\s*:?/ },
   { key: "far", re: /المراجعه\s*البعيد\S*\s*:?/ },
 ];
 
-function extractFields(body: string): Record<"name" | "memorize" | "listen" | "near" | "far", string> {
+function extractFields(body: string): Record<Exclude<FieldName, "other">, string> {
   const c = clean(body).replace(/\*/g, " ");
   const f = fold(c); // نفس الطول — الفهارس متطابقة
   const hits: Array<{ key: string; start: number; end: number }> = [];
+  const taken = new Set<string>();
   for (const { key, re } of LABELS) {
+    if (key !== "other" && taken.has(key)) continue;
     const m = re.exec(f);
-    if (m) hits.push({ key, start: m.index, end: m.index + m[0].length });
+    if (!m) continue;
+    // لا نقبل وسمًا يقع داخل وسم آخر سبق العثور عليه
+    if (hits.some((h) => m.index < h.end && m.index + m[0].length > h.start)) continue;
+    hits.push({ key, start: m.index, end: m.index + m[0].length });
+    if (key !== "other") taken.add(key);
   }
   hits.sort((a, b) => a.start - b.start);
-  const out = { name: "", memorize: "", listen: "", near: "", far: "" };
+  const out = { name: "", memorize: "", listen: "", near: "", far: "", repeat: "" };
   hits.forEach((h, i) => {
+    if (h.key === "other") return;
     const next = hits[i + 1]?.start ?? c.length;
     (out as any)[h.key] = c.slice(h.end, next).replace(/\s+/g, " ").trim();
   });
   return out;
 }
+
+const COUNT_WORDS: Record<string, number> = {
+  مره: 1, مرتين: 2, مرتان: 2, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6, سته: 6,
+  سبع: 7, سبعه: 7, ثمان: 8, ثماني: 8, ثمانيه: 8, تسع: 9, تسعه: 9, عشر: 10, عشره: 10,
+};
+/** «خمس مرات ✅» / «٥ مرات» / «مرة واحدة» → عدد */
+function parseCount(value: string): number | null {
+  const n = norm(value);
+  const d = /(\d{1,3})/.exec(n);
+  if (d) return Number(d[1]);
+  for (const w of n.split(" ")) if (COUNT_WORDS[w] != null) return COUNT_WORDS[w]!;
+  return null;
+}
+
+// بطاقات القالب (شرح الحقول) لا بطاقات طالبات: تُتجاهل حين تُلصق المحادثة كاملة
+const TEMPLATE_RE = /لا يشترط ان يكون رباعي|ما سيتم تسميعه|لابد ان يكون من القراء|يوخذ من الموقع|لمحفوظ اخر/;
 
 function parseListen(rawBody: string, value: string): boolean | null {
   const v = value + " " + rawBody.split("\n").find((l) => /سماع/.test(fold(clean(l))))?.replace(/^.*?(?:مرات|مره)/, "") ;
@@ -411,7 +449,13 @@ function parseListen(rawBody: string, value: string): boolean | null {
 
 export function parseCards(text: string, surahs: SurahInfo[]): ParsedCard[] {
   const si = buildSurahIndex(surahs);
-  return splitCards(text).map((rc, index) => {
+  const raws = splitCards(text).filter((rc) => {
+    const body = rc.lines.join("\n");
+    if (TEMPLATE_RE.test(norm(body))) return false;
+    const f = extractFields(body);
+    return !!(f.name || f.memorize || f.near || f.far); // قالب فارغ
+  });
+  return raws.map((rc, index) => {
     const body = rc.lines.join("\n");
     const f = extractFields(body);
     const warnings: string[] = [];
@@ -426,7 +470,7 @@ export function parseCards(text: string, surahs: SurahInfo[]): ParsedCard[] {
     const memorize = parseRange(f.memorize, surahs, si);
     const near = parseRange(f.near, surahs, si);
     const far = parseRange(f.far, surahs, si);
-    if (memorize.status === "empty") warnings.push("النصاب الجديد فارغ");
+    if (memorize.status === "empty") warnings.push(/التثبيت/.test(norm(body)) ? "التثبيت الجديد فارغ" : "النصاب الجديد فارغ");
     return {
       index,
       sender: rc.sender,
@@ -435,6 +479,7 @@ export function parseCards(text: string, surahs: SurahInfo[]): ParsedCard[] {
       near,
       far,
       listened: parseListen(body, f.listen),
+      repetitions: f.repeat ? parseCount(f.repeat) : null,
       sentDay: rc.sentDay,
       sentMonth: rc.sentMonth,
       warnings,
