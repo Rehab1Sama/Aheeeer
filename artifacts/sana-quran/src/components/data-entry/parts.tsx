@@ -450,7 +450,10 @@ export function AyahSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(value ?? "");
+  // القيمة قد تتغير من خارج الحقل (اقتراح من اليوم السابق أو تغيير الطالبة): تظهر في الخانة نفسها
+  // حتى لا تبقى آية مخفية تُحفظ دون أن تنتبه لها المُدخِلة
+  useEffect(() => { setQuery((q) => (q === value ? q : (value ?? ""))); }, [value]);
   const surah = SURAHS.find((s) => s.name === surahName);
   const max = surah?.ayahs ?? 0;
 

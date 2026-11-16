@@ -746,6 +746,32 @@ export default function DataEntryPage() {
       if (inputFields.includes("listen")) payload.listenedToReciter = form.listenedToReciter;
     }
 
+    // حماية من أخطاء الإدخال الشائعة: نهاية مقطع بقيت من اقتراح اليوم السابق، أو حفظ بلا آية نهاية فيضيع بصمت
+    if (!form.isAbsent) {
+      const unfinished: string[] = [];
+      const half = (label: string, active: boolean, sec: SectionState, skip = false) => {
+        if (active && !skip && !!sec.surahStart !== !!sec.surahEnd) unfinished.push(label);
+      };
+      half("الحفظ", inputFields.includes("memorize") && !(isMothersEntry && form.memorizeMode === "manual"), form.memorize);
+      half("المراجعة القريبة", inputFields.includes("review_near"), form.reviewNear, form.noReviewNear);
+      half("المراجعة البعيدة", inputFields.includes("review_far"), form.reviewFar, form.noReviewFar);
+      half("المراجعة", inputFields.includes("review") && !(isMothersEntry && form.reviewMode === "manual"), form.review, form.noReview);
+      if (unfinished.length) {
+        toast({ title: "أكملي المقطع", description: `${unfinished.join("، ")}: اختاري سورة وآية النهاية، أو امسحي البداية`, variant: "destructive" });
+        return;
+      }
+      const big: string[] = [];
+      const huge = (label: string, pages: number | undefined, limit: number, prefix: string) => {
+        if ((pages ?? 0) > limit) big.push(`• ${label}: من ${payload[`${prefix}SurahStart`]} ${payload[`${prefix}AyahStart`]} إلى ${payload[`${prefix}SurahEnd`]} ${payload[`${prefix}AyahEnd`]} = ${pages} وجه`);
+      };
+      huge("الحفظ", payload.memorizeSurahStart ? payload.memorizePages : 0, 10, "memorize");
+      huge("المراجعة القريبة", payload.reviewNearPages, 60, "reviewNear");
+      huge("المراجعة البعيدة", payload.reviewFarPages, 60, "reviewFar");
+      huge("المراجعة البعيدة ٢", payload.reviewFar2Pages, 60, "reviewFar2");
+      huge("المراجعة", payload.reviewSurahStart ? payload.reviewPages : 0, 60, "review");
+      if (big.length && !confirm(`انتبهي، المقطع كبير جدًا لهذا اليوم:\n${big.join("\n")}\n\nغالبًا بقيت سورة أو آية النهاية من اليوم السابق. متأكدة من الحفظ؟`)) return;
+    }
+
     if (editingRecordId) {
       updateRecord.mutate(
         { id: editingRecordId, data: payload },

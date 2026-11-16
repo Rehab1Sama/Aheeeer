@@ -1,4 +1,4 @@
-import { findExistingStudent } from "../lib/studentIdentity";
+import { findExistingStudent, normalizeName } from "../lib/studentIdentity";
 import { Router, type IRouter } from "express";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, recordsTable, studentGoalsTable, studentNotesTable, studentTransfersTable, examRecordsTable, studentEnrollmentsTable } from "@workspace/db";
@@ -259,49 +259,24 @@ router.post("/users", authenticate, async (req, res): Promise<void> => {
   }).returning();
 
   if (rest.role === "student") {
-    // أولاً: ابحث عن سجل طالبة موجود بنفس الاسم في نفس الحلقة قبل إنشاء سجل جديد
-    // هذا يمنع تكرار السجلات للطالبات الموجودات في أكثر من حلقة
+    // سجل الطالبة نفسها إن وُجد (الاسم الموحَّد + دليل ثانٍ: تسجيل في الحلقة أو الجوال أو حساب آخر بنفس البريد)
+    // ثم تسجيل فعلي في الحلقة: بدونه تظهر الطالبة في الإدخال ولا تظهر في صفحة الحلقة
     let linkedStudentId: number | null = null;
-
-    if (rest.circleId) {
-      // بحث مباشر بالاسم + circleId على جدول students
-      const directMatch = await db
-        .select({ id: studentsTable.id })
-        .from(studentsTable)
-        .where(
-          and(
-            sql`TRIM(${studentsTable.fullName}) = TRIM(${rest.name})`,
-            eq(studentsTable.circleId, rest.circleId),
-            eq(studentsTable.isArchived, false),
-          ),
-        )
-        .limit(1);
-      linkedStudentId = directMatch[0]?.id ?? null;
-
-      if (!linkedStudentId) {
-        // بحث عبر student_enrollments
-        const enrollMatch = await db
-          .select({ id: studentEnrollmentsTable.studentId })
-          .from(studentEnrollmentsTable)
-          .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
-          .where(
-            and(
-              sql`TRIM(${studentsTable.fullName}) = TRIM(${rest.name})`,
-              eq(studentEnrollmentsTable.circleId, rest.circleId),
-              eq(studentEnrollmentsTable.isArchived, false),
-              eq(studentsTable.isArchived, false),
-            ),
-          )
-          .limit(1);
-        linkedStudentId = enrollMatch[0]?.id ?? null;
+    const found = await findExistingStudent({ fullName: rest.name, phone: rest.phone ?? null, circleId: rest.circleId ?? null });
+    if (found && !found.isArchived) linkedStudentId = found.id;
+    if (!linkedStudentId) {
+      const target = normalizeName(rest.name);
+      const sameEmail = await db.select({ studentId: usersTable.studentId, name: usersTable.name }).from(usersTable).where(and(
+        eq(usersTable.email, user.email), eq(usersTable.role, "student"), eq(usersTable.isArchived, false), isNotNull(usersTable.studentId),
+      ));
+      const sib = sameEmail.find((u) => u.studentId !== null && normalizeName(u.name) === target);
+      if (sib?.studentId) {
+        const [st] = await db.select({ archived: studentsTable.isArchived }).from(studentsTable).where(eq(studentsTable.id, sib.studentId));
+        if (st && !st.archived) linkedStudentId = sib.studentId;
       }
     }
 
-    if (linkedStudentId) {
-      // ربط الحساب الجديد بالسجل الموجود — لا تنشئ سجلاً مكرراً
-      await db.update(usersTable).set({ studentId: linkedStudentId }).where(eq(usersTable.id, user.id));
-    } else {
-      // إنشاء سجل جديد فقط إذا لم يُعثر على سجل موجود
+    if (!linkedStudentId) {
       const [newStudent] = await db.insert(studentsTable).values({
         fullName: rest.name,
         circleId: rest.circleId ?? null,
@@ -309,8 +284,15 @@ router.post("/users", authenticate, async (req, res): Promise<void> => {
         country: rest.country ?? null,
         isArchived: false,
       }).returning({ id: studentsTable.id });
-      if (newStudent) {
-        await db.update(usersTable).set({ studentId: newStudent.id }).where(eq(usersTable.id, user.id));
+      linkedStudentId = newStudent?.id ?? null;
+    }
+    if (linkedStudentId) {
+      await db.update(usersTable).set({ studentId: linkedStudentId }).where(eq(usersTable.id, user.id));
+      if (rest.circleId) {
+        const [en] = await db.select({ id: studentEnrollmentsTable.id, archived: studentEnrollmentsTable.isArchived }).from(studentEnrollmentsTable)
+          .where(and(eq(studentEnrollmentsTable.studentId, linkedStudentId), eq(studentEnrollmentsTable.circleId, rest.circleId)));
+        if (!en) await db.insert(studentEnrollmentsTable).values({ studentId: linkedStudentId, circleId: rest.circleId });
+        else if (en.archived) await db.update(studentEnrollmentsTable).set({ isArchived: false }).where(eq(studentEnrollmentsTable.id, en.id));
       }
     }
   }
