@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { studentsByArchived } from "../lib/cachedQueries";
+import { cached, cachedList } from "../lib/readCache";
 import { db, recordsTable, studentsTable, studentEnrollmentsTable, studentMemorizationsTable, circlesTable, usersTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, examRecordsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { isShortcomingRecord } from "../lib/shortcoming";
@@ -31,6 +33,12 @@ async function loadStatsStudents(): Promise<StatsStudent[]> {
   }));
 }
 
+/** سجلات فترة: تُطلب بنفس الفترة مرات كثيرة متتالية (لوحة الإحصاءات) */
+function recordsInRange(from: string, to: string) {
+  return cachedList(`records:${from}:${to}`, 60_000, () =>
+    db.select().from(recordsTable).where(and(gte(recordsTable.date, from), lte(recordsTable.date, to))));
+}
+
 function getDateRange(dateFrom?: string, dateTo?: string): { from: string; to: string; label: string } {
   const today = getMakkahDay();
   if (dateFrom && dateTo) {
@@ -46,8 +54,7 @@ router.get("/stats/summary", authenticate, async (req, res): Promise<void> => {
   const userRole = req.userRole;
   const userId = req.userId;
 
-  let allRecords = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, range.from), lte(recordsTable.date, range.to)));
+  let allRecords = await recordsInRange(range.from, range.to);
 
   const circles = await db.select().from(circlesTable);
   const allTracks = await db.select().from(tracksTable);
@@ -291,8 +298,7 @@ router.get("/stats/circles", authenticate, async (req, res): Promise<void> => {
   const userRole = req.userRole;
   const userId = req.userId;
 
-  const allRecords = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, range.from), lte(recordsTable.date, range.to)));
+  const allRecords = await recordsInRange(range.from, range.to);
 
   const teacherAbsences = await db.select().from(teacherAbsencesTable)
     .where(and(gte(teacherAbsencesTable.date, range.from), lte(teacherAbsencesTable.date, range.to)));
@@ -451,6 +457,11 @@ router.get("/stats/monthly-comparison", authenticate, async (req, res): Promise<
 
 router.get("/stats/today-banner", async (_req, res): Promise<void> => {
   const today = getMakkahDay();
+  // يُطلب مع كل فتح للموقع: نحسبه مرة كل دقيقتين (ويُعاد فورًا بعد أي إدخال)
+  res.json(await cached(`today-banner:${today}`, 120_000, () => computeTodayBanner(today)));
+});
+
+async function computeTodayBanner(today: string) {
   const records = await db.select().from(recordsTable).where(eq(recordsTable.date, today));
   const circles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
   // الشريط عام (بلا تسجيل دخول): نسحب رقم الطالبة وحلقتها فقط لا صفها كاملًا (الجوال والبيانات).
@@ -505,8 +516,8 @@ router.get("/stats/today-banner", async (_req, res): Promise<void> => {
       absences: 0,
     }));
 
-  res.json({ achievement, leastAbsent: fullAttendance });
-});
+  return { achievement, leastAbsent: fullAttendance };
+}
 
 router.get("/stats/monthly-report", authenticate, async (req, res): Promise<void> => {
   if (!["leader", "track_supervisor"].includes(req.userRole!)) {
@@ -537,7 +548,7 @@ router.get("/stats/monthly-report", authenticate, async (req, res): Promise<void
   }
 
   const allCircles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
-  const allStudents = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  const allStudents = await studentsByArchived(false);
 
   // Filter by track for track_supervisor
   let circles = allCircles;
@@ -775,7 +786,7 @@ router.get("/stats/juz-stats", authenticate, async (req, res): Promise<void> => 
 
   const allCircles = await db.select().from(circlesTable);
   const allUsers = await db.select().from(usersTable).where(eq(usersTable.isArchived, false));
-  let students = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  let students = await studentsByArchived(false);
 
   if (userRole === "track_supervisor" || userRole === "data_entry") {
     const userRecord = allUsers.find(u => u.id === userId);
@@ -893,7 +904,7 @@ router.get("/stats/weekly-comparison", authenticate, async (req, res): Promise<v
   const thisFiltered = filterByCircles(thisRecs);
   const lastFiltered = filterByCircles(lastRecs);
 
-  const allStudentsWC = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  const allStudentsWC = await studentsByArchived(false);
 
   const calcWeek = (recs: typeof thisRecs) => {
     const present  = recs.filter(r => !r.isAbsent);
@@ -985,7 +996,7 @@ router.get("/stats/teacher-performance", authenticate, async (req, res): Promise
 
   const allCircles  = await db.select().from(circlesTable);
   const allUsers    = await db.select().from(usersTable).where(eq(usersTable.isArchived, false));
-  const allStudents = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  const allStudents = await studentsByArchived(false);
   const allTracks   = await db.select().from(tracksTable);
 
   // فلترة المسار للمسؤولة
@@ -1100,7 +1111,7 @@ router.get("/stats/monthly-honor", authenticate, async (req, res): Promise<void>
 
   const allCircles  = await db.select().from(circlesTable);
   const allUsers    = await db.select().from(usersTable).where(eq(usersTable.isArchived, false));
-  const allStudents = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+  const allStudents = await studentsByArchived(false);
   const allTracks   = await db.select().from(tracksTable);
 
   // فلترة حسب الصلاحية

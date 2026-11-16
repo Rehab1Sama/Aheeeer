@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { cachedList } from "../lib/readCache";
 import { toSafeUser } from "../lib/safeUser";
 import { db, circlesTable, usersTable, studentsTable, tracksTable, dataEntryCircleAssignmentsTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
@@ -83,11 +84,12 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     circles = circles.filter(c => c.track === req.userTrack);
   }
 
-  const allUsers = await db.select({
+  // تُطلب مع كل فتح لصفحة الحلقات: محفوظة دقيقة (وتُفرَّغ مع أي تعديل)
+  const allUsers = await cachedList("users:lite", 60_000, () => db.select({
     id: usersTable.id, name: usersTable.name, phone: usersTable.phone,
     email: usersTable.email, role: usersTable.role, circleId: usersTable.circleId,
     isArchived: usersTable.isArchived,
-  }).from(usersTable);
+  }).from(usersTable));
   const userMap: Record<number, { name: string; phone: string | null }> = {};
   allUsers.forEach(u => { userMap[u.id] = { name: u.name, phone: u.phone }; });
   const volunteersByCircle: Record<number, { id: number; name: string; phone: string | null }[]> = {};
@@ -110,7 +112,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     }
   }
 
-  const allEnrollments = await db.select({
+  const allEnrollments = await cachedList("enrollments:active-with-names", 60_000, () => db.select({
     studentId: studentEnrollmentsTable.studentId,
     circleId: studentEnrollmentsTable.circleId,
     fullName: studentsTable.fullName,
@@ -118,7 +120,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
   })
     .from(studentEnrollmentsTable)
     .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
-    .where(and(eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false)));
+    .where(and(eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false))));
   const studentsByCircle: Record<number, { id: number; fullName: string; email: string | null }[]> = {};
   for (const e of allEnrollments) {
     if (!studentsByCircle[e.circleId]) studentsByCircle[e.circleId] = [];

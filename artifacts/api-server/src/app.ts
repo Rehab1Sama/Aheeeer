@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import { readCacheInvalidator } from "./lib/readCache";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
@@ -85,6 +86,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // سجل التدقيق: كل تعديل/حذف ناجح
+app.use("/api", readCacheInvalidator);
 app.use("/api", auditLog);
 app.use("/api", router);
 

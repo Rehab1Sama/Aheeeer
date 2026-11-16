@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { studentsByArchived } from "../lib/cachedQueries";
 import { db, examRecordsTable, studentsTable, studentMemorizationsTable, studentEnrollmentsTable, usersTable, recordsTable, circlesTable } from "@workspace/db";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -173,7 +174,7 @@ router.get("/volunteer/near-completion", authenticate, async (req, res): Promise
     allStudents = await db.select().from(studentsTable)
       .where(and(eq(studentsTable.isArchived, false), eq(studentsTable.circleId, req.userCircleId)));
   } else {
-    allStudents = await db.select().from(studentsTable).where(eq(studentsTable.isArchived, false));
+    allStudents = await studentsByArchived(false);
   }
   const allowedStudentIds = await getTrackStudentIds(req);
   if (allowedStudentIds !== null) {

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { cachedList } from "../lib/readCache";
 import {
   db,
   recordsTable,
@@ -41,10 +42,10 @@ router.get("/data-entry/missing", authenticate, async (req, res): Promise<void> 
 
   // Students already recorded today — used to mark (not exclude) them
   // المفتاح: studentId-circleId لأن نفس الطالبة قد تكون في حلقتين بأنصبة مختلفة
-  const todayRecords = await db
+  const todayRecords = await cachedList(`records-ids:${today}`, 60_000, () => db
     .select({ studentId: recordsTable.studentId, circleId: recordsTable.circleId, recordId: recordsTable.id })
     .from(recordsTable)
-    .where(eq(recordsTable.date, today));
+    .where(eq(recordsTable.date, today)));
   const recordMap = new Map(todayRecords.map((r) => [`${r.studentId}-${r.circleId}`, r.recordId]));
 
   // For data_entry: get their assigned circle IDs
@@ -65,7 +66,9 @@ router.get("/data-entry/missing", authenticate, async (req, res): Promise<void> 
     : sql`true`;
 
   // Primary source: enrollment table (source of truth)
-  const byEnrollment = await db
+  // لغير مُدخلة البيانات القائمة واحدة للجميع: تُحفظ دقيقة (وتُفرَّغ مع أي تعديل)
+  const shared = userRole !== "data_entry";
+  const byEnrollment = await (shared ? (q: () => Promise<any[]>) => cachedList("missing:byEnrollment", 60_000, q) : (q: () => Promise<any[]>) => q())(() => db
     .select({
       studentId: studentsTable.id,
       studentName: studentsTable.fullName,
@@ -84,7 +87,7 @@ router.get("/data-entry/missing", authenticate, async (req, res): Promise<void> 
         eq(studentsTable.isArchived, false),
         circleFilter,
       ),
-    );
+    ));
 
   const directCircleFilter = userRole === "data_entry"
     ? assignedCircleIds && assignedCircleIds.length > 0
@@ -93,7 +96,7 @@ router.get("/data-entry/missing", authenticate, async (req, res): Promise<void> 
     : sql`${studentsTable.circleId} IS NOT NULL`;
 
   // Fallback source: students with circleId directly on the row
-  const byDirect = await db
+  const byDirect = await (shared ? (q: () => Promise<any[]>) => cachedList("missing:byDirect", 60_000, q) : (q: () => Promise<any[]>) => q())(() => db
     .select({
       studentId: studentsTable.id,
       studentName: studentsTable.fullName,
@@ -105,7 +108,7 @@ router.get("/data-entry/missing", authenticate, async (req, res): Promise<void> 
     })
     .from(studentsTable)
     .innerJoin(circlesTable, eq(circlesTable.id, studentsTable.circleId))
-    .where(and(eq(studentsTable.isArchived, false), directCircleFilter));
+    .where(and(eq(studentsTable.isArchived, false), directCircleFilter)));
 
   // Merge, deduplicate by (studentId + circleId), enrollment wins
   const seen = new Set<string>();

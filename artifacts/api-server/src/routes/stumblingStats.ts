@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { studentsByArchived } from "../lib/cachedQueries";
 import {
   db, usersTable, circlesTable, studentsTable, recordsTable,
   teacherAbsencesTable, dailyCircleTasksTable, trackSupervisorNamesTable, tracksTable,
@@ -36,7 +37,7 @@ router.get("/stats/stumbling", authenticate, async (req, res): Promise<void> => 
   const [allUsers, allCircles, allStudents, allTracks] = await Promise.all([
     db.select().from(usersTable),
     db.select().from(circlesTable).where(eq(circlesTable.isArchived, false)),
-    db.select().from(studentsTable).where(eq(studentsTable.isArchived, false)),
+    studentsByArchived(false),
     db.select().from(tracksTable),
   ]);
 

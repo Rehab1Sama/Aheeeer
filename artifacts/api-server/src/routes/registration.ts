@@ -292,20 +292,15 @@ router.get("/registration/wizard-config", async (_req, res): Promise<void> => {
     if ((settings as any).wizardConfig) rawConfig = JSON.parse((settings as any).wizardConfig);
   } catch {}
 
-  // Count preferred circles from students' extraData (JavaScript-side parsing)
-  const allStudents = await db.select({ extraData: studentsTable.extraData })
-    .from(studentsTable)
-    .where(eq(studentsTable.isArchived, false));
-
+  // عدد من اختارت كل حلقة: يُحسب داخل القاعدة (لا نسحب بيانات الاستمارات كلها مع كل فتح للنموذج)
+  const prefRows = await db.select({
+    pid: sql<string | null>`substring(${studentsTable.extraData} from '"__preferredCircleId"[[:space:]]*:[[:space:]]*"?([0-9]+)')`,
+    n: sql<number>`count(*)::int`,
+  }).from(studentsTable)
+    .where(and(eq(studentsTable.isArchived, false), sql`${studentsTable.extraData} like '%__preferredCircleId%'`))
+    .groupBy(sql`1`);
   const prefCountMap = new Map<number, number>();
-  for (const { extraData } of allStudents) {
-    if (!extraData) continue;
-    try {
-      const parsed = JSON.parse(extraData);
-      const prefId = parsed.__preferredCircleId;
-      if (prefId) prefCountMap.set(Number(prefId), (prefCountMap.get(Number(prefId)) ?? 0) + 1);
-    } catch {}
-  }
+  for (const r of prefRows) if (r.pid) prefCountMap.set(Number(r.pid), (prefCountMap.get(Number(r.pid)) ?? 0) + Number(r.n));
 
   const circleIds: number[] = (rawConfig.registrationCircles ?? []).map((rc: any) => rc.circleId).filter(Boolean);
   const circleMap = new Map<number, { id: number; name: string; meetingTime: string | null }>();

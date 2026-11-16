@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { studentsByArchived } from "../lib/cachedQueries";
 import { performTransfer } from "../lib/studentTransfer";
 import { moveStudentAccounts } from "../lib/studentAccounts";
 import { db, studentsTable, circlesTable, studentTransfersTable, studentNotesTable, studentMemorizationsTable, messagesTable, recordsTable, usersTable, studentArchiveEventsTable, studentLeaveHistoryTable, studentEnrollmentsTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
@@ -214,14 +215,9 @@ router.get("/students", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  let students = await db.select().from(studentsTable);
-
-  if (isArchivedRaw !== undefined) {
-    const archived = isArchivedRaw === "true";
-    students = students.filter(s => s.isArchived === archived);
-  } else {
-    students = students.filter(s => !s.isArchived);
-  }
+  // القائمة تُطلب كثيرًا: تُسحب بحالة الأرشفة المطلوبة فقط، وتُحفظ مؤقتًا دقيقة (وتُفرَّغ مع أي تعديل)
+  const archived = isArchivedRaw !== undefined ? isArchivedRaw === "true" : false;
+  let students = await studentsByArchived(archived);
 
   if (req.userRole === "student") {
     students = students.filter(s => s.circleId === req.userCircleId);

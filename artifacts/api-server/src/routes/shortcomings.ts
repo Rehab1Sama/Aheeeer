@@ -79,14 +79,33 @@ router.get("/shortcomings", authenticate, async (req, res): Promise<void> => {
   if (dateFrom) conditions.push(gte(recordsTable.date, dateFrom));
   if (dateTo) conditions.push(lte(recordsTable.date, dateTo));
 
-  let records = conditions.length > 0
-    ? await db.select().from(recordsTable).where(and(...conditions))
-    : await db.select().from(recordsTable);
-
-  records = records.filter(r => !r.isAbsent);
-
   const allCircles = await db.select().from(circlesTable);
   const allTracks = await db.select().from(tracksTable);
+
+  // نطاق الدور يُطبَّق في القاعدة نفسها (لا نسحب سجلات المقرأة كلها ثم نرشِّحها)
+  const trackCircleIdsOf = (name: string) => allCircles.filter(c => {
+    const t = allTracks.find(t => t.id === c.trackId);
+    return stripPrefix(t?.name ?? "") === stripPrefix(name);
+  }).map(c => c.id);
+  if (role === "student") {
+    if (!req.userStudentId) { res.json([]); return; }
+    conditions.push(eq(recordsTable.studentId, req.userStudentId));
+  } else if ((role === "teacher" || role === "supervisor") && req.userCircleId) {
+    conditions.push(eq(recordsTable.circleId, req.userCircleId));
+  } else if (role === "track_supervisor") {
+    const ids = trackCircleIdsOf(req.userTrack ?? "");
+    if (!ids.length) { res.json([]); return; }
+    conditions.push(inArray(recordsTable.circleId, ids));
+  }
+  if (trackName) {
+    const ids = trackCircleIdsOf(trackName);
+    if (!ids.length) { res.json([]); return; }
+    conditions.push(inArray(recordsTable.circleId, ids));
+  }
+
+  let records = await db.select().from(recordsTable).where(and(...conditions));
+
+  records = records.filter(r => !r.isAbsent);
 
   const circleTrackTypeMap: Record<number, string> = {};
   for (const c of allCircles) {
