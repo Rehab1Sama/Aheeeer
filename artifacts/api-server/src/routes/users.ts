@@ -2,12 +2,15 @@ import { findExistingStudent } from "../lib/studentIdentity";
 import { Router, type IRouter } from "express";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, studentsTable, circlesTable, recordsTable, studentGoalsTable, studentNotesTable, studentTransfersTable, examRecordsTable, studentEnrollmentsTable } from "@workspace/db";
-import { eq, and, sql, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, sql, isNotNull, inArray, getTableColumns } from "drizzle-orm";
 import { hashPassword } from "../lib/auth";
 import { authenticate, requireRole } from "../middlewares/authenticate";
 import { CreateUserBody, UpdateUserBody, ResetUserPasswordBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+// أعمدة قائمة الحسابات: بلا كلمات المرور والرموز (لا تخرج من القاعدة أصلًا)
+const { passwordHash: _ph, emailVerificationToken: _evt, passwordResetToken: _prt, passwordResetTokenExpiry: _prx, telegramLinkToken: _tlt, telegramChatId: _tci, ...listUserColumns } = getTableColumns(usersTable);
 
 // الأدوار التي تديرها مسؤولة المسار (لا تلمس القائدة ولا النائبة ولا مسؤولات المسارات ولا مدخلات البيانات)
 const TRACK_MANAGED_ROLES = ["student", "teacher", "supervisor", "volunteer"];
@@ -165,7 +168,8 @@ router.get("/users", authenticate, async (req, res): Promise<void> => {
       .where(eq(studentEnrollmentsTable.isArchived, false));
     const trackEnrollments = activeEnrollments.filter(enrollment => trackCircleIds.has(enrollment.circleId));
     const trackStudentIds = new Set(trackEnrollments.map(enrollment => enrollment.studentId));
-    const all = await db.select().from(usersTable);
+    const all = await db.select(listUserColumns).from(usersTable)
+      .where(and(eq(usersTable.isArchived, false), inArray(usersTable.role, ["student", "teacher", "supervisor"])));
     const filtered = all.filter(u => {
       if (u.isArchived) return false;
       if (!["student", "teacher", "supervisor"].includes(u.role)) return false;
@@ -200,8 +204,9 @@ router.get("/users", authenticate, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden" }); return;
   }
   const roleFilter = req.query.role as string | undefined;
-  const users = await db.select().from(usersTable);
-  const filtered = roleFilter ? users.filter(u => u.role === roleFilter) : users;
+  const filtered = roleFilter
+    ? await db.select(listUserColumns).from(usersTable).where(eq(usersTable.role, roleFilter))
+    : await db.select(listUserColumns).from(usersTable);
   res.json(withMeta(filtered));
 });
 

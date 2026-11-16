@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { studentsByArchived } from "../lib/cachedQueries";
-import { cached, cachedList } from "../lib/readCache";
+import { studentsByArchived, recordsInRange } from "../lib/cachedQueries";
+import { cached } from "../lib/readCache";
 import { db, recordsTable, studentsTable, studentEnrollmentsTable, studentMemorizationsTable, circlesTable, usersTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, examRecordsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { isShortcomingRecord } from "../lib/shortcoming";
@@ -31,12 +31,6 @@ async function loadStatsStudents(): Promise<StatsStudent[]> {
     ageRange: row.age_range ?? null,
     isArchived: row.is_archived === true,
   }));
-}
-
-/** سجلات فترة: تُطلب بنفس الفترة مرات كثيرة متتالية (لوحة الإحصاءات) */
-function recordsInRange(from: string, to: string) {
-  return cachedList(`records:${from}:${to}`, 60_000, () =>
-    db.select().from(recordsTable).where(and(gte(recordsTable.date, from), lte(recordsTable.date, to))));
 }
 
 function getDateRange(dateFrom?: string, dateTo?: string): { from: string; to: string; label: string } {
@@ -412,10 +406,8 @@ router.get("/stats/monthly-comparison", authenticate, async (req, res): Promise<
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
   const todayStr = getMakkahDay();
 
-  let thisMonthRecords = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, thisMonthStart), lte(recordsTable.date, todayStr)));
-  let lastMonthRecords = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, lastMonthStart), lte(recordsTable.date, lastMonthEnd)));
+  let thisMonthRecords = await recordsInRange(thisMonthStart, todayStr);
+  let lastMonthRecords = await recordsInRange(lastMonthStart, lastMonthEnd);
 
   if (circleIdParam) {
     const cid = parseInt(circleIdParam, 10);
@@ -557,8 +549,7 @@ router.get("/stats/monthly-report", authenticate, async (req, res): Promise<void
     circles = allCircles.filter(c => c.track === u?.track);
   }
 
-  const records = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, fromDate), lte(recordsTable.date, toDate)));
+  const records = await recordsInRange(fromDate, toDate);
 
   const result = circles.map(circle => {
     const circleStudents = allStudents.filter(s => s.circleId === circle.id);
@@ -893,10 +884,8 @@ router.get("/stats/weekly-comparison", authenticate, async (req, res): Promise<v
     circleIds = [parseInt(circleIdParam, 10)];
   }
 
-  const thisRecs = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, thisWeekStart), lte(recordsTable.date, todayStr)));
-  const lastRecs = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, lastWeekStart), lte(recordsTable.date, lastWeekEnd)));
+  const thisRecs = await recordsInRange(thisWeekStart, todayStr);
+  const lastRecs = await recordsInRange(lastWeekStart, lastWeekEnd);
 
   const filterByCircles = (recs: typeof thisRecs) =>
     circleIds ? recs.filter(r => circleIds!.includes(r.circleId)) : recs;
@@ -1007,8 +996,7 @@ router.get("/stats/teacher-performance", authenticate, async (req, res): Promise
   }
 
   // جلب السجلات وغيابات المعلمات
-  const records = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, from), lte(recordsTable.date, to)));
+  const records = await recordsInRange(from, to);
   const teacherAbsences = await db.select().from(teacherAbsencesTable)
     .where(and(gte(teacherAbsencesTable.date, from), lte(teacherAbsencesTable.date, to)));
 
@@ -1134,8 +1122,7 @@ router.get("/stats/monthly-honor", authenticate, async (req, res): Promise<void>
     }
   }
 
-  const records = await db.select().from(recordsTable)
-    .where(and(gte(recordsTable.date, monthStart), lte(recordsTable.date, effectiveEnd)));
+  const records = await recordsInRange(monthStart, effectiveEnd);
 
   const filteredRecords = visibleCircleIds
     ? records.filter(r => visibleCircleIds!.includes(r.circleId))

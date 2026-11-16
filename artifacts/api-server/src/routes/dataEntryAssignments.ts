@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, dataEntryCircleAssignmentsTable, usersTable, circlesTable, recordsTable, studentsTable, teacherAbsencesTable, tracksTable } from "@workspace/db";
-import { eq, and, gte, inArray } from "drizzle-orm";
+import { eq, and, gte, inArray, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay } from "../lib/date";
 import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
@@ -335,9 +335,11 @@ router.get("/data-entry/track-status", authenticate, async (req, res): Promise<v
     db.select({ id: studentsTable.id, circleId: studentsTable.circleId })
       .from(studentsTable)
       .where(and(inArray(studentsTable.circleId, circleIds), eq(studentsTable.isArchived, false))),
-    db.select({ circleId: recordsTable.circleId, date: recordsTable.date })
+    // آخر تاريخ لكل حلقة يُحسب داخل القاعدة (صف واحد لكل حلقة بدل كل سجلاتها)
+    db.select({ circleId: recordsTable.circleId, date: sql<string>`max(${recordsTable.date})` })
       .from(recordsTable)
-      .where(inArray(recordsTable.circleId, circleIds)),
+      .where(inArray(recordsTable.circleId, circleIds))
+      .groupBy(recordsTable.circleId),
   ]);
 
   // آخر تاريخ فيه إدخال فعلي لكل حلقة (يفيد لو ما دخلت اليوم)

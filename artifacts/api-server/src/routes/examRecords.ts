@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { studentsByArchived } from "../lib/cachedQueries";
+import { studentsByArchived, allStudents as allStudents_, userNames } from "../lib/cachedQueries";
 import { db, examRecordsTable, studentsTable, studentMemorizationsTable, studentEnrollmentsTable, usersTable, recordsTable, circlesTable } from "@workspace/db";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -56,8 +56,8 @@ router.get("/exam-records", authenticate, async (req, res): Promise<void> => {
   if (!allowed.includes(req.userRole!)) { res.status(403).json({ error: "Forbidden" }); return; }
   const { studentId } = req.query as { studentId?: string };
 
-  const allStudents = await db.select().from(studentsTable);
-  const allUsers = await db.select().from(usersTable);
+  const allStudents = await allStudents_();
+  const allUsers = await userNames();
   const allowedStudentIds = await getTrackStudentIds(req);
   const studentMap: Record<number, string> = {};
   allStudents.forEach(s => { studentMap[s.id] = s.fullName; });

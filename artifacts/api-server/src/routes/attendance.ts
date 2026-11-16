@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { allStudents as allStudents_ } from "../lib/cachedQueries";
 import { db, recordsTable, studentsTable, circlesTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -15,7 +16,7 @@ router.get("/attendance/today", authenticate, async (req, res): Promise<void> =>
     and(eq(recordsTable.date, today), eq(recordsTable.isAbsent, true))
   );
 
-  const students = await db.select().from(studentsTable);
+  const students = await allStudents_();
   const circles = await db.select().from(circlesTable);
 
   let absentStudents = records.map(r => {
@@ -75,7 +76,7 @@ router.get("/attendance/repeated-absences", authenticate, async (req, res): Prom
     )
   );
 
-  const students = await db.select().from(studentsTable);
+  const students = await allStudents_();
   const circles = await db.select().from(circlesTable);
 
   const countMap: Record<number, number> = {};

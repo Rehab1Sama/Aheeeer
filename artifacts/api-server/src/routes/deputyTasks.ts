@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { toSafeUser } from "../lib/safeUser";
 import { db, usersTable, deputyTasksTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -72,8 +72,7 @@ router.delete("/deputy/tasks/:id", authenticate, requireRole("leader"), async (r
 });
 
 router.get("/deputy/status", authenticate, requireRole("leader"), async (req, res): Promise<void> => {
-  const allUsers = await db.select().from(usersTable);
-  const deputies = allUsers.filter(u => u.role === "deputy" && !u.isArchived);
+  const deputies = await db.select().from(usersTable).where(and(eq(usersTable.role, "deputy"), eq(usersTable.isArchived, false)));
   if (!deputies.length) { res.json({ hasDeputy: false }); return; }
   const deputy = deputies[0]!;
   const lastLogin = deputy.lastLoginAt;

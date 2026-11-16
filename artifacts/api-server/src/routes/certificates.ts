@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { allStudents as allStudents_ } from "../lib/cachedQueries";
 import ExcelJS from "exceljs";
 import {
   db,
@@ -577,7 +578,7 @@ router.get("/certificate-terms/:termId/import-candidates", authenticate, async (
   }
   const rows = await db.select().from(certificateImportCandidatesTable)
     .where(eq(certificateImportCandidatesTable.termId, Number(req.params.termId)));
-  const students = await db.select().from(studentsTable);
+  const students = await allStudents_();
   res.json(rows.map((row) => {
     const student = students.find((item) => item.id === row.matchedStudentId);
     return {
@@ -656,7 +657,7 @@ router.put("/certificate-terms/:termId/import-candidates", authenticate, async (
   }
   const rows = await db.select().from(certificateImportCandidatesTable)
     .where(eq(certificateImportCandidatesTable.termId, term.id));
-  const students = await db.select().from(studentsTable);
+  const students = await allStudents_();
   res.json(rows.map((row) => ({
     id: row.id,
     sourceName: row.sourceName,

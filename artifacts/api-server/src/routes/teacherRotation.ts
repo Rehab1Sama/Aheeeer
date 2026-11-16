@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { userNames } from "../lib/cachedQueries";
 import { db, examRotationsTable, examTeacherAssignmentsTable, usersTable, circlesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -127,7 +128,7 @@ router.get("/exam-rotations/:id/assignments", authenticate, async (req, res): Pr
   if (req.userRole !== "leader" && req.userRole !== "track_supervisor") { res.status(403).json({ error: "Forbidden" }); return; }
   const rotationId = parseInt(req.params.id as string);
   const assignments = await db.select().from(examTeacherAssignmentsTable).where(eq(examTeacherAssignmentsTable.rotationId, rotationId));
-  const allUsers = await db.select().from(usersTable);
+  const allUsers = await userNames();
   const allCircles = await db.select().from(circlesTable);
   const userMap: Record<number, string> = {};
   allUsers.forEach(u => { userMap[u.id] = u.name; });

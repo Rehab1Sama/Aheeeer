@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { allStudents as allStudents_, recordsInRange } from "../lib/cachedQueries";
 import { db, badgeEventsTable, badgeAssignmentsTable, recordsTable, usersTable, circlesTable, studentsTable, teacherAbsencesTable } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -113,12 +114,11 @@ router.post("/badge-events/:id/auto-assign", authenticate, async (req, res): Pro
 
     // Simplified: all circles with any records in the period qualify
     const circlesWithRecords = new Set<number>();
-    const allStudents = await db.select().from(studentsTable);
+    const allStudents = await allStudents_();
     const studentCircleMap: Record<number, number> = {};
     allStudents.forEach(s => { if (s.circleId) studentCircleMap[s.id] = s.circleId; });
 
-    const periodRecords = await db.select().from(recordsTable)
-      .where(and(gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
+    const periodRecords = await recordsInRange(dateFrom, dateTo);
 
     const circlePresent: Record<number, number> = {};
     const circleAbsent: Record<number, number> = {};

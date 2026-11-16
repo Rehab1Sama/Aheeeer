@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { studentsByArchived } from "../lib/cachedQueries";
+import { studentsByArchived, recordsInRange } from "../lib/cachedQueries";
 import {
   db, usersTable, circlesTable, studentsTable, recordsTable,
   teacherAbsencesTable, dailyCircleTasksTable, trackSupervisorNamesTable, tracksTable,
@@ -72,7 +72,7 @@ router.get("/stats/stumbling", authenticate, async (req, res): Promise<void> => 
   const oldestWorkingDay = lastTwoWorkingDays[lastTwoWorkingDays.length - 1]!;
 
   const [recentRecords, teacherAbsences, circleTasks] = await Promise.all([
-    db.select().from(recordsTable).where(and(gte(recordsTable.date, thirtyDaysAgo), lte(recordsTable.date, today))),
+    recordsInRange(thirtyDaysAgo, today),
     db.select().from(teacherAbsencesTable).where(and(gte(teacherAbsencesTable.date, twoDaysAgo), lte(teacherAbsencesTable.date, today))),
     db.select().from(dailyCircleTasksTable).where(and(gte(dailyCircleTasksTable.date, oldestWorkingDay), lte(dailyCircleTasksTable.date, today))),
   ]);
