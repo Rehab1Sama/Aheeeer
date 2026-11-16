@@ -21,7 +21,8 @@ export function getExpectedEntryDays(
   dataEntryType: string | null | undefined,
   circleName: string | null | undefined,
 ): number[] {
-  void circleName; // كان لمشكاة ٢ و٥ (الثلاثاء فقط)؛ صارتا مثل بقية حلقات مشكاة
+  // مسار مهج: الإدخال يوم الأربعاء فقط، فلا تنبيهات «لم تُدخل» في بقية الأيام
+  if (/^\s*مهج/.test(circleName ?? "")) return [3];
   if (dataEntryType === "recitation" || dataEntryType === "mothers" || dataEntryType === "children" || dataEntryType === "fixation") {
     return SUN_TO_WED;
   }

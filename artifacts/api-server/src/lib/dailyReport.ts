@@ -129,6 +129,9 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const isWorkDay = expected.length > 0;
   // للخلاصة المختصرة: ما يستدعي تدخل القائدة فقط
   const noDataCircles: string[] = [];
+  // جدولا الإدخال في الخلاصة: الحلقات التي لم تُدخل، والتي إدخالها ناقص (مع اسم المشرفة)
+  const notEnteredRows: Array<{ track: string; line: string }> = [];
+  const partialRows: Array<{ track: string; missing: number; line: string }> = [];
   const urgentTeachers: string[] = [];
   const urgentTracks: string[] = [];
   const awaySupervisors: string[] = [];
@@ -150,6 +153,13 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
     presentCount += recs.filter((x) => !x.isAbsent).length;
     absentCount += recs.filter((x) => x.isAbsent).length;
     const missing = r.filter((s) => !entered.has(s.studentId));
+    {
+      const t0 = (tasksByCircle.get(c.id) ?? [])[0];
+      const sid = t0?.supervisorId ?? c.supervisorId;
+      const sup = sid ? ` | ${esc(firstTwo(userName.get(sid)))}` : "";
+      if (recs.length === 0) notEnteredRows.push({ track: trackNameOf(c), line: `${esc(c.name)} (${ar(r.length)} طالبة)${sup}` });
+      else if (missing.length > 0) partialRows.push({ track: trackNameOf(c), missing: missing.length, line: `${esc(c.name)}: ${ar(entered.size)} من ${ar(r.length)}${sup}` });
+    }
     const problems: Row[] = [];
     if (recs.length === 0) { problems.push(["الإدخال", "لم تُدخل البيانات"]); noDataCircles.push(c.name); }
     else if (missing.length > 0) problems.push(["الإدخال", `ناقص ${ar(missing.length)} من ${ar(r.length)} (${missing.slice(0, 6).map((s) => esc(s.fullName.split(" ")[0])).join("، ")}${missing.length > 6 ? "…" : ""})`]);
@@ -420,13 +430,16 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
       if (items.length > max) shown.push(`<i>و${ar(items.length - max)} غيرها</i>`);
       lines.push(`<b>${title}</b>`, `<blockquote>${shown.join("\n")}</blockquote>`);
     };
+    const byTrack = <T extends { track: string }>(xs: T[]) => [...xs].sort((a, b) => a.track.localeCompare(b.track, "ar", { numeric: true }));
+    section(`حلقات لم تُدخل (${ar(notEnteredRows.length)})`, byTrack(notEnteredRows).map((x) => x.line), 40);
+    section(`حلقات إدخالها ناقص (${ar(partialRows.length)})`, [...partialRows].sort((a, b) => b.missing - a.missing || a.track.localeCompare(b.track, "ar", { numeric: true })).map((x) => x.line), 40);
     section("معلمات تكرر غيابهن أو تأخرهن", urgentTeachers);
     section("مشرفات تكرر عدم إدخالهن", repeatNoEntry);
     section("طالبات يتكرر تقصيرهن أو تأخر خطتهن", [...urgentStudents.entries()].sort((x, y) => x[0].localeCompare(y[0], "ar", { numeric: true })).map(([circle, names]) => `${esc(circle)}: ${names.join("، ")}`), 10);
     section("حلقات غيابها كثير", highAbsence);
     if (urgentTracks.length) section("مسارات لم تُعبَّأ مهامها", urgentTracks.map((t) => `مسار ${esc(t)}`));
     section("مسؤولات مسار لم يدخلن الموقع", awaySupervisors);
-    const any = urgentTeachers.length + repeatNoEntry.length + urgentStudents.size + highAbsence.length + urgentTracks.length + awaySupervisors.length;
+    const any = notEnteredRows.length + partialRows.length + urgentTeachers.length + repeatNoEntry.length + urgentStudents.size + highAbsence.length + urgentTracks.length + awaySupervisors.length;
     if (any === 0) lines.push("ما شاء الله، لا شيء يستدعي تدخلكِ اليوم 🌿");
     if (completed.length) lines.push("", `أتمَّت ${ar(completed.length)} ${completed.length >= 3 && completed.length <= 10 ? "طالبات" : "طالبة"} خطة المراجعة ♥️`);
     if (hasOverview) lines.push("", "أوسمة الأسبوع في الرسالة التالية ♥️");
