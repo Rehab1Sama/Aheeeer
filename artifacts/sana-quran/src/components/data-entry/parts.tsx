@@ -137,12 +137,19 @@ export function normalizeAr(s: string): string {
 
 export function findSurahFuzzy(raw: string): { match: Surah | null; suggestions: Surah[] } {
   if (!raw.trim()) return { match: null, suggestions: [] };
-  const norm = normalizeAr(raw.trim());
-  const exact = SURAHS.find((s) => {
-    const sn = normalizeAr(s.name);
-    return sn === norm || norm.includes(sn) || sn.includes(norm);
-  });
+  const norm = normalizeAr(raw.trim()).replace(/^سوره\s+/, "");
+  const bare = (x: string) => x.replace(/^ال/, "");
+  // المطابقة التامة أولًا (بـ«ال» أو بدونها)، ثم الاحتواء مع تفضيل أطول اسم:
+  // كان «القيامة» و«الحاقة» تُطابَق سورة «ق» لأن اسمها حرف واحد موجود داخلهما
+  const exact = SURAHS.find((s) => { const sn = normalizeAr(s.name); return sn === norm || bare(sn) === bare(norm); });
   if (exact) return { match: exact, suggestions: [] };
+  const contained = SURAHS
+    .map((s) => ({ s, sn: normalizeAr(s.name) }))
+    .filter(({ sn }) => sn.length >= 3 && (norm.includes(sn) || (norm.length >= 3 && sn.includes(norm))))
+    .sort((a, b) => b.sn.length - a.sn.length);
+  if (contained.length === 1 || (contained.length > 1 && contained[0]!.sn.length > contained[1]!.sn.length)) {
+    return { match: contained[0]!.s, suggestions: [] };
+  }
   const scores = SURAHS.map((s) => {
     const sn = normalizeAr(s.name);
     let score = 0;
