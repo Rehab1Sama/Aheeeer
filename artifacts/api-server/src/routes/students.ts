@@ -963,6 +963,20 @@ router.patch("/students/:id/leave", authenticate, async (req, res): Promise<void
     await db.insert(studentLeaveHistoryTable).values({
       studentId: id, leaveStart, leaveEnd, reason: reason ?? null, grantedById: req.userId ?? null,
     });
+    // إجازة بأثر رجعي: سجلات «غياب» أُدخلت قبل اعتماد الإجازة لنفس الأيام تُنقل للأرشيف
+    // (records_leave_archive) حتى تُحسب الأيام إجازةً لا غيابًا. لا حذف نهائي.
+    try {
+      const scope = circleId
+        ? sql`circle_id = ${circleId}`
+        : sql`circle_id in (select circle_id from student_enrollments where student_id = ${id} and is_archived = false)`;
+      await db.execute(sql`with moved as (
+          delete from records where student_id = ${id} and is_absent = true
+            and date between ${leaveStart} and ${leaveEnd} and ${scope}
+          returning *)
+        insert into records_leave_archive select now(), m.* from moved m`);
+    } catch (e) {
+      console.error("leave: archiving absences failed", e);
+    }
     // Insert leave notification for leader/deputy
     const enrollmentForNotif = circleId
       ? await db.select({ cid: studentEnrollmentsTable.circleId }).from(studentEnrollmentsTable)
