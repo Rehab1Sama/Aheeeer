@@ -690,7 +690,7 @@ export default function TrackPage() {
                                     <ArrowLeftRight className="w-3 h-3" />نقل
                                   </button>
                                   <button
-                                    onClick={() => { const s = circleStudents.find(x => x.id === student.id); if (s) handleArchive(s, circle.id); }}
+                                    onClick={() => { const s = circleStudents.find(x => x.id === student.id) ?? ({ id: student.id, fullName: student.fullName, circleId: circle.id } as Student); handleArchive(s, circle.id); }}
                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-xs font-semibold"
                                   >
                                     <Archive className="w-3 h-3" />إخراج

@@ -9,6 +9,18 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const MANAGERS = ["leader", "deputy"];
+const VIEWERS = [...MANAGERS, "track_supervisor"];
+
+/** مسؤولة المسار: ترى وتدمج فقط مجموعات كل نسخها النشطة في حلقات مسارها */
+async function scopeForTrack(groups: Group[], track: string | null | undefined): Promise<Group[]> {
+  if (!track) return [];
+  const circles = await db.select({ id: circlesTable.id, track: circlesTable.track }).from(circlesTable);
+  const trackOf = new Map(circles.map((c) => [c.id, c.track]));
+  return groups.filter((g) => {
+    const active = g.members.flatMap((m) => m.circles.filter((c) => c.active));
+    return active.length > 0 && active.every((c) => trackOf.get(c.id) === track);
+  });
+}
 
 type Member = {
   id: number; fullName: string; isArchived: boolean; createdAt: string; phoneTail: string;
@@ -96,8 +108,9 @@ async function buildGroups(): Promise<Group[]> {
 }
 
 router.get("/admin/duplicate-students", authenticate, async (req, res): Promise<void> => {
-  if (!MANAGERS.includes(req.userRole!)) { res.status(403).json({ error: "للقائدة والنائبة فقط" }); return; }
-  const groups = await buildGroups();
+  if (!VIEWERS.includes(req.userRole!)) { res.status(403).json({ error: "للقائدة والنائبة ومسؤولات المسارات فقط" }); return; }
+  let groups = await buildGroups();
+  if (req.userRole === "track_supervisor") groups = await scopeForTrack(groups, req.userTrack);
   res.json({ groups, totalGroups: groups.length, totalCopies: groups.reduce((n, g) => n + g.members.length - 1, 0) });
 });
 
@@ -148,12 +161,13 @@ async function mergeInto(primaryId: number, duplicateIds: number[]): Promise<voi
 }
 
 router.post("/admin/duplicate-students/merge", authenticate, async (req, res): Promise<void> => {
-  if (!MANAGERS.includes(req.userRole!)) { res.status(403).json({ error: "للقائدة والنائبة فقط" }); return; }
+  if (!VIEWERS.includes(req.userRole!)) { res.status(403).json({ error: "للقائدة والنائبة ومسؤولات المسارات فقط" }); return; }
   const primaryId = Number(req.body?.primaryId);
   const duplicateIds: number[] = Array.isArray(req.body?.duplicateIds) ? req.body.duplicateIds.map(Number).filter(Number.isFinite) : [];
   if (!Number.isFinite(primaryId) || duplicateIds.length === 0) { res.status(400).json({ error: "حدّدي السجل الأساسي والنسخ" }); return; }
   // أمان: لا يُدمج إلا ما يقع فعلًا في مجموعة نسخ واحدة مع الأساسي
-  const groups = await buildGroups();
+  let groups = await buildGroups();
+  if (req.userRole === "track_supervisor") groups = await scopeForTrack(groups, req.userTrack);
   const group = groups.find((g) => g.members.some((m) => m.id === primaryId));
   if (!group || !duplicateIds.every((id) => group.members.some((m) => m.id === id))) {
     res.status(400).json({ error: "هذه السجلات ليست نسخًا لطالبة واحدة" });

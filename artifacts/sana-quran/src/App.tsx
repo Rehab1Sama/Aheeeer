@@ -332,7 +332,7 @@ function AppRoutes() {
           {["leader", "deputy", "track_supervisor", "teacher", "supervisor"].includes(user.role) ? <TransferRequestsPage canDecide={isLeaderOrDeputy} /> : <Redirect to="/" />}
         </Route>
         <Route path="/duplicate-students">
-          {isLeaderOrDeputy ? <DuplicateStudentsPage isLeader={isLeader} /> : <Redirect to="/" />}
+          {isLeaderOrDeputy || user.role === "track_supervisor" ? <DuplicateStudentsPage isLeader={isLeader} /> : <Redirect to="/" />}
         </Route>
         <Route path="/audit-log">
           {isLeader ? <AuditLogPage /> : <Redirect to="/" />}

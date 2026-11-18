@@ -1176,6 +1176,7 @@ function getNavItems(role: string, unreadCount = 0, track?: string | null, circl
       { href: "/attendance", label: "الغيابات", icon: CalendarCheck },
       { href: "/monthly-report", label: "تقرير الحضور", icon: BarChart2, feature: "stats_monthly" },
       { href: "/archived-students", label: "المؤرشفات", icon: Archive },
+      { href: "/duplicate-students", label: "الحسابات المكررة", icon: Users },
       { href: "/badges", label: "الأوسمة", icon: Award, feature: "badges" },
       { href: "/badge-entitlements", label: "مستحقات الأوسمة", icon: Award, feature: "badges" },
       { href: "/calendar", label: "التقويم", icon: Calendar, feature: "calendar" },
