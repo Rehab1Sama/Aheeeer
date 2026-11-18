@@ -2,7 +2,7 @@
 //   متكاسلات 🌧️ : خطة متأخرة ٣ أيام فأكثر، أو ٥ أيام فأكثر بلا حفظ في أسبوعين، أو تقصير مرتين فأكثر في أسبوعين
 //   يحتجن متابعة 🌿 : غياب ٣ أيام متتالية أو ٣ مرات في أسبوعين، أو نزول الإنجاز إلى النصف
 //   متميِّزات ♥️ (الخميس فقط): أسبوع بلا غياب ولا تقصير، مع تقدُّم في الخطة أو حفظ فوق معدَّلها
-// مسارات الفتيات (خطة المراجعة) وسُنى (خطة التثبيت؛ «الحفظ» فيها = التثبيت الجديد).
+// كل المسارات: الفتيات (خطة المراجعة)، سُنى (التثبيت)، الأطفال، الأمهات (مهج)، والتصحيح (مشكاة نور).
 import {
   db, circlesTable, tracksTable, studentEnrollmentsTable, studentsTable, recordsTable,
   reviewPlansTable, reviewPlanDaysTable,
@@ -22,9 +22,13 @@ const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربع�
 const fmtDate = (d: string) => { const x = new Date(d + "T12:00:00Z"); return `${DAYS[x.getUTCDay()]} ${ar(x.getUTCDate())} ${MONTHS[x.getUTCMonth()]}`; };
 
 type Line = { circle: string; name: string; reasons: string[] };
-export type TrackStudentDigest = { track: string; lazy: Line[]; follow: Line[]; excellent: Line[]; hadData: boolean };
+export type TrackStudentDigest = { track: string; kind: string; lazy: Line[]; follow: Line[]; excellent: Line[]; hadData: boolean };
 
-const SUPPORTED = new Set(["girls", "fixation"]);
+const SUPPORTED = new Set(["girls", "fixation", "children", "mothers", "recitation"]);
+// مسارات بلا حفظ يومي: لا يُحسب عليها «بلا حفظ»
+const NO_MEMO = new Set(["mothers", "recitation"]);
+/** صيغة المذكَّر والمؤنَّث: الأطفال (بنين وبنات) بصيغة عامة */
+const g = (kind: string, fem: string, neutral: string) => (kind === "children" ? neutral : fem);
 
 /** يبني بيانات كل مسار (الفتيات وسُنى) ليوم التقرير D */
 export async function buildTrackStudentDigests(D: string, opts: { weekly: boolean }): Promise<Map<string, TrackStudentDigest>> {
@@ -96,7 +100,7 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     const c = circleById.get(e.circleId);
     if (!c?.track) continue;
     const t = typeOf(c);
-    const dg = out.get(c.track) ?? { track: c.track, lazy: [], follow: [], excellent: [], hadData: tracksWithData.has(c.track) };
+    const dg = out.get(c.track) ?? { track: c.track, kind: t, lazy: [], follow: [], excellent: [], hadData: tracksWithData.has(c.track) };
     out.set(c.track, dg);
     const k = `${e.studentId}:${e.circleId}`;
     const rs = (recsByKey.get(k) ?? []).sort((a, b) => a.date.localeCompare(b.date));
@@ -105,23 +109,23 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     const lazy: string[] = [];
     const follow: string[] = [];
     const ps = planState.get(k);
-    if (ps && ps.delay >= 3) lazy.push(`متأخرة عن خطتها ${days(ps.delay)}`);
+    if (ps && ps.delay >= 3) lazy.push(`${g(t, "متأخرة عن خطتها", "تأخر عن الخطة")} ${days(ps.delay)}`);
     const noMemo = present14.filter((r) => (r.memorizePages ?? 0) === 0).length;
-    if (noMemo >= 5) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
+    if (noMemo >= 5 && !NO_MEMO.has(t)) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
     const short = last14.filter((r) => isShortcomingRecord(r, t)).length;
     if (short >= 2) lazy.push(`تقصير ${times(short)}`);
     const tail = rs.slice(-3);
     const abs14 = last14.filter((r) => r.isAbsent).length;
-    if (tail.length === 3 && tail.every((r) => r.isAbsent)) follow.push("غابت ٣ أيام متتالية");
-    else if (abs14 >= 3) follow.push(`غابت ${days(abs14)} في أسبوعين`);
-    const pages = (r: typeof rs[number]) => (r.memorizePages ?? 0) + (r.reviewNearPages ?? 0) + (r.reviewFarPages ?? 0) + (r.reviewFar2Pages ?? 0) + (r.reviewPages ?? 0);
+    if (tail.length === 3 && tail.every((r) => r.isAbsent)) follow.push(t === "mothers" ? "غابت ٣ لقاءات متتالية" : g(t, "غابت ٣ أيام متتالية", "غياب ٣ أيام متتالية"));
+    else if (abs14 >= 3) follow.push(`${g(t, "غابت", "غياب")} ${days(abs14)} في أسبوعين`);
+    const pages = (r: typeof rs[number]) => (r.memorizePages ?? 0) + (r.reviewNearPages ?? 0) + (r.reviewFarPages ?? 0) + (r.reviewFar2Pages ?? 0) + (r.reviewPages ?? 0) + (r.recitationPages ?? 0);
     const present = rs.filter((r) => !r.isAbsent);
     const recent = present.filter((r) => r.date >= d7);
     const prev = present.filter((r) => r.date < d7);
     if (recent.length >= 2 && prev.length >= 3) {
       const a = recent.reduce((s, r) => s + pages(r), 0) / recent.length;
       const b = prev.reduce((s, r) => s + pages(r), 0) / prev.length;
-      if (b >= 2 && a <= b * 0.5) follow.push("إنجازها نزل للنصف");
+      if (b >= 2 && a <= b * 0.5) follow.push(g(t, "إنجازها نزل للنصف", "الإنجاز نزل للنصف"));
     }
     const name = esc(firstTwo(e.fullName));
     if (lazy.length) dg.lazy.push({ circle: c.name, name, reasons: [...lazy, ...follow] });
@@ -129,14 +133,15 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
 
     if (opts.weekly && !lazy.length && !follow.length) {
       const week = rs.filter((r) => r.date >= d7);
-      const clean = week.length >= 2 && week.every((r) => !r.isAbsent && !isShortcomingRecord(r, t));
+      const clean = week.length >= (t === "mothers" ? 1 : 2) && week.every((r) => !r.isAbsent && !isShortcomingRecord(r, t));
       if (clean) {
         const why: string[] = [];
-        if (ps?.ahead) why.push("متقدِّمة في خطتها");
+        if (ps?.ahead) why.push(g(t, "متقدِّمة في خطتها", "متقدِّم في الخطة"));
         const weekMemo = week.reduce((s, r) => s + (r.memorizePages ?? 0), 0);
         const prevWeeks = rs.filter((r) => r.date < d7);
         const prevAvg = prevWeeks.length ? (prevWeeks.reduce((s, r) => s + (r.memorizePages ?? 0), 0) / prevWeeks.length) * week.length : 0;
-        if (weekMemo > 0 && prevAvg > 0 && weekMemo >= prevAvg * 1.25) why.push(t === "fixation" ? "ثبَّتت أكثر من معدَّلها" : "حفظت أكثر من معدَّلها");
+        if (weekMemo > 0 && prevAvg > 0 && weekMemo >= prevAvg * 1.25) why.push(t === "fixation" ? "ثبَّتت أكثر من معدَّلها" : g(t, "حفظت أكثر من معدَّلها", "حفظ أكثر من المعدَّل"));
+        if (t === "mothers" || t === "recitation") why.push(g(t, "حضرت الأسبوع كاملًا", ""));
         if (why.length) dg.excellent.push({ circle: c.name, name, reasons: [...why, "بلا غياب ولا تقصير"] });
       }
     }
@@ -156,10 +161,12 @@ function section(title: string, lines: Line[]): string[] {
 /** رسالة مسؤولة المسار باسمها */
 export function trackStudentMessage(dg: TrackStudentDigest, supervisorName: string, D: string, weekly: boolean): string {
   const first = esc((supervisorName || "").trim().split(/\s+/)[0] ?? "");
-  const lines = [`🌸 <b>قمرتنا ${first}</b>، طالبات مسار ${esc(dg.track.replace(/^مسار\s+/, ""))}`, `<i>${fmtDate(D)}</i>`, ""];
-  lines.push(...section("متكاسلات 🌧️", dg.lazy));
-  lines.push(...section("يحتجن متابعة 🌿", dg.follow));
-  if (weekly) lines.push(...section("متميِّزات الأسبوع ♥️", dg.excellent));
-  if (!dg.lazy.length && !dg.follow.length && !(weekly && dg.excellent.length)) lines.push("ما شاء الله، طالبات مساركِ بخير اليوم 🌿");
+  const kid = dg.kind === "children";
+  const who = kid ? "أطفال" : dg.kind === "mothers" ? "أمهات" : "طالبات";
+  const lines = [`🌸 <b>قمرتنا ${first}</b>، ${who} مسار ${esc(dg.track.replace(/^مسار\s+/, ""))}`, `<i>${fmtDate(D)}</i>`, ""];
+  lines.push(...section(kid ? "متكاسلون 🌧️" : "متكاسلات 🌧️", dg.lazy));
+  lines.push(...section(kid ? "يحتاجون متابعة 🌿" : "يحتجن متابعة 🌿", dg.follow));
+  if (weekly) lines.push(...section(kid ? "متميِّزو الأسبوع ♥️" : "متميِّزات الأسبوع ♥️", dg.excellent));
+  if (!dg.lazy.length && !dg.follow.length && !(weekly && dg.excellent.length)) lines.push(`ما شاء الله، ${who} مساركِ بخير اليوم 🌿`);
   return lines.join("\n").trim();
 }
