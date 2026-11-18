@@ -368,10 +368,12 @@ export function evaluateCoverage(
     const missing = ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
     return missing <= (ws.length > 2 ? WAJH_TOLERANCE : 0);
   };
-  // يوم «يُعفى» إن مضى بلا سجل حضور (لم تُدخل المشرفة، أو غياب المعلمة، أو غياب الطالبة):
-  // يُحسب منتظمًا متى غُطّي نصيب يوم بعده. أما يوم فيه سجل حضور ولم يُغطَّ نصيبه فلا يُعفى إلا بتغطية نصيبه نفسه
-  // (التدارك يُحسب تلقائيًا لأن التغطية تراكمية). ولا يُعفى يوم لم يأتِ بعد: تغطية نصيب بعيد خارج الترتيب
-  // لا تجعلها «متقدمة» بأيام لم تراجعها.
+  // قاعدة الإدارة: يوم مضى بلا سجل حضور (لم تُدخل المشرفة، أو غياب المعلمة، أو غياب الطالبة) يُحسب منتظمًا
+  // متى غُطّي نصيب يوم بعده؛ وتأخر الطالبة يُغفر متى تداركت نصيبه (التغطية تراكمية).
+  // وتغطية نصيب يوم لاحق تُسقط ما قبله بشرط أن تكون غطّت فعلًا معظم ما قبله (٨٥٪ فأكثر، وأيام الإعفاء
+  // محسوبة مغطّاة): يتسامح مع صفحة متروكة كالفاتحة أو اختلاف بسيط في الإدخال، ولا يجعل مراجعة مقطع بعيد
+  // خارج الترتيب «تقدمًا» بأيام لم تراجعها.
+  const PREFIX_RATIO = 0.85;
   const forgivable = (dayNumber: number) => {
     if (dayNumber > lastDay) return false;
     const rec = dayRecords[cycleDates[dayNumber - 1]!];
@@ -380,15 +382,16 @@ export function evaluateCoverage(
   const score = (ordered: number[]) => {
     const slices = daySlices(ordered, sortedDays);
     let doneSoFar = 0; // أيام مُنجزة حتى اليوم الحالي (لاختيار الاتجاه)
-    let farthest = 0;  // آخر يوم مُنجز متصل بما قبله (أيام الإعفاء بينهما لا تقطع)
+    let farthest = 0;
+    let total = 0, got = 0;
     for (const d of sortedDays) {
-      if (sliceDone(slices.get(d.dayNumber) ?? [])) {
-        farthest = d.dayNumber;
-        if (d.dayNumber <= lastDay) doneSoFar++;
-        continue;
-      }
-      if (forgivable(d.dayNumber)) continue;
-      break;
+      const ws = slices.get(d.dayNumber) ?? [];
+      total += ws.length;
+      got += forgivable(d.dayNumber) ? ws.length : ws.reduce((n, w) => n + (covered.has(w) ? 1 : 0), 0);
+      if (!sliceDone(ws)) continue;
+      if (d.dayNumber <= lastDay) doneSoFar++;
+      // المسموح: ١٥٪ مما قبله، ولا يقل عن سماح الوجه الواحد
+      if (total > 0 && total - got <= Math.max(WAJH_TOLERANCE, Math.floor((1 - PREFIX_RATIO) * total))) farthest = d.dayNumber;
     }
     return { ordered, slices, doneSoFar, farthest };
   };

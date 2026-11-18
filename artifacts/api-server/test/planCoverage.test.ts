@@ -92,6 +92,13 @@ test("غياب الطالبة ثم تغطية نصيب اليوم التالي �
   assert.equal(r.status, "ontrack");
 });
 
+test("صفحة متروكة في أول الخطة (كالفاتحة) لا توقف حسابها ما دامت غطّت ما بعدها", () => {
+  const all = [...day(1), ...day(2), ...day(3), ...day(4)].slice(2); // أول وجهين غير مُراجعَين
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 4, { [DATES[0]!]: rec(all.slice(0, 6)), [DATES[1]!]: rec(all.slice(6)), [DATES[2]!]: rec([]), [DATES[3]!]: rec([]) });
+  assert.equal(r.daysReached, 4);
+  assert.equal(r.status, "ontrack");
+});
+
 import { evaluateCompletion } from "../src/lib/planProgress";
 const allDays = () => Object.fromEntries(DAYS.map((_, i) => [DATES[i]!, rec(day(i + 1))]));
 
