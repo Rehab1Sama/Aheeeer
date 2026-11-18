@@ -156,3 +156,12 @@ test("خطة أوجهها أقل من أيامها: تغطية النطاق تك
   assert.notEqual(r.status, "behind");
   assert.ok(r.daysReached >= 5);
 });
+
+test("القريبة تُحسب في الأسبوع الأول فقط", async () => {
+  const { farRangesOf } = await import("../src/lib/planProgress");
+  const base = { reviewFarSurahStart: null, reviewFarAyahStart: null, reviewFarSurahEnd: null, reviewFarAyahEnd: null,
+    reviewFar2SurahStart: null, reviewFar2AyahStart: null, reviewFar2SurahEnd: null, reviewFar2AyahEnd: null,
+    reviewNearSurahStart: "البقرة", reviewNearAyahStart: 1, reviewNearSurahEnd: "البقرة", reviewNearAyahEnd: 20 };
+  assert.equal(farRangesOf({ ...base, date: "2026-11-19" }).length, 1);
+  assert.equal(farRangesOf({ ...base, date: "2026-11-22" }).length, 0);
+});

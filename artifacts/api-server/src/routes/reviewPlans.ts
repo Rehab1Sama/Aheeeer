@@ -177,6 +177,8 @@ export async function loadGirlsCoverage(
     reviewFarSurahEnd: recordsTable.reviewFarSurahEnd, reviewFarAyahEnd: recordsTable.reviewFarAyahEnd,
     reviewFar2SurahStart: recordsTable.reviewFar2SurahStart, reviewFar2AyahStart: recordsTable.reviewFar2AyahStart,
     reviewFar2SurahEnd: recordsTable.reviewFar2SurahEnd, reviewFar2AyahEnd: recordsTable.reviewFar2AyahEnd,
+    reviewNearSurahStart: recordsTable.reviewNearSurahStart, reviewNearAyahStart: recordsTable.reviewNearAyahStart,
+    reviewNearSurahEnd: recordsTable.reviewNearSurahEnd, reviewNearAyahEnd: recordsTable.reviewNearAyahEnd,
   }).from(recordsTable).where(and(
     inArray(recordsTable.studentId, [...new Set(girls.map((p) => p.studentId))]),
     inArray(recordsTable.date, [...allDates]),

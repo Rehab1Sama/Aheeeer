@@ -455,16 +455,23 @@ export function evaluateCoverage(
   return { status, unresolvedDelayDays, missingSupervisorDates, daysReached, reversed, coveredDays, dayRanges };
 }
 
-/** نطاقات المراجعة البعيدة ١ و٢ من صف سجل. */
+/** حتى هذا التاريخ (غير شامل) تُحسب المراجعة القريبة مع البعيدة في الخطة — قرار الإدارة للأسبوع الأول فقط. */
+export const NEAR_COUNTS_UNTIL = "2026-11-22";
+
+/** نطاقات المراجعة البعيدة ١ و٢ من صف سجل (ومعها القريبة في الأسبوع الأول من الخطط). */
 export function farRangesOf(r: {
+  date?: string | null;
   reviewFarSurahStart: string | null; reviewFarAyahStart: number | null; reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
   reviewFar2SurahStart: string | null; reviewFar2AyahStart: number | null; reviewFar2SurahEnd: string | null; reviewFar2AyahEnd: number | null;
+  reviewNearSurahStart?: string | null; reviewNearAyahStart?: number | null; reviewNearSurahEnd?: string | null; reviewNearAyahEnd?: number | null;
 }): WajhRangeLike[] {
   const out: WajhRangeLike[] = [];
   if (r.reviewFarSurahStart && r.reviewFarAyahStart != null && r.reviewFarSurahEnd && r.reviewFarAyahEnd != null)
     out.push({ surahStart: r.reviewFarSurahStart, ayahStart: r.reviewFarAyahStart, surahEnd: r.reviewFarSurahEnd, ayahEnd: r.reviewFarAyahEnd });
   if (r.reviewFar2SurahStart && r.reviewFar2AyahStart != null && r.reviewFar2SurahEnd && r.reviewFar2AyahEnd != null)
     out.push({ surahStart: r.reviewFar2SurahStart, ayahStart: r.reviewFar2AyahStart, surahEnd: r.reviewFar2SurahEnd, ayahEnd: r.reviewFar2AyahEnd });
+  if (r.date && r.date < NEAR_COUNTS_UNTIL && r.reviewNearSurahStart && r.reviewNearAyahStart != null && r.reviewNearSurahEnd && r.reviewNearAyahEnd != null)
+    out.push({ surahStart: r.reviewNearSurahStart, ayahStart: r.reviewNearAyahStart, surahEnd: r.reviewNearSurahEnd, ayahEnd: r.reviewNearAyahEnd });
   return out;
 }
 
