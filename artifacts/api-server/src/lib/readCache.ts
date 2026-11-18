@@ -34,13 +34,29 @@ export async function cachedList<T>(key: string, ttlMs: number, fn: () => Promis
   return [...(await cached(key, ttlMs, fn))];
 }
 
-// طلبات كتابة لا تغيِّر بيانات معروضة (نبض الجلسة، رسائل البوت، الدخول) فلا تُفرِغ الذاكرة
-const NON_DATA_WRITES = [/heartbeat/, /\/telegram\//, /\/auth\/(login|logout|forgot|refresh)/, /\/session/];
+// ماذا يُفرَّغ مع كل كتابة: الأكثر تكرارًا (حفظ سجلات اليوم) لا يمس قوائم الطالبات والحسابات،
+// فيبقى أثر الذاكرة حقيقيًا وقت الإدخال. أي مسار غير معروف يفرِّغ الكل (الأمان أولًا).
+const NON_DATA_WRITES = [/heartbeat/, /^\/telegram\//, /^\/auth\/(login|logout|forgot|refresh|switch)/, /\/session/,
+  /^\/messages/, /^\/alerts/, /^\/badge-events/, /^\/live-badges/, /^\/custom-question-answers/, /^\/store-products/,
+  /^\/daily-circle-tasks/, /^\/deputy/, /^\/export/];
+const RECORD_WRITES = /^\/(records|data-entry)(\/|$)/;
+const RECORD_KEYS = /^(records|records-ids|today-banner):/;
+
+function invalidateKeys(match: RegExp): void {
+  generation++; // يمنع حفظ نتيجة جلب بدأ قبل الكتابة
+  for (const k of [...store.keys()]) if (match.test(k)) store.delete(k);
+  // القيم الباقية جُلبت بجيل سابق: نرفعها للجيل الجديد لأنها لم تتأثر بهذه الكتابة
+  for (const e of store.values()) e.gen = generation;
+}
 
 export function readCacheInvalidator(req: Request, res: Response, next: NextFunction): void {
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
     res.on("finish", () => {
-      if (res.statusCode < 400 && !NON_DATA_WRITES.some((r) => r.test(req.path))) invalidateReadCache();
+      if (res.statusCode >= 400) return;
+      const path = req.path;
+      if (NON_DATA_WRITES.some((r) => r.test(path))) return;
+      if (RECORD_WRITES.test(path)) invalidateKeys(RECORD_KEYS);
+      else invalidateReadCache();
     });
   }
   next();
