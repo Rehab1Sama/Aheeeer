@@ -4,7 +4,8 @@ import { db, reviewPlansTable, recordsTable, studentsTable, studentEnrollmentsTa
 import { and, eq, inArray } from "drizzle-orm";
 import { loadGirlsCoverage, getPlanCycleDates } from "../routes/reviewPlans";
 import { getPlanQuotaRanges } from "./quranRanges";
-import { orderedPlanWajhs, coveredWajhSet, computeCurrentDay } from "./planProgress";
+import { orderedPlanWajhs, coveredWajhSet, computeCurrentDay, evaluateCoverage } from "./planProgress";
+import { db as _db, reviewPlanDaysTable } from "@workspace/db";
 import { getMakkahDay } from "./date";
 
 type R = { surahStart: string; ayahStart: number; surahEnd: string; ayahEnd: number };
@@ -32,6 +33,12 @@ export async function auditGirlsPlans() {
 
   const today = getMakkahDay();
   const counts = { behind: 0, ontrack: 0, ahead: 0, none: 0 };
+  // محاكاة: لو احتُسبت المراجعة القريبة مع البعيدة
+  const withNear = { behind: 0, ontrack: 0, ahead: 0, none: 0 };
+  const dayRows = livePlans.length ? await _db.select({ planId: reviewPlanDaysTable.planId, dayNumber: reviewPlanDaysTable.dayNumber, pages: reviewPlanDaysTable.pages })
+    .from(reviewPlanDaysTable).where(inArray(reviewPlanDaysTable.planId, livePlans.map((p) => p.id))) : [];
+  const daysBy = new Map<number, Array<{ dayNumber: number; pages: number | null }>>();
+  for (const r of dayRows) (daysBy.get(r.planId) ?? daysBy.set(r.planId, []).get(r.planId)!).push({ dayNumber: r.dayNumber, pages: r.pages });
   const flags: Record<string, string[]> = { nearCovers: [], farPagesEnough: [], noRangesOnlyPages: [], lenient: [], outsidePlan: [] };
   for (const p of livePlans) {
     const c = cov.get(p.id);
@@ -55,6 +62,15 @@ export async function auditGirlsPlans() {
     const who = `خطة #${p.id} | ${circles.get(p.circleId)} | ${st ?? "—"} (وصلت يوم ${c?.daysReached ?? 0} من ${cur}، تأخير ${c?.unresolvedDelayDays ?? 0})`;
     const detail = `${who}\n    الخطة: ${p.quotaSurahStart ? `${p.quotaSurahStart}←${p.quotaSurahEnd}` : p.extraRanges ? `أجزاء ${p.extraRanges}` : "—"} ${p.totalPages}ص\n    ` +
       rs.map((r) => `${r.date.slice(5)}${r.isAbsent ? " غائبة" : ` بعيدة:${fmt(rng(r.reviewFarSurahStart, r.reviewFarAyahStart, r.reviewFarSurahEnd, r.reviewFarAyahEnd))} قريبة:${fmt(rng(r.reviewNearSurahStart, r.reviewNearAyahStart, r.reviewNearSurahEnd, r.reviewNearAyahEnd))}`}`).join("\n    ");
+    {
+      const pd = [...(daysBy.get(p.id) ?? [])].sort((a, b) => a.dayNumber - b.dayNumber);
+      const dist = (p.totalPages ?? 0) / 21;
+      const pdays = pd.map((d) => ({ dayNumber: d.dayNumber, pages: d.pages ?? Math.round(dist * 2) / 2 }));
+      const dr: Record<string, { isAbsent: boolean; farRanges: R[] }> = {};
+      for (const r of rs) dr[r.date] = { isAbsent: r.isAbsent, farRanges: [rng(r.reviewFarSurahStart, r.reviewFarAyahStart, r.reviewFarSurahEnd, r.reviewFarAyahEnd), rng(r.reviewFar2SurahStart, r.reviewFar2AyahStart, r.reviewFar2SurahEnd, r.reviewFar2AyahEnd), rng(r.reviewNearSurahStart, r.reviewNearAyahStart, r.reviewNearSurahEnd, r.reviewNearAyahEnd)].filter(Boolean) as R[] };
+      const alt = evaluateCoverage(wajhs, pdays, dates, cur, dr).status;
+      if (alt) withNear[alt]++; else withNear.none++;
+    }
     if (wajhs.length === 0) { flags.noRangesOnlyPages!.push(detail); continue; }
     if (st === "behind") {
       if (nearIn >= plannedWajhs && farIn < plannedWajhs) flags.nearCovers!.push(detail);
@@ -63,5 +79,5 @@ export async function auditGirlsPlans() {
     }
     if ((st === "ontrack" || st === "ahead") && farIn < plannedWajhs * 0.5 && present.length > 0) flags.lenient!.push(detail);
   }
-  return { today, plans: livePlans.length, counts, flagCounts: Object.fromEntries(Object.entries(flags).map(([k, v]) => [k, v.length])), flags };
+  return { today, plans: livePlans.length, counts, withNear, flagCounts: Object.fromEntries(Object.entries(flags).map(([k, v]) => [k, v.length])), flags };
 }
