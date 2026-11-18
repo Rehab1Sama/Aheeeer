@@ -1,0 +1,11 @@
+# تدقيق حالات خطط المراجعة (متأخرة/منتظمة/متقدمة) — يدوي
+name: تدقيق خطط المراجعة
+on:
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+        run: curl -sS --max-time 240 "https://sana-alay-abq5.onrender.com/api/reports/plans-audit?key=${REPORT_KEY}" -o audit.json; python3 -c "import json;d=json.load(open('audit.json'));print(json.dumps(d,ensure_ascii=False,indent=1))"

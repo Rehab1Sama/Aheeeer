@@ -12,6 +12,7 @@ import { buildDailyReport, sendDailyReportToTelegram } from "../lib/dailyReport"
 import { logger } from "../lib/logger";
 import { buildTrackStudentDigests } from "../lib/trackStudentReport";
 import { runWeeklyMoonBadgeAward } from "../lib/weeklyMoonBadge";
+import { auditGirlsPlans } from "../lib/planAudit";
 
 const router: IRouter = Router();
 const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -94,6 +95,14 @@ router.get("/reports/track-students/counts", async (req, res): Promise<void> => 
     webhook = { set: !!w.result?.url, pending: w.result?.pending_update_count ?? 0, lastError: w.result?.last_error_message ?? null };
   } catch { /* */ }
   res.json({ webhook, tracks: Object.fromEntries([...m.values()].map((d) => [d.track, { lazy: d.lazy.length, follow: d.follow.length, excellent: d.excellent.length, hadData: d.hadData }])) });
+});
+
+// تدقيق حالات خطط المراجعة (للقائدة عبر سير العمل؛ أسماء داخل سجل التشغيل الخاص بالمستودع)
+router.get("/reports/plans-audit", async (req, res): Promise<void> => {
+  if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
+  if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  try { res.json(await auditGirlsPlans()); }
+  catch (err) { logger.error({ err }, "plans audit failed"); res.status(500).json({ error: String(err) }); }
 });
 
 export default router;
