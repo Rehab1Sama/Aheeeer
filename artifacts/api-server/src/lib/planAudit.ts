@@ -33,6 +33,7 @@ export async function auditGirlsPlans() {
 
   const today = getMakkahDay();
   const counts = { behind: 0, ontrack: 0, ahead: 0, none: 0 };
+  const statusById: Record<number, string> = {};
   // محاكاة: لو احتُسبت المراجعة القريبة مع البعيدة
   const withNear = { behind: 0, ontrack: 0, ahead: 0, none: 0 };
   const dayRows = livePlans.length ? await _db.select({ planId: reviewPlanDaysTable.planId, dayNumber: reviewPlanDaysTable.dayNumber, pages: reviewPlanDaysTable.pages })
@@ -44,6 +45,7 @@ export async function auditGirlsPlans() {
     const c = cov.get(p.id);
     const st = c?.status ?? null;
     if (st) counts[st]++; else counts.none++;
+    statusById[p.id] = `${st ?? "-"}:${c?.daysReached ?? 0}:${c?.unresolvedDelayDays ?? 0}`;
     const dates = getPlanCycleDates(p.startDate!, "girls_review");
     const cur = computeCurrentDay(dates, today, 21);
     const rs = (recsBy.get(`${p.studentId}:${p.circleId}`) ?? []).filter((r) => dates.slice(0, cur).includes(r.date)).sort((a, b) => a.date.localeCompare(b.date));
@@ -79,5 +81,5 @@ export async function auditGirlsPlans() {
     }
     if ((st === "ontrack" || st === "ahead") && farIn < plannedWajhs * 0.5 && present.length > 0) flags.lenient!.push(detail);
   }
-  return { today, plans: livePlans.length, counts, withNear, flagCounts: Object.fromEntries(Object.entries(flags).map(([k, v]) => [k, v.length])), flags };
+  return { today, plans: livePlans.length, counts, withNear, statusById, flagCounts: Object.fromEntries(Object.entries(flags).map(([k, v]) => [k, v.length])), flags };
 }
