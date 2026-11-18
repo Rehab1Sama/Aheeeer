@@ -132,3 +132,16 @@ test("وسام المراجعة: لم تُنهِ آخر يوم ← بلا وسا
   recs[DATES[DAYS.length - 1]!] = rec([]);
   assert.equal(evaluateCompletion(wajhs, DAYS, DATES, recs).reached, false);
 });
+
+test("غياب في آخر الأيام قبل أن يأتي اليوم التالي ← معلَّق لا تأخير", () => {
+  const abs: CoverageDayRecord = { isAbsent: true, farRanges: [] };
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 4, { [DATES[0]!]: rec(day(1)), [DATES[1]!]: rec(day(2)), [DATES[2]!]: abs });
+  assert.equal(r.status, "ontrack");
+  assert.equal(r.unresolvedDelayDays, 0);
+});
+
+test("غياب ثم حضور بلا تعويض ← يوم الغياب تأخير", () => {
+  const abs: CoverageDayRecord = { isAbsent: true, farRanges: [] };
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 4, { [DATES[0]!]: rec(day(1)), [DATES[1]!]: abs, [DATES[2]!]: rec(day(2)) });
+  assert.equal(r.status, "behind");
+});

@@ -436,9 +436,17 @@ export function evaluateCoverage(
   // (عدا السبت، وعدا اليوم الحالي الذي لم يكتمل بعد).
   let unresolvedDelayDays = 0;
   const missingSupervisorDates: string[] = [];
+  // غياب في آخر الأيام (لم يأتِ بعده يوم حضور) معلَّق لا تأخير: يُحكم عليه بنصاب اليوم التالي
+  let lastPresentDay = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const r = dayRecords[cycleDates[d - 1]!];
+    if (r && !r.isAbsent) lastPresentDay = d;
+  }
   for (let d = daysReached + 1; d <= lastDay; d++) {
     const ds = cycleDates[d - 1]!;
-    if (dayRecords[ds]) unresolvedDelayDays++;
+    const rec = dayRecords[ds];
+    if (rec && rec.isAbsent && d > lastPresentDay) continue;
+    if (rec) unresolvedDelayDays++;
     else if (d < lastDay && !isSaturdayDate(ds)) missingSupervisorDates.push(ds);
   }
   const isAhead = daysReached > currentDay;
