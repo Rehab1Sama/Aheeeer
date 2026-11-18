@@ -418,14 +418,15 @@ export function evaluateCoverage(
       if (forgivable(d.dayNumber)) {
         // يوم إعفاء غطّت كميته فعلًا ← مُنجز؛ وإلا يُفترض مُنجزًا حتى تلحق بعده
         const allowF = Math.max(WAJH_TOLERANCE, Math.round(need * 0.15));
-        if (ws.length > 0 && inPlan + presumed + allowF >= need) daysReached = d.dayNumber;
+        if (need === 0 || inPlan + presumed + allowF >= need) daysReached = d.dayNumber;
         presumed += ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
         continue;
       }
       // إتمام الخطة (آخر يوم) يتطلب تغطيتها كاملة بسماح وجه واحد فقط
       const isLast = d.dayNumber === sortedDays[sortedDays.length - 1]!.dayNumber;
       const allow = isLast ? WAJH_TOLERANCE : Math.max(WAJH_TOLERANCE, Math.round(need * 0.15));
-      if (ws.length > 0 && inPlan + presumed + allow >= need) daysReached = d.dayNumber;
+      // يوم نصيبه فارغ (خطة أوجهها أقل من أيامها): يكفي أن يكون التراكمي مغطّى
+      if (need === 0 || inPlan + presumed + allow >= need) daysReached = d.dayNumber;
       else break;
     }
   }

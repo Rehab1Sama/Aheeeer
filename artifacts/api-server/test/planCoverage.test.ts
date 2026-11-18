@@ -145,3 +145,14 @@ test("غياب ثم حضور بلا تعويض ← يوم الغياب تأخي�
   const r = evaluateCoverage(wajhs, DAYS, DATES, 4, { [DATES[0]!]: rec(day(1)), [DATES[1]!]: abs, [DATES[2]!]: rec(day(2)) });
   assert.equal(r.status, "behind");
 });
+
+test("خطة أوجهها أقل من أيامها: تغطية النطاق تكفي للأيام ذات النصيب الفارغ", () => {
+  const small = orderedPlanWajhs([{ surahStart: "البقرة", ayahStart: 1, surahEnd: "البقرة", ayahEnd: 60 }]);
+  const days = Array.from({ length: 21 }, (_, i) => ({ dayNumber: i + 1, pages: i < 4 ? 1 : 0 }));
+  const dates = days.map((_, i) => new Date(Date.UTC(2026, 10, 15 + i)).toISOString().slice(0, 10));
+  const r = evaluateCoverage(small, days, dates, 6, {
+    [dates[0]!]: rec(small.slice(0, 4)), [dates[1]!]: rec(small.slice(4)), [dates[4]!]: rec(small.slice(0, 2)),
+  });
+  assert.notEqual(r.status, "behind");
+  assert.ok(r.daysReached >= 5);
+});
