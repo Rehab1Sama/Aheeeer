@@ -1,5 +1,5 @@
 // خلاصة طالبات المسار لمسؤولتيه على تيليجرام — عن الطالبات فقط:
-//   متكاسلات 🌧️ : خطة متأخرة ٣ أيام فأكثر، أو ٥ أيام فأكثر بلا حفظ في أسبوعين، أو تقصير مرتين فأكثر في أسبوعين
+//   متكاسلات 🌧️ : خطة متأخرة ٣ أيام فأكثر (سُنى: يومان)، أو ٥ أيام فأكثر بلا حفظ في أسبوعين (سُنى: ٣)، أو تقصير مرتين فأكثر في أسبوعين
 //   يحتجن متابعة 🌿 : غياب ٣ أيام متتالية أو ٣ مرات في أسبوعين، أو نزول الإنجاز إلى النصف
 //   متميِّزات ♥️ (الخميس فقط): أسبوع بلا غياب ولا تقصير، مع تقدُّم في الخطة أو حفظ فوق معدَّلها
 // كل المسارات: الفتيات (خطة المراجعة)، سُنى (التثبيت)، الأطفال، الأمهات (مهج)، والتصحيح (مشكاة نور).
@@ -109,9 +109,9 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     const lazy: string[] = [];
     const follow: string[] = [];
     const ps = planState.get(k);
-    if (ps && ps.delay >= 3) lazy.push(`${g(t, "متأخرة عن خطتها", "تأخر عن الخطة")} ${days(ps.delay)}`);
+    if (ps && ps.delay >= (t === "fixation" ? 2 : 3)) lazy.push(`${g(t, "متأخرة عن خطتها", "تأخر عن الخطة")} ${days(ps.delay)}`);
     const noMemo = present14.filter((r) => (r.memorizePages ?? 0) === 0).length;
-    if (noMemo >= 5 && !NO_MEMO.has(t)) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
+    if (noMemo >= (t === "fixation" ? 3 : 5) && !NO_MEMO.has(t)) lazy.push(`بلا ${t === "fixation" ? "تثبيت" : "حفظ"} ${days(noMemo)}`);
     const short = last14.filter((r) => isShortcomingRecord(r, t)).length;
     if (short >= 2) lazy.push(`تقصير ${times(short)}`);
     const tail = rs.slice(-3);
