@@ -183,11 +183,14 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const circlesWithRoster = expected.filter((c) => (roster.get(c.id) ?? []).length > 0).length;
 
   // ── خطط المراجعة ──
-  const coverage = await loadGirlsCoverage(plans);
+  // خطط طالبات منسحبات أو منقولات (بلا تسجيل نشط في الحلقة) لا تُحسب في المتأخرة ولا المنتظمة
+  const enrolledKey = new Set(enrollRows.filter((e) => !e.studentArchived).map((e) => `${e.studentId}:${e.circleId}`));
+  const livePlans = plans.filter((p) => enrolledKey.has(`${p.studentId}:${p.circleId}`));
+  const coverage = await loadGirlsCoverage(livePlans);
   let behind = 0, ontrack = 0, ahead = 0;
   const completed: Array<{ track: string; circle: string; name: string; pages: number | null }> = [];
   const planDelay = new Map<string, number>();
-  for (const p of plans) {
+  for (const p of livePlans) {
     const cv = coverage.get(p.id);
     if (!cv || !cv.status) continue;
     if (cv.status === "behind") behind++; else if (cv.status === "ahead") ahead++; else ontrack++;
