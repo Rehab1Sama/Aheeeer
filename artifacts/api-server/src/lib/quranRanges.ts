@@ -237,11 +237,16 @@ export function getPlanQuotaRanges(plan: {
       ));
     }
   } else if (plan.quotaType === "surah" && plan.quotaSurahStart && plan.quotaAyahStart && plan.quotaSurahEnd && plan.quotaAyahEnd) {
+    // خطة عكسية مكتوبة «الناس ← الحج ٧٨» (آخر آية): المقصود السورة كاملة، لا آيتها الأخيرة وحدها
+    let ayahEnd = plan.quotaAyahEnd;
+    const si = QURAN_SURAHS.findIndex((x) => x.name === plan.quotaSurahStart);
+    const ei = QURAN_SURAHS.findIndex((x) => x.name === plan.quotaSurahEnd);
+    if (si > ei && ei >= 0 && ayahEnd === QURAN_SURAHS[ei]!.ayahs) ayahEnd = 1;
     ranges.push({
       surahStart: plan.quotaSurahStart,
       ayahStart: plan.quotaAyahStart,
       surahEnd: plan.quotaSurahEnd,
-      ayahEnd: plan.quotaAyahEnd,
+      ayahEnd,
     });
     if (plan.extraRanges) {
       try {

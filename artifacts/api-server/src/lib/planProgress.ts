@@ -414,11 +414,14 @@ export function evaluateCoverage(
     for (const d of sortedDays) {
       const ws = chosen.slices.get(d.dayNumber) ?? [];
       cum += ws.length;
-      if (forgivable(d.dayNumber)) {
-        presumed += ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
-        continue; // يوم الإعفاء لا يُحسب وحده؛ يُحتسب متى أنجزت ما بعده
-      }
       const need = Math.min(cum, planWajhs.length);
+      if (forgivable(d.dayNumber)) {
+        // يوم إعفاء غطّت كميته فعلًا ← مُنجز؛ وإلا يُفترض مُنجزًا حتى تلحق بعده
+        const allowF = Math.max(WAJH_TOLERANCE, Math.round(need * 0.15));
+        if (ws.length > 0 && inPlan + presumed + allowF >= need) daysReached = d.dayNumber;
+        presumed += ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
+        continue;
+      }
       // إتمام الخطة (آخر يوم) يتطلب تغطيتها كاملة بسماح وجه واحد فقط
       const isLast = d.dayNumber === sortedDays[sortedDays.length - 1]!.dayNumber;
       const allow = isLast ? WAJH_TOLERANCE : Math.max(WAJH_TOLERANCE, Math.round(need * 0.15));
