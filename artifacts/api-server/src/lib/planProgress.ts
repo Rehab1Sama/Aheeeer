@@ -368,14 +368,27 @@ export function evaluateCoverage(
     const missing = ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
     return missing <= (ws.length > 2 ? WAJH_TOLERANCE : 0);
   };
+  // يوم «يُعفى» إن مضى بلا سجل حضور (لم تُدخل المشرفة، أو غياب المعلمة، أو غياب الطالبة):
+  // يُحسب منتظمًا متى غُطّي نصيب يوم بعده. أما يوم فيه سجل حضور ولم يُغطَّ نصيبه فلا يُعفى إلا بتغطية نصيبه نفسه
+  // (التدارك يُحسب تلقائيًا لأن التغطية تراكمية). ولا يُعفى يوم لم يأتِ بعد: تغطية نصيب بعيد خارج الترتيب
+  // لا تجعلها «متقدمة» بأيام لم تراجعها.
+  const forgivable = (dayNumber: number) => {
+    if (dayNumber > lastDay) return false;
+    const rec = dayRecords[cycleDates[dayNumber - 1]!];
+    return !rec || rec.isAbsent;
+  };
   const score = (ordered: number[]) => {
     const slices = daySlices(ordered, sortedDays);
     let doneSoFar = 0; // أيام مُنجزة حتى اليوم الحالي (لاختيار الاتجاه)
-    let farthest = 0;  // آخر يوم مُنجز في الخطة كلها
+    let farthest = 0;  // آخر يوم مُنجز متصل بما قبله (أيام الإعفاء بينهما لا تقطع)
     for (const d of sortedDays) {
-      if (!sliceDone(slices.get(d.dayNumber) ?? [])) continue;
-      farthest = d.dayNumber;
-      if (d.dayNumber <= lastDay) doneSoFar++;
+      if (sliceDone(slices.get(d.dayNumber) ?? [])) {
+        farthest = d.dayNumber;
+        if (d.dayNumber <= lastDay) doneSoFar++;
+        continue;
+      }
+      if (forgivable(d.dayNumber)) continue;
+      break;
     }
     return { ordered, slices, doneSoFar, farthest };
   };

@@ -77,6 +77,21 @@ test("إنجاز نصيب أيام قادمة ← متقدمة", () => {
   assert.equal(r.daysReached, 4);
 });
 
+test("مراجعة نصيب بعيد خارج الترتيب لا تجعلها متقدمة بأيام لم تراجعها", () => {
+  // الأيام ١–٣ بسجلات حضور لكن المُدخل نصيب اليوم ٩ فقط
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 3, { [DATES[0]!]: rec(day(9)), [DATES[1]!]: rec(day(9)), [DATES[2]!]: rec(day(9)) });
+  assert.notEqual(r.status, "ahead");
+  assert.equal(r.daysReached, 0);
+});
+
+test("غياب الطالبة ثم تغطية نصيب اليوم التالي ← يوم الغياب منتظم", () => {
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 3, {
+    [DATES[0]!]: rec(day(1)), [DATES[1]!]: { isAbsent: true, farRanges: [] }, [DATES[2]!]: rec(day(3)),
+  });
+  assert.equal(r.daysReached, 3);
+  assert.equal(r.status, "ontrack");
+});
+
 import { evaluateCompletion } from "../src/lib/planProgress";
 const allDays = () => Object.fromEntries(DAYS.map((_, i) => [DATES[i]!, rec(day(i + 1))]));
 
