@@ -74,7 +74,7 @@ export async function auditGirlsPlans() {
     if (wajhs.length === 0) { flags.noRangesOnlyPages!.push(detail); continue; }
     if (st === "behind") {
       if (nearIn >= plannedWajhs && farIn < plannedWajhs) flags.nearCovers!.push(detail);
-      else if (farOut > 0 && farIn < plannedWajhs) flags.outsidePlan!.push(detail);
+      else if (farOut > farIn) flags.outsidePlan!.push(detail);
       else if (farPages * 2 >= plannedWajhs) flags.farPagesEnough!.push(detail);
     }
     if ((st === "ontrack" || st === "ahead") && farIn < plannedWajhs * 0.5 && present.length > 0) flags.lenient!.push(detail);

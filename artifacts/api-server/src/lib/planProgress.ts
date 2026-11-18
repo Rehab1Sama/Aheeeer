@@ -401,8 +401,31 @@ export function evaluateCoverage(
   const chosen = rev.doneSoFar > fwd.doneSoFar ? rev : fwd;
   const reversed = chosen === rev;
 
-  // قاعدة الإدارة: تغطية نصيب يوم لاحق تعني أن ما قبله مُنجز — فلا تأخير ولا «لم تُدخل المشرفة» قبله.
-  const daysReached = chosen.farthest;
+  // قرار القائدة: الحكم بالكمية لا بالترتيب — كم وجهًا راجعت من داخل نطاق خطتها (بأي ترتيب، والمكرر يُحسب مرة)
+  // مقابل النصاب التراكمي للأيام. يوم مضى بلا سجل حضور (لم تُدخل المشرفة، أو غياب المعلمة أو الطالبة) يُفترض
+  // نصيبه مُنجزًا ما دامت لحقت بعده؛ وتأخرها يُغفر متى تداركت الكمية. سماح: وجه واحد أو ١٠٪ مما سبق.
+  const planSet = new Set(planWajhs);
+  let inPlan = 0;
+  for (const w of covered) if (planSet.has(w)) inPlan++;
+  let daysReached = 0;
+  {
+    let cum = 0;
+    let presumed = 0; // أوجه أيام الإعفاء التي لم تُراجَع فعلًا
+    for (const d of sortedDays) {
+      const ws = chosen.slices.get(d.dayNumber) ?? [];
+      cum += ws.length;
+      if (forgivable(d.dayNumber)) {
+        presumed += ws.reduce((n, w) => n + (covered.has(w) ? 0 : 1), 0);
+        continue; // يوم الإعفاء لا يُحسب وحده؛ يُحتسب متى أنجزت ما بعده
+      }
+      const need = Math.min(cum, planWajhs.length);
+      // إتمام الخطة (آخر يوم) يتطلب تغطيتها كاملة بسماح وجه واحد فقط
+      const isLast = d.dayNumber === sortedDays[sortedDays.length - 1]!.dayNumber;
+      const allow = isLast ? WAJH_TOLERANCE : Math.max(WAJH_TOLERANCE, Math.round(need * 0.15));
+      if (ws.length > 0 && inPlan + presumed + allow >= need) daysReached = d.dayNumber;
+      else break;
+    }
+  }
   const coveredDays = sortedDays.filter((d) => d.dayNumber <= daysReached).map((d) => d.dayNumber);
   const dayRanges = reversed ? computeDayRanges(wajhsToQuotaRanges(chosen.ordered), sortedDays) : undefined;
 

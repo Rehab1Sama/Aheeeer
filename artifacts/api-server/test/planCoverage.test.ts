@@ -80,8 +80,9 @@ test("إنجاز نصيب أيام قادمة ← متقدمة", () => {
 test("مراجعة نصيب بعيد خارج الترتيب لا تجعلها متقدمة بأيام لم تراجعها", () => {
   // الأيام ١–٣ بسجلات حضور لكن المُدخل نصيب اليوم ٩ فقط
   const r = evaluateCoverage(wajhs, DAYS, DATES, 3, { [DATES[0]!]: rec(day(9)), [DATES[1]!]: rec(day(9)), [DATES[2]!]: rec(day(9)) });
-  assert.notEqual(r.status, "ahead");
-  assert.equal(r.daysReached, 0);
+  // بالكمية: ما راجعته من داخل الخطة يُحسب، لكن لا تقدّم ولا انتظام بأيام لم تراجع كميتها
+  assert.equal(r.status, "behind");
+  assert.ok(r.daysReached <= 1);
 });
 
 test("غياب الطالبة ثم تغطية نصيب اليوم التالي ← يوم الغياب منتظم", () => {
@@ -97,6 +98,12 @@ test("صفحة متروكة في أول الخطة (كالفاتحة) لا تو�
   const r = evaluateCoverage(wajhs, DAYS, DATES, 4, { [DATES[0]!]: rec(all.slice(0, 6)), [DATES[1]!]: rec(all.slice(6)), [DATES[2]!]: rec([]), [DATES[3]!]: rec([]) });
   assert.equal(r.daysReached, 4);
   assert.equal(r.status, "ontrack");
+});
+
+test("البدء من وسط الخطة بكمية النصاب كاملة ← منتظمة (الحكم بالكمية داخل النطاق)", () => {
+  const r = evaluateCoverage(wajhs, DAYS, DATES, 2, { [DATES[0]!]: rec(day(5)), [DATES[1]!]: rec(day(6)) });
+  assert.equal(r.status, "ontrack");
+  assert.equal(r.daysReached, 2);
 });
 
 import { evaluateCompletion } from "../src/lib/planProgress";
