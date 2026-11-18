@@ -456,7 +456,7 @@ function printPlan(plan: ReviewPlan, totalDays: number, planMode: "girls" | "fix
   if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 400); }
 }
 
-type DayStatus = "absent" | "ahead" | "ontrack" | "behind" | null;
+type DayStatus = "absent" | "ahead" | "ontrack" | "behind" | null | "pending";
 type DayRecordShape = {
   reviewFarPages: number | null; reviewPages: number | null; isAbsent: boolean;
   reviewFarSurahEnd: string | null; reviewFarAyahEnd: number | null;
@@ -558,6 +558,8 @@ function computeDayStatuses(
       if (covered.has(d) || d <= cov.daysReached) { map.set(d, d > currentDayNum ? "ahead" : "ontrack"); continue; }
       if (rec?.isAbsent) { map.set(d, "absent"); continue; }
       if (!rec && isSat) { map.set(d, null); continue; }
+      // يوم مضى بلا أي سجل: لم تُدخل المشرفة (أو لم تُعقد الحلقة) — ليس تأخيرًا على الطالبة، كما يحسبه الخادم
+      if (!rec && d < currentDayNum) { map.set(d, "pending"); continue; }
       if (d < currentDayNum) { map.set(d, "behind"); continue; }
       if (d === currentDayNum) { map.set(d, rec ? "behind" : null); continue; }
       map.set(d, null);
@@ -623,6 +625,7 @@ function computeDayStatuses(
     // Saturday: no data entry at the maqraah — never counts as a miss.
     if (!rec && isSaturday(d)) { map.set(d, null); continue; }
     if (target == null) { map.set(d, null); continue; }
+    if (!rec && d < currentDayNum) { map.set(d, "pending"); continue; }
     // She hasn't reached this day's mark yet: only a genuine miss once the day
     // has actually arrived; today with nothing entered yet stays neutral, and
     // days still in the future aren't judged at all.
@@ -784,6 +787,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
                     ahead:  "#dbeafe",
                     ontrack:"#dcfce7",
                     behind: "#fef9c3",
+                    pending: "#fde8e8",
                   };
                   const rowStyle: React.CSSProperties = status
                     ? { background: statusBg[status] }
@@ -828,6 +832,7 @@ function PlanDisplay({ plan, totalDays, planMode, canCancel, onCancel, isLocked,
               { color: "#dbeafe", label: "متقدمة" },
               { color: "#fef9c3", label: "متأخرة" },
               { color: "#f3f4f6", label: "غائبة" },
+              { color: "#fde8e8", label: "لم يُدخل السجل" },
             ] as { color: string; label: string }[]).map(({ color, label }) => (
               <span key={label} className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm border border-border/30" style={{ background: color }} />
