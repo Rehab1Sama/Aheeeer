@@ -184,7 +184,9 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
 
   // ── خطط المراجعة ──
   // خطط طالبات منسحبات أو منقولات (بلا تسجيل نشط في الحلقة) لا تُحسب في المتأخرة ولا المنتظمة
-  const enrolledKey = new Set(enrollRows.filter((e) => !e.studentArchived).map((e) => `${e.studentId}:${e.circleId}`));
+  // (والمستأذنة في إجازة لا تُحسب متأخرة)
+  const enrolledKey = new Set<string>();
+  for (const [cid, list] of roster) for (const st of list) enrolledKey.add(`${st.studentId}:${cid}`);
   const livePlans = plans.filter((p) => enrolledKey.has(`${p.studentId}:${p.circleId}`));
   const coverage = await loadGirlsCoverage(livePlans);
   let behind = 0, ontrack = 0, ahead = 0;
