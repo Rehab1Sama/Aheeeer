@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'sa.sana.alay'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'sa.sana.alay'
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+        versionName "1." + (System.getenv("VERSION_CODE") ?: "1")
+    }
+    signingConfigs {
+        release {
+            storeFile file('sana-release.jks')
+            storePassword 'sanaalay2026'
+            keyAlias 'sana'
+            keyPassword 'sanaalay2026'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
