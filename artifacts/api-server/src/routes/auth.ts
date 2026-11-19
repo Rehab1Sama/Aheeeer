@@ -158,11 +158,23 @@ router.post("/auth/login/select", loginRateLimit, async (req, res): Promise<void
   }
   const { email, password, accountId } = parsed.data;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, accountId));
-  if (!user || user.email !== email.toLowerCase()) {
+  if (!user) {
     res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
     return;
   }
-  if (!verifyPassword(password, user.passwordHash)) {
+  const em = email.toLowerCase().trim();
+  let allowed = user.email === em && verifyPassword(password, user.passwordHash);
+  if (!allowed) {
+    // قائمة الاختيار تعرض الحساب النشط بدل حساب موقوف لنفس الطالبة، وقد يكون ببريد آخر:
+    // نقبله إن كان بديلًا لحساب بهذا البريد وكلمة المرور
+    const mine = await db.select().from(usersTable).where(eq(usersTable.email, em));
+    for (const u of mine) {
+      if (!verifyPassword(password, u.passwordHash)) continue;
+      const sib = await activeSiblingAccount(u);
+      if (sib?.id === user.id) { allowed = true; break; }
+    }
+  }
+  if (!allowed) {
     res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
     return;
   }
@@ -171,7 +183,7 @@ router.post("/auth/login/select", loginRateLimit, async (req, res): Promise<void
     return;
   }
   const token = generateToken(user.id, user.role);
-  rehashIfNeeded(user.id, user.passwordHash, password);
+  if (verifyPassword(password, user.passwordHash)) rehashIfNeeded(user.id, user.passwordHash, password);
   const safeUser = toSafeUser(user);
   await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
   res.json({ user: safeUser, token });
