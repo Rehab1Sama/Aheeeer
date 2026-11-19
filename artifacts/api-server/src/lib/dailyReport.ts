@@ -256,7 +256,9 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   const absentTodayRows = absences.filter((a) => a.date === D);
   const teacherIssues: CircleIssue[] = [];
   const reportedTeachers = new Set<number>();
-  for (const c of expected) {
+  // الخميس مراجعة فقط: المعلمة لا تفتح حلقتها، ولا مهام يومية على المسؤولات
+  const thursday = dow(D) === 4;
+  for (const c of thursday ? [] : expected) {
     const dayTasks = tasksByCircle.get(c.id) ?? [];
     const absRow = absentTodayRows.find((a) => a.circleId === c.id);
     const tid = dayTasks[0]?.teacherId ?? absRow?.teacherId ?? c.teacherId ?? null;
@@ -278,8 +280,8 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
     }
     teacherIssues.push({ track: trackNameOf(c), title: `${esc(c.name)} | ${esc(tid ? userName.get(tid) ?? "—" : "بلا معلمة مسجلة")}`, rows });
   }
-  const noTaskCircles = expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
-  const teacherMsg = [...header("🌷", "تقرير المعلمات"), ...groupByTrack(teacherIssues, "ما شاء الله، لا غياب ولا تأخير.")];
+  const noTaskCircles = thursday ? [] : expected.filter((c) => !(tasksByCircle.get(c.id)?.length));
+  const teacherMsg = [...header("🌷", "تقرير المعلمات"), ...groupByTrack(teacherIssues, thursday ? "الخميس يوم مراجعة، لا دوام للمعلمات." : "ما شاء الله، لا غياب ولا تأخير.")];
   if (noTaskCircles.length > 0) teacherMsg.push(`<i>لم يُسجَّل حضور المعلمة في ${ar(noTaskCircles.length)} حلقة لعدم تعبئة مهام اليوم.</i>`);
   messages.push(teacherMsg.join("\n"));
 
@@ -297,7 +299,7 @@ export async function buildDailyReport(reportDate?: string, opts: { detail?: boo
   let tsProblems = 0;
   for (const [trackName, cs] of [...byTrack.entries()].sort((a, b) => trackOrder(a[0], b[0]))) {
     const problems: Row[] = [];
-    const missingTasks = cs.filter((c) => !(tasksByCircle.get(c.id)?.length));
+    const missingTasks = thursday ? [] : cs.filter((c) => !(tasksByCircle.get(c.id)?.length));
     if (missingTasks.length === cs.length) { problems.push(["المهام", `لم تُعبَّأ لأي حلقة (${ar(cs.length)})`]); urgentTracks.push(trackName.replace(/^مسار\s+/, "")); }
     else if (missingTasks.length > 0) problems.push(["المهام", `ناقصة ${ar(missingTasks.length)}: ${missingTasks.map((c) => esc(c.name)).join("، ")}`]);
     const times = [

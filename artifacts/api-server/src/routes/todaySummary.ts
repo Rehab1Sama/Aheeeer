@@ -92,7 +92,8 @@ router.get("/today-summary", authenticate, async (req, res): Promise<void> => {
       ? { tone: "ok", text: `اكتمل إدخال اليوم في كل حلقات مساركِ (${AR(withRoster)})`, href: "/track-entry-status" }
       : { tone: "warn", text: `حلقات مساركِ المكتملة اليوم: ${AR(complete)} من ${AR(withRoster)}، وباقي ${count(missing, "طالبة", "طالبات")}`, href: "/track-entry-status" });
     const filled = new Set(tasks.map((t) => t.circleId)).size;
-    if (filled < circles.length) items.push({ tone: "warn", text: `مهام اليوم: عُبِّئت لـ${AR(filled)} من ${count(circles.length, "حلقة", "حلقات")}`, href: "/daily-tasks" });
+    const isThursday = new Date(D + "T12:00:00Z").getUTCDay() === 4; // الخميس مراجعة فقط: لا مهام
+    if (!isThursday && filled < circles.length) items.push({ tone: "warn", text: `مهام اليوم: عُبِّئت لـ${AR(filled)} من ${count(circles.length, "حلقة", "حلقات")}`, href: "/daily-tasks" });
   } else {
     items.push(missing === 0
       ? { tone: "ok", text: "اكتمل إدخال اليوم، بارك الله فيكِ", href: "/data-entry" }

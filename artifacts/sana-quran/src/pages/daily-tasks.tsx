@@ -334,6 +334,17 @@ export default function DailyTasksPage() {
     return <LeaderNamesManager />;
   }
 
+  // الخميس مراجعة فقط: المعلمة لا تفتح حلقتها، فلا مهام يومية
+  if (new Date(today + "T12:00:00Z").getUTCDay() === 4) {
+    return (
+      <div className="p-6 max-w-md mx-auto text-center space-y-2" dir="rtl">
+        <ClipboardList className="w-10 h-10 text-primary mx-auto" />
+        <p className="text-lg font-bold text-primary">لا مهام اليوم 🌿</p>
+        <p className="text-sm text-muted-foreground">الخميس يوم مراجعة فقط، والمعلمات لا يفتحن الحلقات.</p>
+      </div>
+    );
+  }
+
   if (!myTrack) {
     return (
       <div className="p-6 text-center text-muted-foreground" dir="rtl">
