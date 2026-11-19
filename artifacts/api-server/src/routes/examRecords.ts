@@ -168,11 +168,10 @@ router.get("/volunteer/near-completion", authenticate, async (req, res): Promise
         res.status(403).json({ error: "الحلقة خارج نطاق المسار" }); return;
       }
     }
-    allStudents = await db.select().from(studentsTable)
-      .where(and(eq(studentsTable.isArchived, false), eq(studentsTable.circleId, cid)));
+    allStudents = (await studentsByArchived(false)).filter((s) => s.circleId === cid);
   } else if (role === "teacher" && req.userCircleId) {
-    allStudents = await db.select().from(studentsTable)
-      .where(and(eq(studentsTable.isArchived, false), eq(studentsTable.circleId, req.userCircleId)));
+    const tcid = req.userCircleId;
+    allStudents = (await studentsByArchived(false)).filter((s) => s.circleId === tcid);
   } else {
     allStudents = await studentsByArchived(false);
   }

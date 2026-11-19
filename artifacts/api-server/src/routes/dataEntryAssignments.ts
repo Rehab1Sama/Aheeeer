@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, dataEntryCircleAssignmentsTable, usersTable, circlesTable, recordsTable, studentsTable, teacherAbsencesTable, tracksTable } from "@workspace/db";
 import { eq, and, gte, inArray, sql } from "drizzle-orm";
+import { studentsByArchived } from "../lib/cachedQueries";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay } from "../lib/date";
 import { isEntryExpectedOn } from "../lib/dataEntrySchedule";
@@ -241,11 +242,8 @@ router.get("/data-entry/my-stats", authenticate, async (req, res): Promise<void>
   const absentTeacherCircleIds = new Set(teacherAbsences.map(a => a.circleId));
 
   // الطالبات الغائبات اليوم (في الحلقات المُسندة)
-  const allStudents = await db.select().from(studentsTable)
-    .where(and(
-      inArray(studentsTable.circleId, circleIds),
-      eq(studentsTable.isArchived, false),
-    ));
+  const circleIdSet = new Set(circleIds);
+  const allStudents = (await studentsByArchived(false)).filter((s) => s.circleId != null && circleIdSet.has(s.circleId));
 
   const absentStudentRecords = await db.select()
     .from(recordsTable)

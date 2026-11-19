@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, circlesTable, studentsTable, tracksTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { recordsInRange } from "../lib/cachedQueries";
 import { authenticate } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -20,9 +21,7 @@ router.get("/reports/weekly", authenticate, async (req, res): Promise<void> => {
   const toStr = to ?? today.toISOString().slice(0, 10);
 
   let [allRecords, allCircles, allTracks] = await Promise.all([
-    db.select().from(recordsTable).where(
-      and(gte(recordsTable.date, fromStr), lte(recordsTable.date, toStr))
-    ),
+    recordsInRange(fromStr, toStr),
     db.select().from(circlesTable).where(eq(circlesTable.isArchived, false)),
     db.select().from(tracksTable),
   ]);

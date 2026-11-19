@@ -63,16 +63,14 @@ router.post("/badge-events/:id/auto-assign", authenticate, async (req, res): Pro
 
   if (targetType === "student") {
     // Students with ZERO absences in the date range
-    const allStudents = await db.select().from(studentsTable)
-      .where(and(eq(studentsTable.isArchived, false)));
+    const allStudents = (await allStudents_()).filter((s) => !s.isArchived);
+    const periodRecs = await recordsInRange(dateFrom, dateTo);
 
-    const absenceRecords = await db.select().from(recordsTable)
-      .where(and(eq(recordsTable.isAbsent, true), gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
+    const absenceRecords = periodRecs.filter((r) => r.isAbsent);
 
     const absentStudentIds = new Set(absenceRecords.map(r => r.studentId));
 
-    const presentRecords = await db.select().from(recordsTable)
-      .where(and(eq(recordsTable.isAbsent, false), gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
+    const presentRecords = periodRecs.filter((r) => !r.isAbsent);
     const hasRecords = new Set(presentRecords.map(r => r.studentId));
 
     candidates = allStudents
@@ -100,8 +98,7 @@ router.post("/badge-events/:id/auto-assign", authenticate, async (req, res): Pro
   } else if (targetType === "circle") {
     // Circles with attendance rate >= 80% in the date range
     const allCircles = await db.select().from(circlesTable);
-    const allRecords = await db.select().from(recordsTable)
-      .where(and(gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo)));
+    const allRecords = await recordsInRange(dateFrom, dateTo);
 
     candidates = allCircles
       .map(c => {

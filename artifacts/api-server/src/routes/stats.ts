@@ -454,7 +454,7 @@ router.get("/stats/today-banner", async (_req, res): Promise<void> => {
 });
 
 async function computeTodayBanner(today: string) {
-  const records = await db.select().from(recordsTable).where(eq(recordsTable.date, today));
+  const records = await recordsInRange(today, today);
   const circles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
   // الشريط عام (بلا تسجيل دخول): نسحب رقم الطالبة وحلقتها فقط لا صفها كاملًا (الجوال والبيانات).
   const students = await db.select({ id: studentsTable.id, circleId: studentsTable.circleId }).from(studentsTable).where(eq(studentsTable.isArchived, false));
@@ -587,9 +587,9 @@ router.get("/stats/daily-snapshot", authenticate, async (req, res): Promise<void
   const weekAgo = getMakkahDaysAgo(7);
   const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const allStudents = await db.select().from(studentsTable)
-    .leftJoin(circlesTable, eq(studentsTable.circleId, circlesTable.id))
-    .where(eq(studentsTable.isArchived, false));
+  const circleRows = await db.select().from(circlesTable);
+  const circleOf = new Map(circleRows.map((c) => [c.id, c]));
+  const allStudents = (await studentsByArchived(false)).map((s) => ({ students: s, circles: (s.circleId != null ? circleOf.get(s.circleId) : undefined) ?? null }));
 
   const activeCircles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
 

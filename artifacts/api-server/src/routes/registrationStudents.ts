@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { performTransfer } from "../lib/studentTransfer";
 import { db, studentsTable, circlesTable, usersTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { studentsByArchived } from "../lib/cachedQueries";
 import { authenticate } from "../middlewares/authenticate";
 
 const router: IRouter = Router();
@@ -18,8 +19,8 @@ router.get("/registration-students", authenticate, async (req, res): Promise<voi
   if (regCircles.length === 0) { res.json([]); return; }
 
   const regCircleIds = regCircles.map(c => c.id);
-  const students = await db.select().from(studentsTable)
-    .where(and(inArray(studentsTable.circleId, regCircleIds), eq(studentsTable.isArchived, false)));
+  const regSet = new Set(regCircleIds);
+  const students = (await studentsByArchived(false)).filter((s) => s.circleId != null && regSet.has(s.circleId));
 
   res.json(students.map(s => {
     let email: string | null = null;

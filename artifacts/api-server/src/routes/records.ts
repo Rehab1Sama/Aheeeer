@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, studentsTable, usersTable, circlesTable, tracksTable, globalSettingsTable, studentEnrollmentsTable, dataEntryCircleAssignmentsTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { recordsInRange } from "../lib/cachedQueries";
 import { authenticate } from "../middlewares/authenticate";
 import { CreateRecordBody, UpdateRecordBody } from "@workspace/api-zod";
 import { checkAndCreateLowMemorizationAlert } from "./lowMemorizationAlerts";
@@ -357,9 +358,7 @@ router.post("/records/thursday-bulk", authenticate, async (req, res): Promise<vo
     .where(eq(studentEnrollmentsTable.isArchived, false));
 
   // سجلات الأسبوع (الأحد–الأربعاء)
-  const weekRecords = await db.select().from(recordsTable).where(
-    and(gte(recordsTable.date, dateFrom), lte(recordsTable.date, dateTo))
-  );
+  const weekRecords = await recordsInRange(dateFrom, dateTo);
   // سجلات الخميس الموجودة — المفتاح المركب (studentId-circleId) لأن الطالبة قد تكون في حلقتين
   const existingThursday = await db.select({ studentId: recordsTable.studentId, circleId: recordsTable.circleId })
     .from(recordsTable).where(eq(recordsTable.date, date));
@@ -414,7 +413,7 @@ router.get("/records/thursday-history", authenticate, async (req, res): Promise<
   }
   const twelveWeeksAgo = new Date(Date.now() - 84 * 86400000);
   const dateFrom = twelveWeeksAgo.toISOString().slice(0, 10);
-  const allRecords = await db.select().from(recordsTable).where(gte(recordsTable.date, dateFrom));
+  const allRecords = await recordsInRange(dateFrom, "9999-12-31");
   const thursdayRecs = allRecords.filter(r => new Date(r.date + "T12:00:00Z").getUTCDay() === 4);
   const grouped: Record<string, { date: string; count: number; totalPages: number }> = {};
   for (const r of thursdayRecs) {

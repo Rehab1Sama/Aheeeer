@@ -8,6 +8,7 @@
 import { Router, type IRouter } from "express";
 import { db, recordsTable, studentsTable, circlesTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { recordsInRange } from "../lib/cachedQueries";
 import { authenticate } from "../middlewares/authenticate";
 import { getMakkahDay, addDaysStr } from "../lib/date";
 import { computeShortcoming } from "./shortcomings";
@@ -41,11 +42,8 @@ async function buildMerits(
   if (circleIds.length === 0) return [];
   const circleById = new Map(circles.map(c => [c.id, c]));
 
-  const records = await db.select().from(recordsTable).where(and(
-    gte(recordsTable.date, dateFrom),
-    lte(recordsTable.date, dateTo),
-    inArray(recordsTable.circleId, circleIds),
-  ));
+  const circleIdSet = new Set(circleIds);
+  const records = (await recordsInRange(dateFrom, dateTo)).filter((r) => circleIdSet.has(r.circleId));
   if (records.length === 0) return [];
 
   const studentIds = [...new Set(records.map(r => r.studentId))];

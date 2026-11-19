@@ -3,12 +3,14 @@
 // - كل طلب تعديل ناجح (POST/PUT/PATCH/DELETE) يُفرِغها فورًا (انظري middleware أدناه)
 // - وتنتهي صلاحية كل قيمة بعد مدة قصيرة على أي حال
 import type { Request, Response, NextFunction } from "express";
+import { markMirrorsDirty } from "./tableMirror";
 
 type Entry = { at: number; gen: number; p: Promise<unknown> };
 const store = new Map<string, Entry>();
 let generation = 0;
 
 export function invalidateReadCache(): void {
+  markMirrorsDirty();
   generation++;
   store.clear();
 }
@@ -55,6 +57,7 @@ export function readCacheInvalidator(req: Request, res: Response, next: NextFunc
       if (res.statusCode >= 400) return;
       const path = req.path;
       if (NON_DATA_WRITES.some((r) => r.test(path))) return;
+      markMirrorsDirty();
       if (RECORD_WRITES.test(path)) invalidateKeys(RECORD_KEYS);
       else invalidateReadCache();
     });

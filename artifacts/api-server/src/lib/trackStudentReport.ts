@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { addDaysStr } from "./date";
+import { mirroredRecordsInRange } from "./tableMirror";
 import { isShortcomingRecord } from "./shortcoming";
 import { loadGirlsCoverage, getPlanCycleDates } from "../routes/reviewPlans";
 
@@ -54,7 +55,7 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     }).from(studentEnrollmentsTable)
       .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
       .where(and(eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false), inArray(studentEnrollmentsTable.circleId, ids))),
-    db.select().from(recordsTable).where(and(inArray(recordsTable.circleId, ids), gte(recordsTable.date, d28), lte(recordsTable.date, D))),
+    mirroredRecordsInRange(d28, D).then((rs) => { const set = new Set(ids); return rs.filter((r) => set.has(r.circleId)); }),
     db.select().from(reviewPlansTable).where(and(inArray(reviewPlansTable.circleId, ids), eq(reviewPlansTable.status, "active"))),
   ]);
 

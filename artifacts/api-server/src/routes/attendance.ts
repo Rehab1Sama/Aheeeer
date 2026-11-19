@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { allStudents as allStudents_ } from "../lib/cachedQueries";
+import { allStudents as allStudents_, recordsInRange } from "../lib/cachedQueries";
 import { db, recordsTable, studentsTable, circlesTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/authenticate";
@@ -12,9 +12,8 @@ router.get("/attendance/today", authenticate, async (req, res): Promise<void> =>
   const today = new Date().toISOString().slice(0, 10);
   const trackFilter = req.query.track as string | undefined;
 
-  const records = await db.select().from(recordsTable).where(
-    and(eq(recordsTable.date, today), eq(recordsTable.isAbsent, true))
-  );
+  const todayRecs = await recordsInRange(today, today);
+  const records = todayRecs.filter((r) => r.isAbsent);
 
   const students = await allStudents_();
   const circles = await db.select().from(circlesTable);
@@ -49,7 +48,7 @@ router.get("/attendance/today", authenticate, async (req, res): Promise<void> =>
 
   // Find circles with no data today
   const circlesWithData = new Set(
-    (await db.select().from(recordsTable).where(eq(recordsTable.date, today))).map(r => r.circleId)
+    todayRecs.map(r => r.circleId)
   );
   let allCircles = circles.filter(c => !c.isArchived && c.trackType !== "archive" && c.trackType !== "registration");
   if (req.userRole === "track_supervisor" && req.userTrack) {
@@ -68,13 +67,7 @@ router.get("/attendance/repeated-absences", authenticate, async (req, res): Prom
   const fromDate = dateFrom ?? weekAgo;
   const toDate = dateTo ?? today;
 
-  const records = await db.select().from(recordsTable).where(
-    and(
-      eq(recordsTable.isAbsent, true),
-      gte(recordsTable.date, fromDate),
-      lte(recordsTable.date, toDate)
-    )
-  );
+  const records = (await recordsInRange(fromDate, toDate)).filter((r) => r.isAbsent);
 
   const students = await allStudents_();
   const circles = await db.select().from(circlesTable);
