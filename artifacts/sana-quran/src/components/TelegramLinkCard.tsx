@@ -62,7 +62,7 @@ export default function TelegramLinkCard() {
             </>
           ) : (
             <>
-              <p className="text-sm font-bold text-primary">{identity ? (() => { const f = identity.name.split(/\s+/)[0]; return `${/نا$/.test(f) ? f : `قمرتنا ${f}`}، `; })() : ""}اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
+              <p className="text-sm font-bold text-primary">{identity ? (() => { const f = identity.name.split(/\s+/)[0]; return `${/ـ|نا$/.test(f) ? f : `قمرتنا ${f}`}، `; })() : ""}اربطي تيليجرام لتصلكِ خلاصة طالبات مساركِ 🌸</p>
               <p className="mt-0.5 text-xs text-muted-foreground">اضغطي الزر، ثم «Start» في البوت، وتصلكِ كل صباح باسمكِ.</p>
               <button type="button" disabled={busy} onClick={link} className="mt-2 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50">اربطي تيليجرام</button>
             </>

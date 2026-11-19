@@ -165,7 +165,7 @@ export function trackStudentMessage(dg: TrackStudentDigest, supervisorName: stri
   const kid = dg.kind === "children";
   const who = kid ? "أطفال" : dg.kind === "mothers" ? "أمهات" : "طالبات";
   // اسم الدلع (أمواجنا، هبتنا…) يُنادى به كما هو، وغيره «قمرتنا فلانة»
-  const call = /نا$/.test(first) ? first : `قمرتنا ${first}`;
+  const call = /ـ|نا$/.test(first) ? first : `قمرتنا ${first}`;
   const lines = [`🌸 <b>${call}</b>، ${who} مسار ${esc(dg.track.replace(/^مسار\s+/, ""))}`, `<i>${fmtDate(D)}</i>`, ""];
   lines.push(...section(kid ? "متكاسلون 🌧️" : "متكاسلات 🌧️", dg.lazy));
   lines.push(...section(kid ? "يحتاجون متابعة 🌿" : "يحتجن متابعة 🌿", dg.follow));
