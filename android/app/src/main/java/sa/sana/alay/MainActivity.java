@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -20,13 +21,22 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 /**
  * تطبيق «سنا الآي»: نافذة تعرض موقع المقرأة مباشرة، فكل تحديث في الموقع يظهر فورًا
  * دون تحديث التطبيق.
+ * رابط الموقع يُقرأ من android/site-url.txt في المستودع: لو تغيَّر رابط الموقع يكفي تعديل
+ * ذلك الملف، فتنتقل كل التطبيقات المثبَّتة للرابط الجديد بنفسها.
  */
 public class MainActivity extends Activity {
-    private static final String SITE = "https://sana-alay-abq5.onrender.com/";
-    private static final String HOST = "sana-alay-abq5.onrender.com";
+    private static final String DEFAULT_SITE = "https://sana-alay-abq5.onrender.com/";
+    private static final String CONFIG_URL = "https://raw.githubusercontent.com/Rehab1Sama/Aheeeer/main/android/site-url.txt";
+    private String site;
+    private String host;
     private static final int FILE_REQ = 1001;
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
@@ -35,6 +45,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        SharedPreferences prefs = getSharedPreferences("sana", MODE_PRIVATE);
+        site = prefs.getString("site", DEFAULT_SITE);
+        host = Uri.parse(site).getHost();
         web = new WebView(this);
         setContentView(web);
 
@@ -55,7 +68,7 @@ public class MainActivity extends Activity {
                 Uri u = req.getUrl();
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
                 // صفحات الموقع داخل التطبيق، وما سواها (واتساب، تيليجرام، اتصال…) في تطبيقه
-                if ((scheme.equals("https") || scheme.equals("http")) && HOST.equals(u.getHost())) return false;
+                if ((scheme.equals("https") || scheme.equals("http")) && host != null && host.equals(u.getHost())) return false;
                 openExternal(u);
                 return true;
             }
@@ -97,7 +110,41 @@ public class MainActivity extends Activity {
         });
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
-        else web.loadUrl(SITE);
+        else web.loadUrl(site);
+        refreshSiteUrl(prefs);
+    }
+
+    /** يقرأ رابط الموقع الحالي من المستودع؛ إن تغيَّر يحفظه وينتقل إليه */
+    private void refreshSiteUrl(SharedPreferences prefs) {
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(CONFIG_URL).openConnection();
+                c.setConnectTimeout(6000);
+                c.setReadTimeout(6000);
+                c.setUseCaches(false);
+                if (c.getResponseCode() != 200) return;
+                String line;
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"))) {
+                    line = r.readLine();
+                }
+                if (line == null) return;
+                final String fresh = line.trim();
+                if (!fresh.startsWith("https://") || fresh.equals(site)) return;
+                final String freshHost = Uri.parse(fresh).getHost();
+                if (freshHost == null || freshHost.isEmpty()) return;
+                prefs.edit().putString("site", fresh).apply();
+                runOnUiThread(() -> {
+                    site = fresh;
+                    host = freshHost;
+                    web.loadUrl(fresh);
+                });
+            } catch (Exception ignored) {
+                // بلا إنترنت أو تعذَّر الوصول: يبقى الرابط المحفوظ
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }).start();
     }
 
     private void openExternal(Uri u) {
