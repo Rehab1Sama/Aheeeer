@@ -2,7 +2,8 @@ import { Router, type IRouter } from "express";
 import { cachedList } from "../lib/readCache";
 import { toSafeUser } from "../lib/safeUser";
 import { db, circlesTable, usersTable, studentsTable, tracksTable, dataEntryCircleAssignmentsTable, studentEnrollmentsTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
+import { fingerprinted } from "../lib/tableMirror";
 import { authenticate } from "../middlewares/authenticate";
 import { CreateCircleBody, UpdateCircleBody } from "@workspace/api-zod";
 
@@ -85,7 +86,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
   }
 
   // تُطلب مع كل فتح لصفحة الحلقات: محفوظة دقيقة (وتُفرَّغ مع أي تعديل)
-  const allUsers = await cachedList("users:lite", 60_000, () => db.select({
+  const allUsers = await fingerprinted("users:lite", sql`select md5(string_agg(concat_ws('|', id, name, phone, email, role, circle_id, is_archived), ',' order by id)) as h from users`, () => db.select({
     id: usersTable.id, name: usersTable.name, phone: usersTable.phone,
     email: usersTable.email, role: usersTable.role, circleId: usersTable.circleId,
     isArchived: usersTable.isArchived,
@@ -112,7 +113,8 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     }
   }
 
-  const allEnrollments = await cachedList("enrollments:active-with-names", 60_000, () => db.select({
+  const allEnrollments = await fingerprinted("enrollments:active-with-names", sql`select md5(string_agg(concat_ws('|', e.id, e.student_id, e.circle_id, s.full_name, s.phone), ',' order by e.id)) as h
+      from student_enrollments e join students s on s.id = e.student_id where e.is_archived = false and s.is_archived = false`, () => db.select({
     studentId: studentEnrollmentsTable.studentId,
     circleId: studentEnrollmentsTable.circleId,
     fullName: studentsTable.fullName,

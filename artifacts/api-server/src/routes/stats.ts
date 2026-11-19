@@ -457,7 +457,7 @@ async function computeTodayBanner(today: string) {
   const records = await recordsInRange(today, today);
   const circles = await db.select().from(circlesTable).where(eq(circlesTable.isArchived, false));
   // الشريط عام (بلا تسجيل دخول): نسحب رقم الطالبة وحلقتها فقط لا صفها كاملًا (الجوال والبيانات).
-  const students = await db.select({ id: studentsTable.id, circleId: studentsTable.circleId }).from(studentsTable).where(eq(studentsTable.isArchived, false));
+  const students = (await studentsByArchived(false)).map((s) => ({ id: s.id, circleId: s.circleId }));
 
   const circleMap: Record<number, { total: number; present: number; absences: number }> = {};
   for (const r of records) {

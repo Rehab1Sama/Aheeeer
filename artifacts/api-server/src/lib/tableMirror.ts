@@ -8,6 +8,7 @@
 // لا نفحص البصمات أكثر من مرة كل CHECK_MS، إلا بعد أي كتابة في الموقع (markDirty).
 import { db, studentsTable, recordsTable } from "@workspace/db";
 import { and, or, gte, lt, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 const CHECK_MS = 20_000;
 type Student = typeof studentsTable.$inferSelect;
@@ -118,3 +119,31 @@ export function mirroredRecordsOn(date: string): Promise<RecordRow[]> {
 
 // للاختبار فقط
 export function _resetMirrors(): void { sBuckets.clear(); sAll = []; sCheckedAt = 0; rDays.clear(); rChecked.clear(); }
+
+// ─── قوائم صغيرة بالبصمة: تُعاد كاملة فقط إن تغيَّرت بصمتها ─────────────────
+const fpStore = new Map<string, { hash: string; rows: unknown[]; at: number; gen: number }>();
+const fpInflight = new Map<string, Promise<unknown[]>>();
+
+/**
+ * يرجع نتيجة fetch من الذاكرة ما دامت بصمة البيانات (fp: استعلام يرجع عمودًا واحدًا h) لم تتغيَّر.
+ * اكتبي البصمة على نفس الأعمدة والشروط التي يجلبها fetch.
+ */
+export async function fingerprinted<T>(key: string, fp: SQL, fetch: () => Promise<T[]>): Promise<T[]> {
+  const now = Date.now();
+  const hit = fpStore.get(key);
+  if (hit && hit.gen === dirtyGen && now - hit.at < CHECK_MS) return [...hit.rows] as T[];
+  let p = fpInflight.get(key) as Promise<T[]> | undefined;
+  if (!p) {
+    const gen = dirtyGen;
+    p = (async () => {
+      const h = String(rowsOf(await db.execute(fp))[0]?.h ?? "");
+      const cur = fpStore.get(key);
+      if (cur && cur.hash === h) { cur.at = Date.now(); cur.gen = gen; return cur.rows as T[]; }
+      const rows = await fetch();
+      fpStore.set(key, { hash: h, rows, at: Date.now(), gen });
+      return rows;
+    })().finally(() => fpInflight.delete(key));
+    fpInflight.set(key, p);
+  }
+  return [...(await p)];
+}
