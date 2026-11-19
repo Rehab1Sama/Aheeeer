@@ -1619,13 +1619,14 @@ export default function DataEntryPage() {
                       } else if (recordForEdit && !recordForEdit.isAbsent) {
                         const entered = studentPlan.planType === "fixation"
                           ? (recordForEdit.reviewPages ?? recordForEdit.reviewFarPages ?? 0)
-                          : (recordForEdit.reviewFarPages ?? 0);
+                          : (recordForEdit.reviewFarPages ?? 0) + (recordForEdit.reviewFar2Pages ?? 0)
+                            + (recordForEdit.date < "2026-11-22" ? (recordForEdit.reviewNearPages ?? 0) : 0);
                         if (entered >= planned * 1.05) {
-                          planBadge = <Badge className="bg-blue-100 text-blue-700 border-0 text-[11px] px-1.5 py-0">↑ تجاوزت</Badge>;
+                          planBadge = <Badge className="bg-blue-100 text-blue-700 border-0 text-[11px] px-1.5 py-0">↑ فوق نصاب اليوم</Badge>;
                         } else if (entered >= planned * 0.95) {
-                          planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">✓ نصاب الخطة</Badge>;
+                          planBadge = <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[11px] px-1.5 py-0">✓ نصاب اليوم</Badge>;
                         } else if (entered > 0) {
-                          planBadge = <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] px-1.5 py-0">⚠ أقل من الخطة</Badge>;
+                          planBadge = <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] px-1.5 py-0">⚠ أقل من نصاب اليوم</Badge>;
                         }
                       }
                     }
