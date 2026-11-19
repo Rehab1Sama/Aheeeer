@@ -38,6 +38,7 @@ import MessagesPage from "@/pages/messages";
 import MyMessagesPage from "@/pages/my-messages";
 import ArchivedStudentsPage from "@/pages/archived-students";
 import ManageTracksPage from "@/pages/manage-tracks";
+import InstallAppBanner from "@/components/InstallAppBanner";
 import DailyTasksPage from "@/pages/daily-tasks";
 import LeaderTasksPage from "@/pages/leader-tasks";
 import CalendarPage from "@/pages/calendar";
@@ -392,6 +393,7 @@ function App() {
           <AppRoutes />
         </WouterRouter>
         <Toaster />
+        <InstallAppBanner />
       </TooltipProvider>
     </QueryClientProvider>
   );
