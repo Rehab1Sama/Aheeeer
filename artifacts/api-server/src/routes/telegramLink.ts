@@ -127,14 +127,14 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
       if (nm) {
         await db.update(trackSupervisorNamesTable).set({ telegramChatId: chatId, telegramLinkToken: null }).where(eq(trackSupervisorNamesTable.id, nm.id));
         const f = (nm.name ?? "").trim().split(/\s+/)[0] ?? "";
-        await telegramSend(chatId, `تم ربطكِ يا قمرتنا ${f} 🌸\nستصلكِ كل صباح خلاصة طالبات مسار ${nm.track ?? ""}، أعانكِ الله ♥️\n\nلإيقافها اكتبي: إيقاف`);
+        await telegramSend(chatId, `تم ربطكِ يا ${/نا$/.test(f) ? f : `قمرتنا ${f}`} 🌸\nستصلكِ كل صباح خلاصة طالبات مسار ${nm.track ?? ""}، أعانكِ الله ♥️\n\nلإيقافها اكتبي: إيقاف`);
         return;
       }
       const [u] = await db.select({ id: usersTable.id, name: usersTable.name, track: usersTable.track }).from(usersTable).where(eq(usersTable.telegramLinkToken, tok));
       if (!u) { await telegramSend(chatId, "انتهت صلاحية رابط الربط، اضغطي الزر في الموقع مرة أخرى 🌿"); return; }
       await db.update(usersTable).set({ telegramChatId: chatId, telegramLinkToken: null }).where(eq(usersTable.id, u.id));
       const first = (u.name ?? "").trim().split(/\s+/)[0] ?? "";
-      await telegramSend(chatId, `تم ربطكِ يا قمرتنا ${first} 🌸\nستصلكِ كل صباح خلاصة طالبات مسار ${u.track ?? ""}، أعانكِ الله ♥️\n\nلإيقافها اكتبي: إيقاف`);
+      await telegramSend(chatId, `تم ربطكِ يا ${/نا$/.test(first) ? first : `قمرتنا ${first}`} 🌸\nستصلكِ كل صباح خلاصة طالبات مسار ${u.track ?? ""}، أعانكِ الله ♥️\n\nلإيقافها اكتبي: إيقاف`);
       return;
     }
     if (/^(\/stop|إيقاف|ايقاف)$/.test(text)) {

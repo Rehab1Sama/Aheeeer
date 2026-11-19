@@ -580,7 +580,7 @@ export async function sendTrackStudentReports(D: string, only?: { userId?: numbe
     const dg = digests.get(r.track);
     if (!dg || (!dg.hadData && !only)) continue;
     // الأمهات (مهج): رسالة واحدة في الأسبوع يوم الخميس، لهبة فقط
-    if (dg.kind === "mothers" && !only && (!weekly || !/^\s*هب[ةه]/.test(r.name))) continue;
+    if (dg.kind === "mothers" && !only && (!weekly || !/^\s*هب[ةهت]/.test(r.name))) continue;
     for (const part of splitForTelegram(trackStudentMessage(dg, r.name, D, weekly))) {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
