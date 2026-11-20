@@ -10,6 +10,7 @@ import {
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { addDaysStr } from "./date";
 import { mirroredRecordsInRange } from "./tableMirror";
+import { isEntryExpectedOn } from "./dataEntrySchedule";
 import { isShortcomingRecord } from "./shortcoming";
 import { loadGirlsCoverage, getPlanCycleDates } from "../routes/reviewPlans";
 
@@ -132,18 +133,22 @@ export async function buildTrackStudentDigests(D: string, opts: { weekly: boolea
     if (lazy.length) dg.lazy.push({ circle: c.name, name, reasons: [...lazy, ...follow] });
     else if (follow.length) dg.follow.push({ circle: c.name, name, reasons: follow });
 
-    if (opts.weekly && !lazy.length && !follow.length) {
+    // متميِّزات الأسبوع = حضور كامل لكل أيام الأسبوع المتوقعة، بلا غياب ولا تقصير (الخطة لا تدخل في الشرط)
+    if (opts.weekly) {
       const week = rs.filter((r) => r.date >= d7);
-      const clean = week.length >= (t === "mothers" ? 1 : 2) && week.every((r) => !r.isAbsent && !isShortcomingRecord(r, t));
+      const expected: string[] = [];
+      for (let d = d7; d <= D; d = addDaysStr(d, 1)) if (isEntryExpectedOn(t, c.name, d)) expected.push(d);
+      const have = new Set(week.map((r) => r.date));
+      const clean = expected.length > 0 && expected.every((d) => have.has(d))
+        && week.every((r) => !r.isAbsent && !isShortcomingRecord(r, t));
       if (clean) {
-        const why: string[] = [];
+        const why: string[] = [g(t, "حضرت الأسبوع كاملًا", "حضور الأسبوع كاملًا")];
         if (ps?.ahead) why.push(g(t, "متقدِّمة في خطتها", "متقدِّم في الخطة"));
         const weekMemo = week.reduce((s, r) => s + (r.memorizePages ?? 0), 0);
         const prevWeeks = rs.filter((r) => r.date < d7);
         const prevAvg = prevWeeks.length ? (prevWeeks.reduce((s, r) => s + (r.memorizePages ?? 0), 0) / prevWeeks.length) * week.length : 0;
         if (weekMemo > 0 && prevAvg > 0 && weekMemo >= prevAvg * 1.25) why.push(t === "fixation" ? "ثبَّتت أكثر من معدَّلها" : g(t, "حفظت أكثر من معدَّلها", "حفظ أكثر من المعدَّل"));
-        if (t === "mothers" || t === "recitation") why.push(g(t, "حضرت الأسبوع كاملًا", ""));
-        if (why.length) dg.excellent.push({ circle: c.name, name, reasons: [...why, "بلا غياب ولا تقصير"] });
+        dg.excellent.push({ circle: c.name, name, reasons: [...why, "بلا غياب ولا تقصير"] });
       }
     }
   }
