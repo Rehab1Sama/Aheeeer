@@ -1,0 +1,30 @@
+# إرسال «متميِّزات الأسبوع» وحدها لمسؤولات المسارات عن أسبوع ينتهي بتاريخ معيَّن (تشغيل يدوي)
+name: متميزات الأسبوع للمسؤولات
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "آخر يوم في الأسبوع (YYYY-MM-DD)"
+        required: true
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wake server and send
+        env:
+          REPORT_KEY: ${{ secrets.REPORT_KEY }}
+          SITE: https://sana-alay-abq5.onrender.com
+          DATE: ${{ github.event.inputs.date }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 60 "$SITE/api/healthz" >/dev/null 2>&1; then break; fi
+            sleep 20
+          done
+          for i in 1 2 3; do
+            if curl -fsS --max-time 240 "$SITE/api/reports/track-students/excellent/run?key=$REPORT_KEY&date=$DATE"; then echo; exit 0; fi
+            echo "retry $i"; sleep 30
+          done
+          exit 1

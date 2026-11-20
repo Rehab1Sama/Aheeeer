@@ -8,7 +8,7 @@ import { db, reviewPlansTable, reviewPlanDaysTable, circlesTable } from "@worksp
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
 import { authenticate } from "../middlewares/authenticate";
-import { buildDailyReport, sendDailyReportToTelegram } from "../lib/dailyReport";
+import { buildDailyReport, sendDailyReportToTelegram, sendTrackStudentReports } from "../lib/dailyReport";
 import { logger } from "../lib/logger";
 import { buildTrackStudentDigests } from "../lib/trackStudentReport";
 import { runWeeklyMoonBadgeAward } from "../lib/weeklyMoonBadge";
@@ -83,6 +83,16 @@ router.get("/reports/fixation-plans-check", async (req, res): Promise<void> => {
 });
 
 // فحص خلاصة طالبات المسارات (أعداد فقط، بلا أسماء) — للتحقق من عمل التقرير
+// إرسال «متميِّزات الأسبوع» وحدها لمسؤولات المسارات عن أسبوع ينتهي بتاريخ date
+router.get("/reports/track-students/excellent/run", async (req, res): Promise<void> => {
+  if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
+  if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const D = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
+  if (!D) { res.status(400).json({ error: "date مطلوب" }); return; }
+  const sent = await sendTrackStudentReports(D, undefined, "excellent");
+  res.json({ sent, date: D });
+});
+
 router.get("/reports/track-students/counts", async (req, res): Promise<void> => {
   if (!process.env.REPORT_KEY) { res.status(503).json({ error: "REPORT_KEY غير مضبوط" }); return; }
   if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }

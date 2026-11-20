@@ -555,7 +555,7 @@ export async function sendDailyReportToTelegram(opts: { date?: string; force?: b
 
 /** يرسل لكل مسؤولة مسار مربوطة (باسمها في الحساب المشترك، أو حسابها) خلاصة طالبات مسارها.
  * المتميِّزات يوم الخميس فقط. لا شيء في الإجازة أو يوم بلا إدخال في المسار. */
-export async function sendTrackStudentReports(D: string, only?: { userId?: number; nameId?: number }): Promise<number> {
+export async function sendTrackStudentReports(D: string, only?: { userId?: number; nameId?: number }, mode?: "excellent"): Promise<number> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || (await holidayOn(D))) return 0;
   const recipients: Array<{ name: string; track: string; chat: string }> = [];
@@ -570,15 +570,18 @@ export async function sendTrackStudentReports(D: string, only?: { userId?: numbe
     for (const u of users) if (!u.isArchived && u.chat && u.track && (only?.userId == null || u.id === only.userId)) recipients.push({ name: u.name ?? "", track: u.track, chat: u.chat });
   }
   if (recipients.length === 0) return 0;
-  const weekly = new Date(getMakkahDay() + "T12:00:00Z").getUTCDay() === 4; // الخميس
+  // رسالة «متميِّزات الأسبوع» وحدها (mode=excellent) تُحسب أسبوعية دائمًا
+  const weekly = mode === "excellent" || new Date(getMakkahDay() + "T12:00:00Z").getUTCDay() === 4; // الخميس
   const digests = await buildTrackStudentDigests(D, { weekly });
   let sent = 0;
   const seen = new Set<string>();
   for (const r of recipients) {
     if (seen.has(`${r.chat}:${r.track}`)) continue; // نفس المحادثة لا تُكرَّر لها الرسالة
     seen.add(`${r.chat}:${r.track}`);
-    const dg = digests.get(r.track);
-    if (!dg || (!dg.hadData && !only)) continue;
+    const full = digests.get(r.track);
+    if (!full) continue;
+    const dg = mode === "excellent" ? { ...full, lazy: [], follow: [] } : full;
+    if (mode === "excellent" ? !dg.excellent.length : (!dg.hadData && !only)) continue;
     // الأمهات (مهج): رسالة واحدة في الأسبوع يوم الخميس، لهبة فقط
     if (dg.kind === "mothers" && !only && (!weekly || !/^\s*هب[ةهت]/.test(r.name))) continue;
     for (const part of splitForTelegram(trackStudentMessage(dg, r.name, D, weekly))) {
