@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { studentsByArchived, recordsInRange } from "../lib/cachedQueries";
+import { studentsByArchived, recordsInRange, allStudents as allStudents_ } from "../lib/cachedQueries";
 import { cached } from "../lib/readCache";
 import { db, recordsTable, studentsTable, studentEnrollmentsTable, studentMemorizationsTable, circlesTable, usersTable, teacherAbsencesTable, tracksTable, dailyCircleTasksTable, examRecordsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
@@ -20,16 +20,12 @@ type StatsStudent = {
 // استخدم الأعمدة التي تحتاجها الإحصائيات فقط. هذا يمنع تعطل الإحصائيات
 // إذا كان مخطط Supabase يحتوي على أعمدة إضافية أو ترحيلًا جاريًا.
 async function loadStatsStudents(): Promise<StatsStudent[]> {
-  const result = await db.execute(sql`
-    SELECT id, full_name, circle_id, age_range, is_archived
-    FROM students
-  `);
-  return (result as any).rows.map((row: any) => ({
-    id: Number(row.id),
-    fullName: row.full_name,
-    circleId: row.circle_id === null ? null : Number(row.circle_id),
-    ageRange: row.age_range ?? null,
-    isArchived: row.is_archived === true,
+  return (await allStudents_()).map((s) => ({
+    id: s.id,
+    fullName: s.fullName,
+    circleId: s.circleId ?? null,
+    ageRange: s.ageRange ?? null,
+    isArchived: s.isArchived === true,
   }));
 }
 
@@ -620,9 +616,7 @@ router.get("/stats/daily-snapshot", authenticate, async (req, res): Promise<void
   const circlesRecordedTodaySet = new Set(todayRecords.map(r => r.circleId));
 
   // Circles with students but no records in the past 7 days
-  const weekRecords = await db.select({ circleId: recordsTable.circleId, date: recordsTable.date })
-    .from(recordsTable)
-    .where(and(gte(recordsTable.date, weekAgo), lte(recordsTable.date, today)));
+  const weekRecords = await recordsInRange(weekAgo, today);
   const lastRecordByCircle: Record<number, string> = {};
   for (const r of weekRecords) {
     if (!lastRecordByCircle[r.circleId] || r.date > lastRecordByCircle[r.circleId]) {

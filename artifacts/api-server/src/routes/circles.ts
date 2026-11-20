@@ -3,6 +3,7 @@ import { cachedList } from "../lib/readCache";
 import { toSafeUser } from "../lib/safeUser";
 import { db, circlesTable, usersTable, studentsTable, tracksTable, dataEntryCircleAssignmentsTable, studentEnrollmentsTable } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { activeEnrollmentsWithNames } from "../lib/cachedQueries";
 import { fingerprinted } from "../lib/tableMirror";
 import { authenticate } from "../middlewares/authenticate";
 import { CreateCircleBody, UpdateCircleBody } from "@workspace/api-zod";
@@ -113,16 +114,7 @@ router.get("/circles/enriched", authenticate, async (req, res): Promise<void> =>
     }
   }
 
-  const allEnrollments = await fingerprinted("enrollments:active-with-names", sql`select md5(string_agg(concat_ws('|', e.id, e.student_id, e.circle_id, s.full_name, s.phone), ',' order by e.id)) as h
-      from student_enrollments e join students s on s.id = e.student_id where e.is_archived = false and s.is_archived = false`, () => db.select({
-    studentId: studentEnrollmentsTable.studentId,
-    circleId: studentEnrollmentsTable.circleId,
-    fullName: studentsTable.fullName,
-    phone: studentsTable.phone,
-  })
-    .from(studentEnrollmentsTable)
-    .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
-    .where(and(eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false))));
+  const allEnrollments = await activeEnrollmentsWithNames();
   const studentsByCircle: Record<number, { id: number; fullName: string; email: string | null }[]> = {};
   for (const e of allEnrollments) {
     if (!studentsByCircle[e.circleId]) studentsByCircle[e.circleId] = [];

@@ -4,6 +4,7 @@
 // - قائمة «تبديل الحساب» واختيار الحساب عند الدخول لا تعرض إلا حسابات حلقاتها الحالية، بلا تكرار.
 import { db, usersTable, studentsTable, studentEnrollmentsTable, circlesTable } from "@workspace/db";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { activeEnrollmentsWithNames } from "./cachedQueries";
 import { normalizeName } from "./nameMatch";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -57,10 +58,7 @@ export async function currentAccountsOnly<T extends AccountRow>(accounts: T[], k
   if (students.length) {
     const linkedIds = [...new Set(students.map((a) => a.studentId).filter((x): x is number => x != null))];
     const names = [...new Set(students.map((a) => normalizeName(a.name ?? "")))];
-    const enrolls = await db.select({ studentId: studentEnrollmentsTable.studentId, circleId: studentEnrollmentsTable.circleId, fullName: studentsTable.fullName })
-      .from(studentEnrollmentsTable)
-      .innerJoin(studentsTable, eq(studentsTable.id, studentEnrollmentsTable.studentId))
-      .where(and(eq(studentEnrollmentsTable.isArchived, false), eq(studentsTable.isArchived, false)));
+    const enrolls = await activeEnrollmentsWithNames();
     const byStudent = new Set(enrolls.filter((e) => linkedIds.includes(e.studentId)).map((e) => `${e.studentId}:${e.circleId}`));
     const byName = new Set(enrolls.filter((e) => names.includes(normalizeName(e.fullName))).map((e) => `${normalizeName(e.fullName)}:${e.circleId}`));
     const okStudents = students.filter((a) => a.circleId != null && (
