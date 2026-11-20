@@ -89,8 +89,12 @@ router.get("/reports/track-students/excellent/run", async (req, res): Promise<vo
   if (!keyMatches(req.query.key)) { res.status(403).json({ error: "Forbidden" }); return; }
   const D = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
   if (!D) { res.status(400).json({ error: "date مطلوب" }); return; }
-  const sent = await sendTrackStudentReports(D, undefined, "excellent");
-  res.json({ sent, date: D });
+  try {
+    const sent = await sendTrackStudentReports(D, undefined, "excellent");
+    res.json({ sent, date: D });
+  } catch (e) {
+    res.status(500).json({ error: String((e as Error)?.message ?? e).slice(0, 300), stack: String((e as Error)?.stack ?? "").split("\n").slice(0, 4).join(" | ") });
+  }
 });
 
 router.get("/reports/track-students/counts", async (req, res): Promise<void> => {

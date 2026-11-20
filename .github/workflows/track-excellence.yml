@@ -24,7 +24,8 @@ jobs:
             sleep 20
           done
           for i in 1 2 3; do
-            if curl -fsS --max-time 240 "$SITE/api/reports/track-students/excellent/run?key=$REPORT_KEY&date=$DATE"; then echo; exit 0; fi
+            code=$(curl -sS -o out.json -w "%{http_code}" --max-time 240 "$SITE/api/reports/track-students/excellent/run?key=$REPORT_KEY&date=$DATE"); cat out.json; echo
+            if [ "$code" = "200" ]; then exit 0; fi
             echo "retry $i"; sleep 30
           done
           exit 1
